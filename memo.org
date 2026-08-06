@@ -1,0 +1,9 @@
+kernel
+s6
+seatd
+mdevd
+execline
+rust
+optionの定義はnickelを使うのが良いかもしれない。
+booster Nixを使って自前でinitramfsを錬成するが良いかもしれない
+bash,nix,coreutils,iproute2
