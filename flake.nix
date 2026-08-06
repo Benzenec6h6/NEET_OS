@@ -7,20 +7,16 @@
     pkgs = import sources.nixpkgs {system = "x86_64-linux";};
     lib = pkgs.lib;
 
-    # 2. 外部コンポーネント（Rustツール）のビルド
-    etcSyncer = import ./etc-syncer/derivation.nix {inherit pkgs lib;};
-
     # 3. OSの「設計図」を評価 (NixOS風のモジュールシステム)
     # ここで /etc やインストールするパッケージを宣言的に定義します
     myOS = lib.evalModules {
-      # configuration.nix で etcSyncer を使えるように渡す
-      specialArgs = {inherit pkgs lib etcSyncer;};
+      specialArgs = {inherit pkgs lib;};
       modules = [./configuration.nix];
     };
 
     # 5. 初期化スクリプト (init) の作成
     myInit = pkgs.writeScript "init" ''
-      #!${pkgs.pkgsStatic.execline}/bin/execlineb -P
+      #!/bin/execlineb -P
       export PATH /bin
       # 1. 複雑な初期化を呼び出す
       foreground { ${myOS.config.system.activationScript} }
