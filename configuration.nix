@@ -1,12 +1,12 @@
 {
   pkgs,
   lib,
-  etcSyncer,
   ...
 }: {
   # 必要なモジュールをインポート
   imports = [
     ./modules/system/etc/default.nix
+    ./modules/system/boot.nix
     ./modules/environment.nix
     ./modules/activation.nix
   ];
@@ -15,7 +15,6 @@
   environment.systemPackages = [
     pkgs.pkgsStatic.busybox
     pkgs.pkgsStatic.s6
-    etcSyncer
   ];
 
   # サービスの設定
