@@ -2,52 +2,24 @@
   description = "NEET OS - A minimal s6/Rust based OS";
 
   outputs = {self}: let
-    # 1. 外部リソースの取得
     sources = import ./npins;
     pkgs = import sources.nixpkgs {system = "x86_64-linux";};
     lib = pkgs.lib;
 
-    # 3. OSの「設計図」を評価 (NixOS風のモジュールシステム)
-    # ここで /etc やインストールするパッケージを宣言的に定義します
+    # OSの評価
     myOS = lib.evalModules {
       specialArgs = {inherit pkgs lib;};
       modules = [./configuration.nix];
     };
 
-    # 5. 初期化スクリプト (init) の作成
-    myInit = pkgs.writeScript "init" ''
-      #!/bin/execlineb -P
-      export PATH /bin
-      # 1. 複雑な初期化を呼び出す
-      foreground { ${myOS.config.system.activationScript} }
-
-      # 2. s6-svscan を実行 (exec なので PID 1 を引き継ぐ)
-      s6-svscan /run/service
-    '';
-
-    # 6. VM用の RAMディスク (initrd) を組み立てる
-    myInitrd = pkgs.makeInitrd {
-      contents = [
-        {
-          object = myInit;
-          symlink = "/init";
-        }
-
-        {
-          object = "${myOS.config.system.path}/bin";
-          symlink = "/bin";
-        }
-      ];
-    };
-
-    # 7. QEMU実行スクリプト (Runner)
+    # Runner の作成
+    # 評価結果の config.system.build.initrd を渡すだけ
     runner = import ./nix/runner.nix {
       inherit pkgs;
       kernel = pkgs.linux;
-      initrd = myInitrd;
+      initrd = myOS.config.system.build.initrd;
     };
   in {
-    # 最終的な出力: nix run . で QEMU が走る
     apps.x86_64-linux.default = {
       type = "app";
       program = "${runner}/bin/run-vm";
