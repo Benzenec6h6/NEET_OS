@@ -52,8 +52,8 @@
         ln -s "${value.source}" "$out/${value.target}"
         ${lib.optionalString (value.mode != "symlink") ''
           echo "${value.mode}" > "$out/${value.target}.mode"
-          echo "${toString value.uid}" > "$out/${value.target}.uid"
-          echo "${toString value.gid}" > "$out/${value.target}.gid"
+          echo "+${toString value.uid}" > "$out/${value.target}.uid"
+          echo "+${toString value.gid}" > "$out/${value.target}.gid"
         ''}
       '')
       config.environment.etc)}
