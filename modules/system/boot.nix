@@ -10,48 +10,64 @@
     internal = true;
   };
 
-  config.system.build.initrd = let
-    rootPaths =
-      [
-        config.system.activationScript
-        config.system.path
-        config.system.etc.bin
-      ]
-      ++ config.system.activationHookPackages;
+  config = let
+    stage2Init = pkgs.replaceVarsWith {
+      src = ./stage2.sh;
+      replacements = {
+        systemPath = config.system.path;
+        s6 = pkgs.s6;
+        # activationScriptはファイルパスとして参照できるようにする
+        activationScript = "${config.system.activationScript}";
+      };
+      isExecutable = true;
+    };
+    # --- カスタムカーネルの定義 ---
+    customKernel = pkgs.linux.override {
+      structuredExtraConfig = with lib.kernel; {
+        "9P_FS" = yes;
+        "9P_FS_POSIX_ACL" = yes;
+        NET_9P = yes;
+        NET_9P_VIRTIO = yes;
+        VIRTIO_PCI = yes;
+        VIRTIO_NET = yes;
+        VIRTIO_BLK = yes;
+        PCI = yes;
+      };
+    };
 
-    closure = pkgs.closureInfo {inherit rootPaths;};
+    kernelVersion = customKernel.modDirVersion;
 
-    initScript = pkgs.writeScript "init" ''
-      #!${config.environment.execline}/bin/execlineb -P
-      export PATH /bin
-      foreground { ${config.system.activationScript} }
-      exec s6-svscan /run/service
-    '';
-
-    manualInitrd =
-      pkgs.runCommand "manual-initrd" {
-        nativeBuildInputs = [pkgs.cpio pkgs.zstd];
-      } ''
-        # 作業用ディレクトリを作成
-        mkdir root
-        mkdir -p root/dev root/proc root/sys root/tmp root/run root/var/log
-
-        # 1. closureInfo からファイルをコピー
-        while read -r path; do
-          mkdir -p "root/$(dirname "$path")"
-          cp -a "$path" "root/$path"
-        done < ${closure}/store-paths
-
-        # 2. init と bin の配置
-        cp ${initScript} root/init
-        chmod +x root/init
-        mkdir -p root/bin
-        ln -s ${config.system.path}/bin/* root/bin/
-
-        # 3. 【ここを修正】 $out をディレクトリにし、その中に initrd ファイルを作成する
-        mkdir -p $out
-        (cd root && find . -print0 | cpio --null -o -H newc --quiet | zstd -z > $out/initrd)
-      '';
-  in
-    manualInitrd;
+    # --- initrd の定義 ---
+    initrd = pkgs.makeInitrdNG {
+      name = "stage1-initrd";
+      contents = [
+        {
+          source = pkgs.replaceVarsWith {
+            src = ./stage1.sh;
+            replacements = {
+              inherit kernelVersion;
+              stage2Init = "${stage2Init}";
+              systemPath = config.system.path;
+            };
+            isExecutable = true;
+            dontPatchShebangs = true;
+          };
+          target = "/init";
+        }
+        {
+          source = "${pkgs.pkgsStatic.busybox}/bin/busybox";
+          target = "/bin/busybox";
+        }
+        {
+          source = "${pkgs.pkgsStatic.busybox}/bin/busybox";
+          target = "/bin/sh";
+        }
+      ];
+    };
+  in {
+    # ここでエクスポートする！
+    system.build.kernel = customKernel;
+    system.build.initrd = initrd;
+    system.build.stage2Init = stage2Init;
+  };
 }
