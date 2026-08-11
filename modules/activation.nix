@@ -13,7 +13,6 @@
       type = lib.types.package;
       internal = true;
     };
-    # 【追加】生成されたフックパッケージのリストを保持する
     system.activationHookPackages = lib.mkOption {
       type = lib.types.listOf lib.types.package;
       internal = true;
@@ -22,7 +21,11 @@
   };
 
   config = let
-    # 各フックを独立したパッケージにする
+    activationScriptFile = pkgs.replaceVarsWith {
+      src = ./activation.sh;
+      replacements = {};
+      isExecutable = true;
+    };
     hooks =
       lib.mapAttrs (
         name: text:
@@ -31,28 +34,17 @@
       config.system.activationScripts;
 
     hookPaths = lib.attrValues hooks;
+
+    # activate.sh をラッパー経由で呼ぶ実行可能パッケージにする
+    activateRunner = pkgs.writeShellScript "activate" ''
+      export SYSTEM_PATH="${config.system.path}"
+      export EXTRA_BIN_PATH="${pkgs.coreutils}/bin:${pkgs.busybox}/bin"
+      export HOOK_PATHS="${lib.concatStringsSep " " hookPaths}"
+
+      exec ${activationScriptFile}
+    '';
   in {
     system.activationHookPackages = hookPaths;
-
-    system.activationScript = pkgs.writeScript "activate" ''
-      #!${config.environment.execline}/bin/execlineb -P
-      export PATH /bin
-
-      if { mkdir -p /proc /sys /dev /etc /run /root /var/log /tmp }
-      if { mount -t proc proc /proc }
-      if { mount -t sysfs sysfs /sys }
-      if { mount -t devtmpfs devtmpfs /dev }
-
-      # 各フックを実行
-      ${lib.concatStringsSep "\n" (map (path: "foreground { ${path} }") hookPaths)}
-
-      # s6準備
-      foreground { rm -rf /run/service }
-      foreground { mkdir -p /run/service }
-      # /etc/s6-scan の中身を /run/service にコピー
-      # ※ etc-syncer が成功していればここにファイルがあるはず
-      if { /bin/sh -c "test -d /etc/s6-scan" }
-      /bin/sh -c "cp -rL /etc/s6-scan/. /run/service/"
-    '';
+    system.activationScript = activateRunner;
   };
 }
