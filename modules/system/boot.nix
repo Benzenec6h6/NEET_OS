@@ -1,73 +1,50 @@
 {
+  config,
   pkgs,
   lib,
-  config,
   ...
-}: {
-  options.system.build = lib.mkOption {
-    type = lib.types.attrsOf lib.types.anything;
-    default = {};
-    internal = true;
+}: let
+  kernel = config.boot.kernelPackages.kernel;
+
+  # Stage 2 スクリプトの生成
+  stage2Init = pkgs.replaceVarsWith {
+    src = ./stage2.sh;
+    replacements = {
+      systemPath = "${config.system.path}";
+      s6 = "${pkgs.s6}";
+      activationScript = "${config.system.activationScript}";
+    };
+    isExecutable = true;
   };
 
-  config = let
-    stage2Init = pkgs.replaceVarsWith {
-      src = ./stage2.sh;
-      replacements = {
-        systemPath = config.system.path;
-        s6 = pkgs.s6;
-        # activationScriptはファイルパスとして参照できるようにする
-        activationScript = "${config.system.activationScript}";
-      };
-      isExecutable = true;
+  # Stage 1 スクリプトの生成
+  stage1Script = pkgs.replaceVarsWith {
+    src = ./stage1.sh;
+    replacements = {
+      kernelVersion = "${kernel.modDirVersion}";
+      systemPath = "${config.system.path}";
+      stage2Init = "${stage2Init}";
     };
-    # --- カスタムカーネルの定義 ---
-    customKernel = pkgs.linux.override {
-      structuredExtraConfig = with lib.kernel; {
-        "9P_FS" = yes;
-        "9P_FS_POSIX_ACL" = yes;
-        NET_9P = yes;
-        NET_9P_VIRTIO = yes;
-        VIRTIO_PCI = yes;
-        VIRTIO_NET = yes;
-        VIRTIO_BLK = yes;
-        PCI = yes;
-      };
-    };
+    isExecutable = true;
+    dontPatchShebangs = true;
+  };
+in {
+  imports = [
+    ../boot/kernel.nix
+    ../boot/initrd.nix
+  ];
 
-    kernelVersion = customKernel.modDirVersion;
-
-    # --- initrd の定義 ---
-    initrd = pkgs.makeInitrdNG {
-      name = "stage1-initrd";
-      contents = [
-        {
-          source = pkgs.replaceVarsWith {
-            src = ./stage1.sh;
-            replacements = {
-              inherit kernelVersion;
-              stage2Init = "${stage2Init}";
-              systemPath = config.system.path;
-            };
-            isExecutable = true;
-            dontPatchShebangs = true;
-          };
-          target = "/init";
-        }
-        {
-          source = "${pkgs.pkgsStatic.busybox}/bin/busybox";
-          target = "/bin/busybox";
-        }
-        {
-          source = "${pkgs.pkgsStatic.busybox}/bin/busybox";
-          target = "/bin/sh";
-        }
-      ];
+  options = {
+    system.build = lib.mkOption {
+      type = lib.types.attrsOf lib.types.raw;
+      default = {};
+      description = "ビルド成果物（カーネル、initrdなど）を格納する属性セット";
     };
-  in {
-    # ここでエクスポートする！
-    system.build.kernel = customKernel;
-    system.build.initrd = initrd;
-    system.build.stage2Init = stage2Init;
+  };
+
+  config = {
+    # 最終的な成果物を system.build に出す（initrd は initrd.nix 内で定義されるため、ここには kernel と stage1Script 等のみ残す）
+    system.build.kernel = kernel;
+    system.build.stage1Script = stage1Script;
   };
 }
