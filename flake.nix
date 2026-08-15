@@ -12,11 +12,10 @@
       modules = [./configuration.nix];
     };
 
-    # Runner の作成
     # 評価結果の config.system.build.initrd を渡すだけ
     runner = import ./nix/runner.nix {
       inherit pkgs;
-      kernel = pkgs.linux;
+      kernel = myOS.config.system.build.kernel;
       initrd = myOS.config.system.build.initrd;
     };
   in {

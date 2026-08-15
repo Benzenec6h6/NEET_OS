@@ -1,57 +1,50 @@
 {
+  config,
   pkgs,
   lib,
-  config,
   ...
-}: {
-  options.system.build = lib.mkOption {
-    type = lib.types.attrsOf lib.types.anything;
-    default = {};
-    internal = true;
+}: let
+  kernel = config.boot.kernelPackages.kernel;
+
+  # Stage 2 スクリプトの生成
+  stage2Init = pkgs.replaceVarsWith {
+    src = ./stage2.sh;
+    replacements = {
+      systemPath = "${config.system.path}";
+      s6 = "${pkgs.s6}";
+      activationScript = "${config.system.activationScript}";
+    };
+    isExecutable = true;
   };
 
-  config.system.build.initrd = let
-    rootPaths =
-      [
-        config.system.activationScript
-        config.system.path
-        config.system.etc.bin
-      ]
-      ++ config.system.activationHookPackages;
+  # Stage 1 スクリプトの生成
+  stage1Script = pkgs.replaceVarsWith {
+    src = ./stage1.sh;
+    replacements = {
+      kernelVersion = "${kernel.modDirVersion}";
+      systemPath = "${config.system.path}";
+      stage2Init = "${stage2Init}";
+    };
+    isExecutable = true;
+    dontPatchShebangs = true;
+  };
+in {
+  imports = [
+    ../boot/kernel.nix
+    ../boot/initrd.nix
+  ];
 
-    closure = pkgs.closureInfo {inherit rootPaths;};
+  options = {
+    system.build = lib.mkOption {
+      type = lib.types.attrsOf lib.types.raw;
+      default = {};
+      description = "ビルド成果物（カーネル、initrdなど）を格納する属性セット";
+    };
+  };
 
-    initScript = pkgs.writeScript "init" ''
-      #!${config.environment.execline}/bin/execlineb -P
-      export PATH /bin
-      foreground { ${config.system.activationScript} }
-      exec s6-svscan /run/service
-    '';
-
-    manualInitrd =
-      pkgs.runCommand "manual-initrd" {
-        nativeBuildInputs = [pkgs.cpio pkgs.zstd];
-      } ''
-        # 作業用ディレクトリを作成
-        mkdir root
-        mkdir -p root/dev root/proc root/sys root/tmp root/run root/var/log
-
-        # 1. closureInfo からファイルをコピー
-        while read -r path; do
-          mkdir -p "root/$(dirname "$path")"
-          cp -a "$path" "root/$path"
-        done < ${closure}/store-paths
-
-        # 2. init と bin の配置
-        cp ${initScript} root/init
-        chmod +x root/init
-        mkdir -p root/bin
-        ln -s ${config.system.path}/bin/* root/bin/
-
-        # 3. 【ここを修正】 $out をディレクトリにし、その中に initrd ファイルを作成する
-        mkdir -p $out
-        (cd root && find . -print0 | cpio --null -o -H newc --quiet | zstd -z > $out/initrd)
-      '';
-  in
-    manualInitrd;
+  config = {
+    # 最終的な成果物を system.build に出す（initrd は initrd.nix 内で定義されるため、ここには kernel と stage1Script 等のみ残す）
+    system.build.kernel = kernel;
+    system.build.stage1Script = stage1Script;
+  };
 }
