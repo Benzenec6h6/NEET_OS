@@ -23,7 +23,10 @@
   config = let
     activationScriptFile = pkgs.replaceVarsWith {
       src = ./activation.sh;
-      replacements = {};
+      replacements = {
+        modulesTree = "${config.system.modulesTree}";
+        kmod = "${pkgs.pkgsStatic.kmod}";
+      };
       isExecutable = true;
     };
     hooks =
@@ -38,7 +41,6 @@
     # activate.sh をラッパー経由で呼ぶ実行可能パッケージにする
     activateRunner = pkgs.writeShellScript "activate" ''
       export SYSTEM_PATH="${config.system.path}"
-      export EXTRA_BIN_PATH="${pkgs.coreutils}/bin:${pkgs.busybox}/bin"
       export HOOK_PATHS="${lib.concatStringsSep " " hookPaths}"
 
       exec ${activationScriptFile}
