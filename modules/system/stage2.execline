@@ -1,0 +1,10 @@
+#!@execline@/bin/execlineb -P
+
+# 環境変数をセットアップ
+export PATH /bin:@systemPath@/bin:@s6@/bin
+
+# Rust製の初期化ツールを実行
+foreground { @systemInit@/bin/system-init @etcPackage@ @systemPath@ @kernelPath@ }
+
+# s6-svscan を PID 1 として起動 (プロセスの置き換え)
+s6-svscan /run/service

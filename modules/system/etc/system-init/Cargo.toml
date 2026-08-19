@@ -1,0 +1,8 @@
+[package]
+name = "system-init"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nix = { version = "0.31.3", features = ["fs", "user", "mount"] }
+# 拡張する際にここに追加（例: serde, walkdir など）
