@@ -4,11 +4,11 @@
   config,
   ...
 }: let
-  # 1. 内部で Rust ツールをビルド
+  # 1. 内部で Rust ツールをビルド（Clean Source を適用）
   systemInit = pkgs.pkgsStatic.rustPlatform.buildRustPackage {
     pname = "system-init";
     version = "0.1.0";
-    src = ./system-init;
+    src = lib.cleanSource ./system-init;
     cargoLock.lockFile = ./system-init/Cargo.lock;
   };
 
@@ -83,8 +83,13 @@ in {
     # ツール自体をシステムパッケージに追加
     environment.systemPackages = [systemInit];
 
+    # 修正: system-init が求める 3 つの必須引数を正しく渡す
+    # (system-init <store-etc-path> <system-path> <kernel-path>)
     system.activationScripts.etc = ''
-      ${config.system.etc.bin}/bin/system-init ${config.system.etc.package}
+      ${config.system.etc.bin}/bin/system-init \
+        ${config.system.etc.package} \
+        ${config.system.build.toplevel or "/run/current-system"} \
+        ${config.boot.kernelPackages.kernel or "/run/current-system/kernel"}
     '';
   };
 }
