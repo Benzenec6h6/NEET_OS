@@ -5,4 +5,6 @@ edition = "2021"
 
 [dependencies]
 nix = { version = "0.31.3", features = ["fs", "user", "mount"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 # 拡張する際にここに追加（例: serde, walkdir など）
