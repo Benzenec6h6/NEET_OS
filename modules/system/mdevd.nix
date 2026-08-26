@@ -6,6 +6,7 @@
 }:
 with lib; let
   cfg = config.services.mdevd;
+  gidOf = name: toString config.neet.gids.${name};
 in {
   options.services.mdevd = {
     enable = mkEnableOption "mdevd";
@@ -20,6 +21,7 @@ in {
     environment.systemPackages = [
       pkgs.pkgsStatic.mdevd
       pkgs.pkgsStatic.kmod # modprobe を確実に用意
+      pkgs.pkgsStatic.iproute2
     ];
 
     # mdev.conf の配置
@@ -47,27 +49,44 @@ in {
 
     environment.etc."s6-scan/mdevd/notification-fd".text = "4\n";
 
+    environment.etc."s6-scan/udhcpc-eth0/run" = {
+      text = ''
+        #!/bin/execlineb -P
+        # PATH の通し（busybox や s6 のバイナリパス）
+        export PATH /bin:${pkgs.pkgsStatic.s6}/bin
+
+        # -f : フォアグラウンドで常駐（s6 に監視させるため必須）
+        # -i : インターフェース指定
+        # -p : PID ファイルの場所
+        exec udhcpc -f -i eth0
+      '';
+      mode = "0555";
+    };
+
     # ルールのデフォルト定義
     services.mdevd.rules = lib.mkDefault ''
-      # 1. モジュールの自動ロード (MODALIASに基づく) - ★最重要
+      # 1. モジュールの自動ロード
       -$MODALIAS=.* 0:0 660 @modprobe --quiet "$MODALIAS"
 
-      # 2. 基本的なデバイスのパーミッション設定
+      SUBSYSTEM=net;ACTION=add;.* 0:0 660 @ip link set $INTERFACE up
+
+      # 2. 基本的なデバイス
       null        0:0 666
       zero        0:0 666
       full        0:0 666
       random      0:0 444
       urandom     0:0 444
-      tty         0:5 666
-      console     0:5 600
-      ptmx        0:5 666
+      tty         0:0 666
+      console     0:0 600
+      ptmx        0:0 666
 
-      # 3. 各サブシステムごとのディレクトリ分離・パーミッション指定
-      event[0-9]+ 0:0 660 =input/
-      mice        0:0 660 =input/
-      card[0-9]+  0:0 660 =dri/
-      tun         0:0 666 =net/
-      sd[a-z].*   0:6 660
+      # 3. 各サブシステムのパーミッション (パス含めで指定)
+      input/.*    0:${gidOf "input"} 660
+      dri/.*      0:${gidOf "video"} 660
+      video[0-9]+ 0:${gidOf "video"} 660
+
+      tun         0:0 660 =net/
+      sd[a-z].*   0:0 660
     '';
   };
 }
