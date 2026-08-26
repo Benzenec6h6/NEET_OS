@@ -1,6 +1,6 @@
 mod copy;
 mod manifest;
-mod user_group;
+pub mod user_group;
 
 use std::collections::BTreeSet;
 use std::fs;

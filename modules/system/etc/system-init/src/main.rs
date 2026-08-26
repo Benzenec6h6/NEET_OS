@@ -6,6 +6,7 @@ mod bin_setup;
 mod etc_syncer;
 mod fs_setup;
 mod modules_setup;
+mod net_setup;
 mod s6_setup;
 
 use std::env;
@@ -38,10 +39,24 @@ fn run(
     kernel_path: &Path,
     prune: &[PathBuf],
 ) -> io::Result<()> {
-    fs_setup::setup_essential_fs()?;
-    modules_setup::setup_kernel_modules(kernel_path)?;
-    bin_setup::setup_bin(system_path)?;
+    // 1. /etc の同期を最優先（mount-plan.json などを配置するため）
     etc_syncer::setup_etc(store_etc, prune)?;
+
+    // 2. 配置された mount-plan.json を読み込んでマウントを実行
+    let plan_path = Path::new("/etc/mount-plan.json");
+    fs_setup::setup_filesystems(plan_path, true)?;
+
+    // 3. その他の初期化
+    modules_setup::setup_kernel_modules(kernel_path)?;
+    net_setup::setup_existing_network()?;
+    bin_setup::setup_bin(system_path)?;
+
+    let users = etc_syncer::user_group::parse_passwd().unwrap_or_else(|e| {
+        eprintln!("system-init: warning: failed to parse /etc/passwd: {}", e);
+        Vec::new()
+    });
+
+    fs_setup::setup_user_directories(&users)?;
     s6_setup::setup_s6_services()?;
 
     Ok(())
