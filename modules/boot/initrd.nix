@@ -39,16 +39,6 @@ in {
   };
 
   config = {
-    # 9p ブートに最低限必要なモジュールを指定
-    boot.initrd.availableKernelModules = [
-      "9p"
-      "9pnet_virtio"
-      "virtio_pci"
-      "virtio_net"
-      "virtio_blk"
-      "virtio_mmio"
-    ];
-
     system.build.debugModulesClosure = modulesClosure;
     # Stage 1 の initrd にモジュール群と必要な初期バイナリを配置
     system.build.initrd = pkgs.makeInitrdNG {

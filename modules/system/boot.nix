@@ -6,6 +6,17 @@
 }: let
   kernel = config.boot.kernelPackages.kernel;
 
+  initrdFs = lib.filter (fs: fs.neededForBoot) (lib.attrValues config.fileSystems);
+
+  makeMountCmd = fs: let
+    opts =
+      if fs.options != []
+      then "-o ${lib.concatStringsSep "," fs.options}"
+      else "";
+  in "mkdir -p \"/mnt${fs.mountPoint}\"\nmount -t ${fs.fsType} ${opts} ${fs.device} \"/mnt${fs.mountPoint}\"";
+
+  mountCommands = lib.concatMapStringsSep "\n" makeMountCmd initrdFs;
+
   # Stage 2 スクリプトの生成
   stage2Init = pkgs.replaceVarsWith {
     src = ./stage2.execline;
@@ -35,6 +46,7 @@
       systemPath = "${config.system.path}";
       stage2Init = "${stage2Init}";
       kernelModules = lib.concatStringsSep " " config.boot.initrd.availableKernelModules;
+      mountCommands = mountCommands;
     };
     isExecutable = true;
     dontPatchShebangs = true;

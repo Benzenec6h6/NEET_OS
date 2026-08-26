@@ -23,14 +23,11 @@ for mod in @kernelModules@; do
     fi
 done
 
-# 4. 9pストアのマウント
-echo "NEET OS Stage 1: Mounting 9p store..."
-mount -t tmpfs tmpfs /mnt
-mkdir -p /mnt/nix/store
-if ! mount -t 9p -o trans=virtio,version=9p2000.L,msize=1048576,readonly nixstore /mnt/nix/store; then
-    echo "FAILED to mount 9p store."
-    exec /bin/sh
-fi
+# 4. 動的マウント処理 (Nix側で生成されたマウントコマンドの展開)
+echo "NEET OS Stage 1: Mounting root filesystems..."
+mkdir -p /mnt
+
+@mountCommands@
 
 echo "NEET OS Stage 1: Preparing Stage 2 env..."
 
@@ -49,6 +46,10 @@ for f in "/mnt@systemPath@/bin/"*; do
         ln -s "@systemPath@/bin/$name" "/mnt/bin/$name"
     fi
 done
+
+mount --move /proc /mnt/proc
+mount --move /sys /mnt/sys
+mount --move /dev /mnt/dev
 
 echo "NEET OS Stage 1: switch_root!"
 echo "Debug: NEW_INIT is [@stage2Init@]"
