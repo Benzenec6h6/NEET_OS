@@ -10,6 +10,7 @@
     ./modules/system/mdevd.nix
     ./modules/system/seatd.nix
     ./modules/system/users.nix
+    ./modules/virtualisation/virtio.nix
     ./modules/filesystems
     ./modules/dbus.nix
     ./modules/networking
@@ -94,4 +95,6 @@
       neededForBoot = true; # Stage 1 でマウントさせる！
     };
   };
+
+  virtualisation.virtio.enable = true;
 }
