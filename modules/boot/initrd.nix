@@ -27,7 +27,7 @@
   modulesClosure = pkgs.makeModulesClosure {
     # lib.getOutput を使うと、マルチ出力でもシングル出力でも適切にパスを拾える
     kernel = lib.getOutput "modules" config.boot.kernelPackages.kernel;
-    rootModules = config.boot.initrd.availableKernelModules;
+    rootModules = lib.unique config.boot.initrd.availableKernelModules;
     firmware = pkgs.linux-firmware;
     allowMissing = true;
   };
