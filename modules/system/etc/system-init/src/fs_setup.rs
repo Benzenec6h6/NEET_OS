@@ -50,34 +50,43 @@ pub fn setup_user_directories(users: &[UserEntry]) -> io::Result<()> {
 
         // 1. ホームディレクトリの生成と所有権変更
         if create_home {
-            let home_path = Path::new(&user.home);
-            if !home_path.exists() {
-                println!(
-                    "system-init: creating home dir for {} at {}",
-                    user.username, user.home
-                );
-                fs::create_dir_all(home_path)?;
-                let _ = chown(home_path, Some(user.uid), Some(user.gid));
-                let _ = fs::set_permissions(home_path, fs::Permissions::from_mode(0o755));
-            }
+            setup_single_directory(
+                Path::new(&user.home),
+                user,
+                0o755,
+                &format!("creating home dir for {} at {}", user.username, user.home),
+            )?;
         }
 
         // 2. 一般ユーザー(UID >= 1000)に対する XDG_RUNTIME_DIR の生成
         if user.uid.as_raw() >= 1000 && create_runtime {
             let runtime_path_str = format!("/run/user/{}", user.uid.as_raw());
-            let runtime_path = Path::new(&runtime_path_str);
-
-            if !runtime_path.exists() {
-                println!(
-                    "system-init: creating XDG_RUNTIME_DIR at {}",
-                    runtime_path_str
-                );
-                fs::create_dir_all(runtime_path)?;
-                let _ = chown(runtime_path, Some(user.uid), Some(user.gid));
-                let _ = fs::set_permissions(runtime_path, fs::Permissions::from_mode(0o700));
-            }
+            setup_single_directory(
+                Path::new(&runtime_path_str),
+                user,
+                0o700,
+                &format!("creating XDG_RUNTIME_DIR at {}", runtime_path_str),
+            )?;
         }
     }
+    Ok(())
+}
+
+/// ディレクトリが存在しない場合のみ作成し、パーミッションを設定するヘルパー
+fn setup_single_directory(
+    path: &Path,
+    user: &UserEntry,
+    mode: u32,
+    log_msg: &str,
+) -> io::Result<()> {
+    if path.exists() {
+        return Ok(());
+    }
+
+    println!("system-init: {}", log_msg);
+    fs::create_dir_all(path)?;
+    let _ = chown(path, Some(user.uid), Some(user.gid));
+    let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));
     Ok(())
 }
 
@@ -100,6 +109,7 @@ pub fn setup_filesystems(plan_path: &Path, early_only: bool) -> io::Result<()> {
     entries.sort_by_key(|e| (e.mount_point.len(), e.mount_point.clone()));
 
     for entry in entries {
+        // ガード節: boot時に不要なものをスキップ
         if early_only && !entry.needed_for_boot {
             continue;
         }
@@ -119,20 +129,18 @@ pub fn setup_filesystems(plan_path: &Path, early_only: bool) -> io::Result<()> {
         }
 
         let (flags, data_options) = parse_mount_options(&entry.options);
-        let data_str = if data_options.is_empty() {
-            None
-        } else {
-            Some(data_options.join(","))
-        };
+        let data_str = (!data_options.is_empty()).then(|| data_options.join(","));
 
-        if let Err(e) = mount(
+        // マウント実行（EBUSY 以外のエラーのみ出力）
+        let result = mount(
             Some(entry.device.as_str()),
             entry.mount_point.as_str(),
             Some(entry.fs_type.as_str()),
             flags,
             data_str.as_deref(),
-        ) {
-            // EBUSY（既にマウント済み）は正常系（Stage1からの引き継ぎ等）として無視
+        );
+
+        if let Err(e) = result {
             if e != nix::errno::Errno::EBUSY {
                 eprintln!(
                     "system-init: warning: failed to mount {} ({}): {}",
