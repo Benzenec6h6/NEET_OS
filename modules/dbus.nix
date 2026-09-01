@@ -5,7 +5,6 @@
   ...
 }: let
   cfg = config.services.dbus;
-
   homeDir = "/run/dbus";
 
   # Nixのヘルパーを使ってXML設定ディレクトリを自動生成
@@ -51,24 +50,21 @@ in {
     environment.systemPackages = [cfg.package];
 
     services.dbus.packages =
-      [
-        cfg.package
-      ]
+      [cfg.package]
       ++ config.environment.systemPackages;
 
     # 4. s6-scan 経由での D-Bus システムデーモン起動定義
-    environment.etc = {
-      "s6-scan/dbus/run" = {
-        text = ''
-          #!/bin/execlineb -P
-          foreground { mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys }
-          foreground { chown messagebus:messagebus /run/dbus /var/lib/dbus }
-          foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
+    system.s6-rc.services.dbus = {
+      type = "longrun";
+      # 元々の run スクリプトをそのまま移植
+      run = ''
+        #!/bin/execlineb -P
+        foreground { mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys }
+        foreground { chown messagebus:messagebus /run/dbus /var/lib/dbus }
+        foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
 
-          ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only
-        '';
-        mode = "0555";
-      };
+        ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only
+      '';
     };
   };
 }

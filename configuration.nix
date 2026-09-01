@@ -3,8 +3,8 @@
   lib,
   ...
 }: {
-  # 必要なモジュールをインポート
   imports = [
+    ./modules/system/s6-rc
     ./modules/system/etc/default.nix
     ./modules/system/boot.nix
     ./modules/system/mdevd.nix
@@ -18,50 +18,56 @@
     ./modules/activation.nix
   ];
 
-  # パッケージの設定 (execlineは modules/environment.nix で自動追加されるため除去)
   environment.systemPackages = [
     pkgs.pkgsStatic.busybox
     pkgs.pkgsStatic.s6
+    pkgs.pkgsStatic.s6-rc
     pkgs.sway
     pkgs.foot
-    pkgs.dbus
     pkgs.mesa
     pkgs.libGL
     pkgs.fontconfig
     pkgs.dejavu_fonts
   ];
 
-  # サービスの設定
   environment.etc = {
     "hostname".text = "neet-os\n";
-
-    # ログ付き meow サービス
-    "s6-scan/meow/run" = {
-      text = "#!/bin/execlineb -P\n/bin/sh -c \"while :; do echo NEET OS: meow!; sleep 10; done\"";
-      mode = "0555";
-    };
-    "s6-scan/meow/log/run" = {
-      text = "#!/bin/execlineb -P\nforeground { mkdir -p /var/log/meow }\ns6-log n3 s1000000 /var/log/meow";
-      mode = "0555";
-    };
-
-    # getty シェル
-    "s6-scan/shell/run" = {
-      text = "#!/bin/execlineb -P\ngetty -n -l /bin/sh 115200 ttyS0";
-      mode = "0555";
-    };
-
     "fonts/fonts.conf".source = "${pkgs.fontconfig.out}/etc/fonts/fonts.conf";
   };
 
+  # s6-rc サービスとしてシステム初期化・実験用サービスを定義
+  system.s6-rc.services = {
+    meow = {
+      type = "longrun";
+      run = ''
+        #!/bin/execlineb -P
+        /bin/sh -c "while :; do echo NEET OS: meow!; sleep 10; done"
+      '';
+    };
+
+    shell = {
+      type = "longrun";
+      run = ''
+        #!/bin/execlineb -P
+        getty -n -l /bin/sh 115200 ttyS0
+      '';
+    };
+  };
+
+  # サービス有効化
   services.mdevd.enable = true;
   services.seatd = {
     enable = true;
-    group = "seat"; # または "video" (users.nixで定義したグループ名に合わせる)
-    debug = true; # 最初はログを詳しく見るために true にしておくと便利です
+    group = "seat";
+    debug = true;
   };
 
   services.dbus.enable = true;
+
+  networking = {
+    upInterfaces = ["lo" "eth0"];
+    dhcpInterfaces = ["eth0"];
+  };
 
   neet.users = {
     root = {
@@ -80,20 +86,20 @@
     };
   };
 
-  networking.upInterfaces = ["lo" "eth0"];
+  boot.stage1.fileSystems."/" = {
+    device = "tmpfs";
+    fsType = "tmpfs";
+  };
 
-  fileSystems = {
-    "/" = {
-      device = "tmpfs"; # ルートは tmpfs
-      fsType = "tmpfs";
-      options = ["mode=0755"];
-    };
-    "/nix/store" = {
-      device = "nixstore"; # 9pタグ
-      fsType = "9p";
-      options = ["trans=virtio" "version=9p2000.L" "msize=1048576" "readonly"];
-      neededForBoot = true; # Stage 1 でマウントさせる！
-    };
+  boot.stage1.fileSystems."/nix/store" = {
+    device = "/dev/vda";
+    fsType = "ext4";
+  };
+
+  boot.stage2.fileSystems."/" = {
+    device = "tmpfs";
+    fsType = "tmpfs";
+    alreadyMounted = true;
   };
 
   virtualisation.virtio.enable = true;

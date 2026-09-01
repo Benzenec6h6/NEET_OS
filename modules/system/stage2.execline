@@ -1,10 +1,34 @@
 #!@execline@/bin/execlineb -P
+export PATH @systemPath@/bin:@systemPath@/sbin
+fdmove -c 2 1
+foreground { echo "[stage2] Starting stage2 init sequence..." }
 
-# 環境変数をセットアップ
-export PATH /bin:@systemPath@/bin:@s6@/bin
+# ここで /etc と /run を含む各種マウントを組み立てる (system-init 経由)
+foreground { echo "[stage2] Running activation script (system-init)..." }
+if { @activationScript@ }
+foreground { echo "[stage2] Activation done." }
 
-# Rust製の初期化ツールを実行
-foreground { @systemInit@/bin/system-init @etcPackage@ @systemPath@ @kernelPath@ }
+# /run のマウントが完了した後で、s6-rc 用のディレクトリを作る
+foreground { mkdir -p /run/service }
 
-# s6-svscan を PID 1 として起動 (プロセスの置き換え)
+background
+{
+  fdmove -c 2 1
+  foreground { echo "[stage2-bg] Waiting for s6-svscan control pipe..." }
+  foreground {
+    /bin/sh -c "
+      i=0
+      while [ ! -p /run/service/.s6-svscan/control ] && [ \$i -lt 50 ]; do
+        sleep 0.1
+        i=\$((i+1))
+      done
+    "
+  }
+  if { echo "[stage2-bg] Running s6-rc-init..." }
+  foreground { echo "[stage2-bg] Running s6-rc-init..." }
+  if { s6-rc-init -c /etc/s6-rc/compiled /run/service }
+  foreground { echo "[stage2-bg] Changing state to top..." }
+  s6-rc -u change top
+}
+foreground { echo "[stage2] Executing s6-svscan..." }
 s6-svscan /run/service
