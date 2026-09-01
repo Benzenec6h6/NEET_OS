@@ -10,8 +10,8 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev
 
-# 3. ドライバのロード (9pドライバの読み込み強化)
-echo "NEET OS Stage 1: Loading 9p drivers..."
+# 3. ドライバのロード 
+echo "NEET OS Stage 1: Loading drivers..."
 echo /bin/modprobe > /proc/sys/kernel/modprobe
 
 # kmod/modprobe があれば使い、無ければ find + insmod でフォールバック
@@ -26,6 +26,7 @@ done
 # 4. 動的マウント処理 (Nix側で生成されたマウントコマンドの展開)
 echo "NEET OS Stage 1: Mounting root filesystems..."
 mkdir -p /mnt
+mkdir -p /mnt/nix/store
 
 @mountCommands@
 
@@ -55,4 +56,13 @@ echo "NEET OS Stage 1: switch_root!"
 echo "Debug: NEW_INIT is [@stage2Init@]"
 
 # 8. switch_root 実行
-exec switch_root "/mnt" "@stage2Init@"
+echo "NEET OS Stage 1: Creating skeleton directories in new root..."
+# 仮想ファイルシステムと基本ディレクトリの枠組みを作成
+mkdir -p /mnt/dev /mnt/proc /mnt/sys /mnt/run /mnt/etc /mnt/bin
+
+echo "NEET OS Stage 1: Linking stage2 init..."
+ln -sf "@stage2Init@" /mnt/init
+
+echo "NEET OS Stage 1: switch_root!"
+#exec switch_root /mnt /init
+exec switch_root -c /dev/ttyS0 /mnt /init
