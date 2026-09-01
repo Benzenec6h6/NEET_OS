@@ -7,7 +7,6 @@ mod etc_syncer;
 mod fs_setup;
 mod modules_setup;
 mod net_setup;
-mod s6_setup;
 
 use std::env;
 use std::io;
@@ -44,7 +43,7 @@ fn run(
 
     // 2. 配置された mount-plan.json を読み込んでマウントを実行
     let plan_path = Path::new("/etc/mount-plan.json");
-    fs_setup::setup_filesystems(plan_path, true)?;
+    fs_setup::setup_filesystems(plan_path)?;
 
     // 3. その他の初期化
     modules_setup::setup_kernel_modules(kernel_path)?;
@@ -57,7 +56,6 @@ fn run(
     });
 
     fs_setup::setup_user_directories(&users)?;
-    s6_setup::setup_s6_services()?;
 
     Ok(())
 }

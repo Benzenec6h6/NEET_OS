@@ -1,33 +1,35 @@
 {lib, ...}: let
-  specialFSTypes = ["proc" "sysfs" "devtmpfs" "tmpfs" "devpts"];
-  pathsNeededForBoot = ["/" "/proc" "/sys" "/dev" "/run" "/tmp" "/var/log"];
-
-  fileSystemOpts = {
-    name,
-    config,
-    ...
-  }: {
+  # 個別のマウントエントリの型定義
+  mountOpts = {name, ...}: {
     options = {
       mountPoint = lib.mkOption {
         type = lib.types.str;
         default = name;
+        description = "マウント先のパス";
       };
       device = lib.mkOption {
         type = lib.types.str;
-        # デフォルト値を空文字にしておく
         default = "";
+        description = "デバイスパス、または tmpfs / proc 等の識別子";
       };
       fsType = lib.mkOption {
         type = lib.types.str;
         default = "auto";
+        description = "ファイルシステムの種類";
       };
       options = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = ["defaults"];
+        description = "マウントオプション（fstab形式）";
       };
-      neededForBoot = lib.mkOption {
+      alreadyMounted = lib.mkOption {
         type = lib.types.bool;
         default = false;
+        description = ''
+          Stage 1 等で既にマウント済みであり、Stage 2 (system-init) での
+          マウント処理をスキップすべきかどうかのフラグ (原則2)。
+          fstab などの宣言出力には含まれます。
+        '';
       };
       dump = lib.mkOption {
         type = lib.types.int;
@@ -38,22 +40,23 @@
         default = 0;
       };
     };
-
-    config = {
-      # 条件に config.device を含めず、fsType の判定のみで mkDefault を当てる
-      # ユーザーが明示的に device = "/dev/xxx" を書いた場合は mkDefault 側が自動で上書き・譲歩する
-      device = lib.mkIf (lib.elem config.fsType specialFSTypes) (lib.mkDefault config.fsType);
-
-      # config.mountPoint ではなく親から渡される name を使って安全に判定
-      neededForBoot = lib.mkIf (lib.elem name pathsNeededForBoot) (lib.mkDefault true);
-      pass = lib.mkIf (name == "/") (lib.mkDefault 1);
-    };
   };
 in {
   options = {
-    fileSystems = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.submodule fileSystemOpts);
-      default = {};
+    boot = {
+      # 原則1: Stage 1 (initrd) 専用のマウント定義
+      stage1.fileSystems = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule mountOpts);
+        default = {};
+        description = "Stage 1 (initrd) で switch_root するために必要な最小限のマウント";
+      };
+
+      # 原則1: Stage 2 (system-init) 専用のマウント定義
+      stage2.fileSystems = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.submodule mountOpts);
+        default = {};
+        description = "Stage 2 (system-init) で実行時環境を仕上げるための仮想FSなどのマウント";
+      };
     };
   };
 }

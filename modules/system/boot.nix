@@ -6,7 +6,7 @@
 }: let
   kernel = config.boot.kernelPackages.kernel;
 
-  initrdFs = lib.filter (fs: fs.neededForBoot) (lib.attrValues config.fileSystems);
+  initrdFs = lib.attrValues config.boot.stage1.fileSystems;
 
   makeMountCmd = fs: let
     opts =
@@ -21,19 +21,9 @@
   stage2Init = pkgs.replaceVarsWith {
     src = ./stage2.execline;
     replacements = {
-      # environment.nix で定義した system.path を参照
-      systemPath = "${config.system.path}";
-
-      # environment.nix で定義した execline パッケージを参照
       execline = "${config.environment.execline}";
-
-      # pkgsStatic.s6 (ここは直接 pkgs から取っても、オプション化してもOK)
-      s6 = "${pkgs.pkgsStatic.s6}";
-
-      # activation.nix / etc/default.nix で定義されているはずのオプション
-      systemInit = "${config.system.etc.bin}";
-      etcPackage = "${config.system.etc.package}";
-      kernelPath = "${config.boot.kernelPackages.kernel.modules}";
+      systemPath = "${config.system.path}";
+      activationScript = "${config.system.activationScript}";
     };
     isExecutable = true;
   };
@@ -51,6 +41,21 @@
     isExecutable = true;
     dontPatchShebangs = true;
   };
+
+  toplevel =
+    pkgs.runCommand "neet-os-toplevel" {
+      # 依存関係として明示的に認識させる
+      passthru = {
+        inherit stage2Init;
+        systemPath = config.system.path;
+        etc = config.system.etc.package;
+      };
+    } ''
+      mkdir -p $out
+      ln -s ${stage2Init} $out/init
+      ln -s ${config.system.path} $out/system-path
+      ln -s ${config.system.etc.package} $out/etc
+    '';
 in {
   imports = [
     ../boot/kernel.nix
@@ -69,5 +74,7 @@ in {
     # 最終的な成果物を system.build に出す（initrd は initrd.nix 内で定義されるため、ここには kernel と stage1Script 等のみ残す）
     system.build.kernel = kernel;
     system.build.stage1Script = stage1Script;
+    system.build.stage2Init = stage2Init;
+    system.build.toplevel = toplevel;
   };
 }

@@ -17,12 +17,8 @@ pub struct MountEntry {
     pub fs_type: String,
     #[serde(default)]
     pub options: Vec<String>,
-    #[serde(rename = "neededForBoot", default)]
-    pub needed_for_boot: bool,
-    #[serde(default)]
-    pub dump: u32,
-    #[serde(default)]
-    pub pass: u32,
+    #[serde(rename = "alreadyMounted", default)]
+    pub already_mounted: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,7 +87,7 @@ fn setup_single_directory(
 }
 
 /// mount-plan.json をロードしてファイルシステムをマウント
-pub fn setup_filesystems(plan_path: &Path, early_only: bool) -> io::Result<()> {
+pub fn setup_filesystems(plan_path: &Path) -> io::Result<()> {
     if !plan_path.exists() {
         eprintln!(
             "system-init: warning: mount plan not found at {}",
@@ -109,8 +105,11 @@ pub fn setup_filesystems(plan_path: &Path, early_only: bool) -> io::Result<()> {
     entries.sort_by_key(|e| (e.mount_point.len(), e.mount_point.clone()));
 
     for entry in entries {
-        // ガード節: boot時に不要なものをスキップ
-        if early_only && !entry.needed_for_boot {
+        if entry.already_mounted {
+            println!(
+                "system-init: skipping already mounted {}",
+                entry.mount_point
+            );
             continue;
         }
 
