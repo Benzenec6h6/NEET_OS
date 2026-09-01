@@ -2,6 +2,7 @@
   pkgs,
   kernel,
   initrd,
+  image,
   ...
 }: let
   qemuArgs = [
@@ -15,12 +16,15 @@
     "-display gtk" # 環境により "sdl" や "spice-app"、macOSなら "cocoa"
     "-vga none" # 標準VGAを無効化してvirtio-gpuに絞る
 
-    "-append \"console=ttyS0 console=tty1 panic=0 net.ifnames=0\""
+    #"-append \"console=ttyS0 console=tty1 panic=0 net.ifnames=0\""
+    "-append \"console=tty1 console=ttyS0 panic=0 net.ifnames=0\""
     "-no-reboot"
     "-netdev user,id=net0 -device virtio-net-pci,netdev=net0"
 
-    "-fsdev local,security_model=none,id=fsdev-store,path=/nix/store,readonly=on"
-    "-device virtio-9p-pci,fsdev=fsdev-store,mount_tag=nixstore"
+    #"-fsdev local,security_model=none,id=fsdev-store,path=/nix/store,readonly=on"
+    #"-device virtio-9p-pci,fsdev=fsdev-store,mount_tag=nixstore"
+
+    "-drive file=${image},if=virtio,format=raw,snapshot=on"
 
     # GPU
     "-device virtio-gpu-pci"
