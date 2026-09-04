@@ -39,6 +39,16 @@ in {
         device = "devtmpfs";
         fsType = "devtmpfs";
       };
+      "/dev/pts" = {
+        device = "devpts";
+        fsType = "devpts";
+        options = ["gid=5" "mode=620"];
+      };
+      "/dev/shm" = {
+        device = "tmpfs";
+        fsType = "tmpfs";
+        options = ["mode=1777"];
+      };
       "/run" = {
         device = "tmpfs";
         fsType = "tmpfs";
@@ -73,6 +83,7 @@ in {
             && fs != "sysfs"
             && fs != "devtmpfs"
             && fs != "tmpfs"
+            && fs != "devpts"
         )
         fsTypes;
     in
