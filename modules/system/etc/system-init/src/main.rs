@@ -7,6 +7,7 @@ mod etc_syncer;
 mod fs_setup;
 mod modules_setup;
 mod net_setup;
+mod wrappers;
 
 use std::env;
 use std::io;
@@ -38,23 +39,24 @@ fn run(
     kernel_path: &Path,
     prune: &[PathBuf],
 ) -> io::Result<()> {
-    // 1. /etc の同期を最優先（mount-plan.json などを配置するため）
+    // 1. /etc の同期を最優先（mount-plan.json や wrappers.json を配置するため）
     etc_syncer::setup_etc(store_etc, prune)?;
 
-    // 2. 配置された mount-plan.json を読み込んでマウントを実行
+    // 2. 次にマウントを実行 (/run や /tmp を準備する)
     let plan_path = Path::new("/etc/mount-plan.json");
     fs_setup::setup_filesystems(plan_path)?;
 
-    // 3. その他の初期化
+    // 3. マウントが終わった綺麗な /run に対して Wrapper を作成する
+    if let Err(e) = wrappers::setup_wrappers() {
+        eprintln!("system-init: warning: failed to setup wrappers: {e}");
+    }
+
+    // 4. その他の初期化 (パスをマウント済みの / に対して行う)
     modules_setup::setup_kernel_modules(kernel_path)?;
     net_setup::setup_existing_network()?;
     bin_setup::setup_bin(system_path)?;
 
-    let users = etc_syncer::user_group::parse_passwd().unwrap_or_else(|e| {
-        eprintln!("system-init: warning: failed to parse /etc/passwd: {}", e);
-        Vec::new()
-    });
-
+    let users = etc_syncer::user_group::parse_passwd().unwrap_or_default();
     fs_setup::setup_user_directories(&users)?;
 
     Ok(())

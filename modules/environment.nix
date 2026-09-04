@@ -47,7 +47,7 @@
 
     # /etc/profile を強化
     environment.etc."profile".text = ''
-      export PATH=/bin:/sbin
+      export PATH=/run/wrappers/bin:/bin:/sbin
       export TERM=linux
       export PS1='\e[1;32mNEET-OS\e[0m \w \$ '
     '';
