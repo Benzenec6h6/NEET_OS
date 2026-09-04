@@ -4,6 +4,7 @@
   ...
 }: {
   imports = [
+    ./modules/security
     ./modules/system/s6-rc
     ./modules/system/etc/default.nix
     ./modules/system/boot.nix
@@ -69,6 +70,20 @@
     dhcpInterfaces = ["eth0"];
   };
 
+  neet.security.enable = true;
+
+  # sudo-rs の具体的なルール設定
+  neet.security.privileges = {
+    backend = "sudo-rs";
+    rules = [
+      {
+        groups = ["wheel"];
+        command = "ALL";
+        requirePassword = true;
+      }
+    ];
+  };
+
   neet.users = {
     root = {
       uid = 0;
@@ -76,13 +91,15 @@
       shell = "/bin/sh";
       home = "/root";
       description = "System Administrator";
+      initialHashedPassword = "$y$j9T$lwc.8Oc5W7OwTWLCfDmfw/$IA4QRTrN.yPQcPwIiF8UULTrTDA3nZTM0p1JmQj/Jw4";
     };
     neet = {
       uid = 1000;
       gid = 1000;
       shell = "/bin/sh";
       description = "Primary User";
-      extraGroups = ["video" "input" "seat"];
+      extraGroups = ["video" "input" "seat" "wheel"];
+      initialHashedPassword = "$y$j9T$lwc.8Oc5W7OwTWLCfDmfw/$IA4QRTrN.yPQcPwIiF8UULTrTDA3nZTM0p1JmQj/Jw4";
     };
   };
 
