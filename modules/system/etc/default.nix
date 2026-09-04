@@ -89,7 +89,7 @@ in {
       ${config.system.etc.bin}/bin/system-init \
         ${config.system.etc.package} \
         ${config.system.build.toplevel or "/run/current-system"} \
-        ${config.boot.kernelPackages.kernel or "/run/current-system/kernel"}
+        ${config.system.modulesTree}
     '';
   };
 }

@@ -23,7 +23,7 @@
       systemInitBin = "${config.system.etc.bin}/bin/system-init";
       etcPackage = "${config.system.etc.package}";
       systemPath = "${config.system.path}";
-      kernelPath = "${config.boot.kernelPackages.kernel}";
+      kernelPath = "${config.system.modulesTree}";
     };
     isExecutable = true;
     dontPatchShebangs = true;

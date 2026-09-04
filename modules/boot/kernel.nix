@@ -32,7 +32,7 @@
   config = {
     # カーネル本体と追加モジュールを1つのツリーにまとめる
     system.modulesTree = pkgs.aggregateModules [
-      config.boot.kernelPackages.kernel
+      (lib.getOutput "modules" config.boot.kernelPackages.kernel)
     ];
 
     # デフォルトのカーネルパラメータ（シリアルコンソール等）
