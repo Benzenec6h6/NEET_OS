@@ -95,18 +95,20 @@ in {
 
     gids = mkOption {
       type = types.attrsOf types.int;
-      default = {
-        root = 0;
-        wheel = 10;
-        video = 44;
-        input = 104;
-        seat = 150;
-      };
+      default = {};
       description = "System Shared Group IDs";
     };
   };
 
   config = {
+    neet.gids = {
+      root = lib.mkDefault 0;
+      tty = lib.mkDefault 5;
+      wheel = lib.mkDefault 10;
+      video = lib.mkDefault 44;
+      input = lib.mkDefault 104;
+      seat = lib.mkDefault 150;
+    };
     environment.etc."passwd".text =
       concatStringsSep "\n" (mapAttrsToList mkPasswdLine cfg) + "\n";
 
