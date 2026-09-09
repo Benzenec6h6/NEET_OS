@@ -5,12 +5,7 @@
   ...
 }: let
   # 1. 内部で Rust ツールをビルド（Clean Source を適用）
-  systemInit = pkgs.pkgsStatic.rustPlatform.buildRustPackage {
-    pname = "system-init";
-    version = "0.1.0";
-    src = lib.cleanSource ./system-init;
-    cargoLock.lockFile = ./system-init/Cargo.lock;
-  };
+  inherit (import ./inieet {inherit pkgs lib;}) earlyInit systemInit;
 
   # 2. etc フォルダ内の各ファイルの設定
   etcOpts = {
@@ -79,7 +74,7 @@ in {
   config = {
     system.etc.package = etcDirectory;
     system.etc.bin = systemInit;
-
+    system.build.earlyInit = earlyInit;
     # ツール自体をシステムパッケージに追加
     environment.systemPackages = [systemInit];
 

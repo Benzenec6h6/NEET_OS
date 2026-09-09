@@ -1,0 +1,9 @@
+[package]
+name = "init-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nix = { version = "0.31.3", features = ["fs", "mount"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"

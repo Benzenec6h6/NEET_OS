@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "init-core",
+    "early-init",
+    "system-init",
+]

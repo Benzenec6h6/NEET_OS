@@ -1,0 +1,7 @@
+[package]
+name = "early-init"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+init-core = { path = "../init-core" }
