@@ -103,20 +103,11 @@
     };
   };
 
-  boot.stage1.fileSystems."/" = {
-    device = "tmpfs";
-    fsType = "tmpfs";
-  };
-
-  boot.stage1.fileSystems."/nix/store" = {
+  boot.fileSystems."/" = {
     device = "/dev/vda";
-    fsType = "ext4";
-  };
-
-  boot.stage2.fileSystems."/" = {
-    device = "tmpfs";
-    fsType = "tmpfs";
-    alreadyMounted = true;
+    fsType = "btrfs";
+    options = ["compress=zstd"];
+    neededForBoot = true;
   };
 
   virtualisation.virtio.enable = true;
