@@ -51,12 +51,6 @@ with lib; {
 
     # PAM / Polkit の基本ファイル配置 (etc_syncer 経由)
     environment.etc = {
-      "pam.d/other".text = ''
-        auth     required       pam_deny.so
-        account  required       pam_deny.so
-        password required       pam_deny.so
-        session  required       pam_deny.so
-      '';
       "polkit-1/rules.d/50-default.rules".text = ''
         polkit.addAdminRule(function(action, subject) {
             return ["unix-group:wheel"];
