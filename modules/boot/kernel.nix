@@ -36,12 +36,12 @@
     ];
 
     # デフォルトのカーネルパラメータ（シリアルコンソール等）
-    boot.kernelParams = [
+    boot.kernelParams = lib.mkDefault [
       "console=ttyS0"
       "panic=10"
     ];
 
     # 標準でロードしておくべきモジュール
-    boot.kernelModules = ["loop" "atkbd"];
+    boot.kernelModules = lib.mkDefault ["loop" "atkbd"];
   };
 }
