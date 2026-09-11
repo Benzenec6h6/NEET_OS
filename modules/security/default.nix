@@ -44,7 +44,7 @@ with lib; {
     # システムユーザーの定義 (users.nix の neet.users に追加)
     neet.users.polkituser = {
       uid = 999;
-      gid = 999;
+      gid = config.neet.gids.polkituser;
       description = "Polkit daemon user";
       createHome = false;
     };
