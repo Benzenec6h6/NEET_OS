@@ -39,4 +39,4 @@ mount --move /dev /mnt/dev
 echo "NEET OS Stage 1: Linking stage2 init..."
 ln -sf "@stage2Init@" /mnt/init
 echo "NEET OS Stage 1: switch_root!"
-exec switch_root -c /dev/ttyS0 /mnt /init
+exec switch_root -c "/dev/@console@" /mnt /init

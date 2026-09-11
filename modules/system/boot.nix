@@ -25,6 +25,7 @@
       systemPath = "${config.system.path}";
       stage2Init = "${stage2Init}";
       kernelModules = lib.concatStringsSep " " config.boot.initrd.availableKernelModules;
+      console = builtins.head config.boot.consoles;
     };
     isExecutable = true;
     dontPatchShebangs = true;
@@ -54,6 +55,11 @@ in {
       type = lib.types.attrsOf lib.types.raw;
       default = {};
       description = "ビルド成果物（カーネル、initrdなど）を格納する属性セット";
+    };
+    boot.consoles = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = ["tty1"];
+      description = "switch_root -c に渡すコンソール候補（先頭が優先）";
     };
   };
 
