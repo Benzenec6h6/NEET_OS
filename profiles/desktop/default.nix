@@ -3,5 +3,7 @@
   pkgs,
   ...
 }: {
-  # 将来の設定をここに記述
+  imports = [
+    ../../configuration.nix
+  ];
 }

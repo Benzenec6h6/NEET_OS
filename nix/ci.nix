@@ -1,7 +1,7 @@
 {
   pkgs,
   lib,
-  profiles, # { vm = myOS-VM; baremetal = myOS-Desktop; } の形で渡す
+  profiles, # { vm = myOS-VM; desktop = myOS-Desktop; } の形で渡す
 }: let
   # environment.etc 配下で同じキーが複数箇所から定義されていないかを検出
   findConflicts = optionSet:
@@ -51,10 +51,10 @@
   };
 
   vmChecks = mkProfileChecks "vm" profiles.vm;
-  desktopChecks = mkProfileChecks "baremetal" profiles.baremetal;
+  desktopChecks = mkProfileChecks "desktop" profiles.desktop;
 
   optionsDocVm = pkgs.nixosOptionsDoc {options = profiles.vm.options;};
-  optionsDocDesktop = pkgs.nixosOptionsDoc {options = profiles.baremetal.options;};
+  optionsDocDesktop = pkgs.nixosOptionsDoc {options = profiles.desktop.options;};
 in {
   checks = vmChecks // desktopChecks;
   docs = {

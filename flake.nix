@@ -19,13 +19,13 @@
       inherit pkgs lib;
       profiles = {
         vm = myOS-VM;
-        baremetal = myOS-Desktop;
+        desktop = myOS-Desktop;
       };
     };
   in {
     debugConfig = {
       vm = myOS-VM.config;
-      baremetal = myOS-Desktop.config;
+      desktop = myOS-Desktop.config;
     };
 
     apps.x86_64-linux.default = {
@@ -37,7 +37,7 @@
       default = myOS-VM.config.system.build.diskImage;
       vmImage = myOS-VM.config.system.build.diskImage;
       toplevelVm = myOS-VM.config.system.build.toplevel;
-      toplevelBaremetal = myOS-Desktop.config.system.build.toplevel;
+      toplevelDesktop = myOS-Desktop.config.system.build.toplevel;
       optionsDocVm = ci.docs.optionsDocVm;
       optionsDocDesktop = ci.docs.optionsDocDesktop;
     };
