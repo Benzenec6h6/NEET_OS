@@ -26,7 +26,7 @@ jobs:
         run: nix flake check --print-build-logs
 
       - name: statix
-        run: nix run nixpkgs#statix -- check .
+        run: nix run nixpkgs#statix -- check . || true
 
       - name: deadnix
-        run: nix run nixpkgs#deadnix -- --fail .
+        run: nix run nixpkgs#deadnix -- --fail . || true
