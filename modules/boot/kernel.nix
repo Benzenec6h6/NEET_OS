@@ -7,6 +7,7 @@
   options = {
     boot.kernelPackages = lib.mkOption {
       default = pkgs.linuxPackages;
+      defaultText = lib.literalExpression "pkgs.linuxPackages";
       type = lib.types.raw;
       description = "使用するカーネルパッケージ（標準は最新のLTSなど）";
     };
