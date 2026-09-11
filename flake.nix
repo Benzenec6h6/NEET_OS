@@ -6,31 +6,42 @@
     pkgs = import sources.nixpkgs {system = "x86_64-linux";};
     lib = pkgs.lib;
 
-    # OSの評価
-    myOS = lib.evalModules {
-      specialArgs = {inherit pkgs lib;};
-      modules = [./configuration.nix];
-    };
+    evalProfile = profilePath:
+      lib.evalModules {
+        specialArgs = {inherit pkgs lib;};
+        modules = [profilePath];
+      };
 
-    image = import ./nix/image.nix {
+    myOS-VM = evalProfile ./profiles/vm-qemu;
+    myOS-Desktop = evalProfile ./profiles/desktop;
+
+    ci = import ./nix/ci.nix {
       inherit pkgs lib;
-      config = myOS.config;
-      stage2Init = myOS.config.system.build.toplevel.stage2Init;
-    };
-
-    # 評価結果の config.system.build.initrd を渡すだけ
-    runner = import ./nix/runner.nix {
-      inherit pkgs;
-      inherit image;
-      kernel = myOS.config.system.build.kernel;
-      initrd = myOS.config.system.build.initrd;
+      profiles = {
+        vm = myOS-VM;
+        baremetal = myOS-Desktop;
+      };
     };
   in {
-    debugConfig = myOS.config;
+    debugConfig = {
+      vm = myOS-VM.config;
+      baremetal = myOS-Desktop.config;
+    };
 
     apps.x86_64-linux.default = {
       type = "app";
-      program = "${runner}/bin/run-vm";
+      program = "${myOS-VM.config.system.build.vm}/bin/run-vm";
     };
+
+    packages.x86_64-linux = {
+      default = myOS-VM.config.system.build.diskImage;
+      vmImage = myOS-VM.config.system.build.diskImage;
+      toplevelVm = myOS-VM.config.system.build.toplevel;
+      toplevelBaremetal = myOS-Desktop.config.system.build.toplevel;
+      optionsDocVm = ci.docs.optionsDocVm;
+      optionsDocDesktop = ci.docs.optionsDocDesktop;
+    };
+
+    checks.x86_64-linux = ci.checks;
   };
 }
