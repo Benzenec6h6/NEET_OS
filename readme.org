@@ -1,0 +1,84 @@
+#+TITLE: NEET_OS 開発日誌: 非systemd・独自NixOS構築におけるトラップと設計の軌跡
+#+AUTHOR: NEET_OS Developer
+#+DATE: 2026-09-06
+
+* はじめに
+本ドキュメントは、非systemd環境かつ独自アーキテクチャでNixOS派生ディストリビューション（NEET_OS）を構築する過程で遭遇した技術的ハマりポイント（トラップ）と、その分析・解決に至るプロセスの記録である。
+
+* 1. Linuxカーネルモジュールのマルチ出力トラップ
+** 現象
+initrd（Stage-1）のビルド自体はエラーなく正常に完了するにもかかわらず、起動時に ~kmod~ (~modprobe~) がカーネルドライバを見つけられず、デバイスの認識やマウントに失敗する。
+
+** 原因
+Nixpkgsにおけるカーネルパッケージ（~pkgs/os-specific/linux/kernel/generic.nix~）はマルチ出力（Multiple Outputs）構成となっている。
+単純に ~config.boot.kernelPackages.kernel~ を参照した場合、標準出力（~$out~）であるカーネルバイナリ（~vmlinuz~）のパスが引き渡されてしまい、モジュール群（~/lib/modules/...~）が含まれる出力（~modules~）が参照されない。
+
+** 対策
+ドライバやカーネルモジュールを要するビルドステップでは、明示的に ~lib.getOutput~ を用いて ~modules~ 出力を抽出して指定する必要がある。
+
+#+BEGIN_SRC nix
+# 誤り: カーネル本体の出力のみを参照してしまう
+# config.boot.kernelPackages.kernel
+
+# 正しい指定: modules出力を明示的に取得
+lib.getOutput "modules" config.boot.kernelPackages.kernel
+#+END_SRC
+
+* 2. D-Bus 導入における罠と依存性の制約
+** XML設定生成処理（makeDBusConf）の必要性
+D-Busには標準のパーサーと、~suid helper~ で使用される軽量（trivial）パーサーの2種類が存在する。
+後者は ~<include>~ ディレクティブに対応していないため、単純に ~*-local.conf~ へ設定を配置するだけでは動作しない。
+そのため、NixOS環境下では ~xsltproc~ を用いて ~system.conf~ や ~session.conf~ のXMLを動的に結合・生成する ~makeDBusConf~ パッケージ（~make-system-conf.xsl~ 等）を経由して設定ファイルを組む必要が生じる。
+
+** dbus-broker と systemd 強制依存問題（2026年9月現在）
+高速なD-Bus実装である ~dbus-broker~ の採用を検討したが、Nixpkgsの定義（~pkgs/by-name/db/dbus-broker/package.nix~）を確認したところ、以下の依存関係が判明した：
+- ~buildInputs~ に ~systemd~ が直接含まれている。
+- ~postInstall~ にて ~systemd~ 配下の ~busctl~ バイナリへの直接パス置き換え（~ExecReload=${systemd}/bin/busctl~）が行われている。
+- ~mesonFlags~ や環境変数で systemd のユニットディレクトリ配置が前提となっている。
+
+非systemd環境（脱systemd）を目指す本プロジェクトにおいて、~dbus-broker~ の導入は不要な ~systemd~ パッケージをクロージャに強制引き入れ（汚染）することになるため、現時点での使用は不適切（推奨されない）と結論付けた。
+
+** Polkit における実行ユーザー名の固定化トラップ (polkitd vs polkituser)
+*** 現象
+独自NixOS環境下でPolkitデーモンを稼働させる際、権限分離用のシステムユーザーとして一般的な ~polkitd~ を作成・指定しても、デーモンの起動失敗や権限エラーが発生する。
+
+*** 原因
+NixpkgsにおけるPolkitのパッケージ定義（~pkgs/by-name/po/polkit/package.nix~）を確認したところ、Mesonのビルドオプションにて実行ユーザー名がハードコード指定されていた：
+
+#+BEGIN_SRC nix
+mesonFlags = [
+  ...
+  "-Dpolkitd_user=polkituser" # TODO? <nixos> config.ids.uids.polkituser
+  ...
+];
+#+END_SRC
+
+一般名詞的な ~polkitd~ ではなく、NixOS特有の ~polkituser~ が強制的に組み込まれてビルドされているため、OS（NEET_OS）側のユーザー空間設計においても ~polkituser~ アカウントを用意するか、パッケージ定義側で override / overrideAttrs を行い指定を書き換える必要がある。
+
+*** 対策
+NEET_OSのベース権限設計において ~polkituser~ (UID/GID) を正しく定義・生成するか、~polkit.overrideAttrs~ を用いて ~mesonFlags~ 内の ~-Dpolkitd_user~ を任意のユーザー名（~polkitd~ 等）へ差し替える。
+
+* 3. Stage-1 (sh) の限界と各プロジェクトのイニット統合アプローチ
+** シェルスクリプトによる Stage-1 の抽象化限界
+当初は Stage-1 をシンプルな ~sh~ スクリプトで記述していたが、ファイルシステム（ext4, btrfs, zfs等）の選択に汎用性を持たせようとした際、コードの維持が困難になった。
+例えば、ext4からbtrfsへ変更するだけで ~mkdir -p /mnt/nix/store~ のような事前ディレクトリ作成処理のコメントアウト・条件分岐修正が必要となり、「スクリプト側が上位の抽象化を保持できていない」という違和感（設計の破綻）に直面した。
+
+** 先人プロジェクト（SixOS, Finix）の解析とInitの役割
+なぜ先人たちが initrd（Stage-1）の段階にわざわざイニットシステムを含めているのか再調査を行った結果、これが「ファイルシステムや暗号化、動的マウントの差分を吸収し、汎用性を持たせるため」であると判明した。
+
+しかし、そのアプローチには大きな違いが存在する：
+
+*** SixOS (s6 採用)
+- s6をinitrd内で動かそうとするが、s6が要求する「FIFO（名前付きパイプ）や特殊パーミッション構造」が、読み取り専用かつアトミックな Nix Store の制約と正面衝突する。
+- SixOSはこれを回避するため、ビルド時に ~fakeroot~ や ~cpio~ 解凍・再アーカイブを駆使して ~/run~ 配下に強引に構造を展開するという、非常に泥臭く無理のあるアプローチ（強行手段）を取っていた。
+
+*** Finix (finit 採用)
+- finitはC言語で書かれた単一バイナリ構造であり、プラグイン形式で機能を拡張できる。
+- Nix Storeの制約に引っかかる要素が少なく、s6のような強引なワークアラウンドを必要とせずにスマートかつ軽量に解決していた。
+
+* 4. 結語：NEET_OSにおける到達点
+先人の試行錯誤と限界を踏まえ、NEET_OSでは以下のアーキテクチャを採用する方向性を確立した：
+1. **Stage-1 の完全独立化 (Rust化):**
+   initrd段階の初期化・ファイルシステム準備・~switch_root~ は、特定のイニットシステムやシェルの限界に依存しない「依存ゼロの自作Rust単一バイナリ」で完結させる。
+2. **Stage-2 イニットシステムのポリモーフィズム化:**
+   Stage-1 と Stage-2 を完全に疎結合とし、~finit~ / ~dinit~ / ~s6~ などのイニットシステムを単なる「1サービス/1パッケージ」として切り替え可能（マルチInit対応）にする。
