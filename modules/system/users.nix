@@ -47,6 +47,11 @@ with lib; let
         default = [];
         description = "The user's auxiliary groups.";
       };
+      initialHashedPassword = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "パスワードハッシュ (例: mkpasswd -m sha-512 で生成した文字列)";
+      };
     };
   };
 
@@ -61,8 +66,17 @@ with lib; let
   # 2. ユーザー個人の主グループを動的抽出
   userGroups = mapAttrs (_name: u: u.gid) cfg;
 
-  # 3. システム定義の共有グループとユーザー個人のグループを自動合体
-  allGroups = config.neet.gids // userGroups;
+  # 3. システム定義の共有グループとユーザー個人のグループを安全に合体
+  allGroups = let
+    # 重複しているグループ名を取得
+    overlapGroupNames = attrNames (intersectAttrs config.neet.gids userGroups);
+
+    # GIDが一致していない不整合なグループを検出
+    mismatched = filter (name: config.neet.gids.${name} != userGroups.${name}) overlapGroupNames;
+  in
+    if mismatched != []
+    then throw "GID不一致エラー: グループ [ ${concatStringsSep ", " mismatched} ] の GID が neet.gids と neet.users 間で一致していません。"
+    else config.neet.gids // userGroups;
 
   # 4. 各グループの所属メンバーを取得
   getUsersInGroup = groupName: let
@@ -76,7 +90,7 @@ with lib; let
     memberStr = concatStringsSep "," members;
   in "${groupName}:x:${toString gid}:${memberStr}";
 
-  # 6. 【追加】Rust 側に渡すユーザー制御用の JSON 設定ファイルを出力
+  # 6. Rust 側に渡すユーザー制御用の JSON 設定ファイルを出力
   userControlJson =
     mapAttrsToList (name: u: {
       username = name;
@@ -115,7 +129,6 @@ in {
     environment.etc."group".text =
       concatStringsSep "\n" (mapAttrsToList mkGroupLine allGroups) + "\n";
 
-    # 【追加】Rust(system-init) 用の制御設定ファイルを出力
     environment.etc."user_control.json".text = builtins.toJSON userControlJson;
   };
 }

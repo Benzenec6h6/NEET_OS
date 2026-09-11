@@ -17,18 +17,6 @@ with lib; let
       else "!";
   in "${name}:${passHash}:19700:0:99999:7:::";
 in {
-  options.neet.users = mkOption {
-    type = types.attrsOf (types.submodule {
-      options = {
-        initialHashedPassword = mkOption {
-          type = types.nullOr types.str;
-          default = null;
-          description = "パスワードハッシュ (例: mkpasswd -m sha-512 で生成した文字列)";
-        };
-      };
-    });
-  };
-
   config = {
     # /etc/shadow の生成 (etc_syncer 等で 0600 / root:root のパーミッション制御が必要)
     environment.etc."shadow" = {
