@@ -38,13 +38,13 @@
 
   # s6-rc サービスとしてシステム初期化・実験用サービスを定義
   system.s6-rc.services = {
-    meow = {
-      type = "longrun";
-      run = ''
-        #!/bin/execlineb -P
-        /bin/sh -c "while :; do echo NEET OS: meow!; sleep 10; done"
-      '';
-    };
+    #meow = {
+    #  type = "longrun";
+    #  run = ''
+    #    #!/bin/execlineb -P
+    #    /bin/sh -c "while :; do echo NEET OS: meow!; sleep 10; done"
+    #  '';
+    #};
 
     shell = {
       type = "longrun";
@@ -57,18 +57,8 @@
 
   # サービス有効化
   services.mdevd.enable = true;
-  services.seatd = {
-    enable = true;
-    group = "seat";
-    debug = true;
-  };
 
   services.dbus.enable = true;
-
-  networking = {
-    upInterfaces = ["lo" "eth0"];
-    dhcpInterfaces = ["eth0"];
-  };
 
   neet.security.enable = true;
 
@@ -102,13 +92,4 @@
       initialHashedPassword = "$y$j9T$lwc.8Oc5W7OwTWLCfDmfw/$IA4QRTrN.yPQcPwIiF8UULTrTDA3nZTM0p1JmQj/Jw4";
     };
   };
-
-  boot.fileSystems."/" = {
-    device = "/dev/vda";
-    fsType = "btrfs";
-    options = ["compress=zstd"];
-    neededForBoot = true;
-  };
-
-  virtualisation.virtio.enable = true;
 }
