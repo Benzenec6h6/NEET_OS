@@ -4,22 +4,20 @@
   ...
 }: {
   imports = [
-    ./modules/security
-    ./modules/system/s6-rc
-    ./modules/system/etc/default.nix
-    ./modules/system/boot.nix
-    ./modules/system/mdevd.nix
-    ./modules/system/seatd.nix
-    ./modules/system/users.nix
-    ./modules/virtualisation/virtio.nix
+    ./modules/boot
     ./modules/filesystems
-    ./modules/dbus.nix
+    ./modules/init
     ./modules/networking
-    ./modules/environment.nix
-    ./modules/activation.nix
+    ./modules/security
+    ./modules/services/dbus.nix
+    ./modules/services/seatd.nix
+    ./modules/services/mdevd
+    ./modules/system
+    ./modules/virtualisation/virtio.nix
   ];
 
   environment.systemPackages = [
+    pkgs.pkgsStatic.util-linux
     pkgs.pkgsStatic.busybox
     pkgs.pkgsStatic.s6
     pkgs.pkgsStatic.s6-rc
