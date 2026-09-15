@@ -4,22 +4,26 @@
   lib,
   ...
 }: let
+  # ビルド用スクリプトの生成（変数の注入）
+  buildInitrdEnvScript = pkgs.replaceVarsWith {
+    src = ./build-initrd.sh;
+    replacements = {
+      busybox = "${pkgs.pkgsStatic.busybox}";
+      kmod = "${pkgs.pkgsStatic.kmod}";
+      utilLinux = "${pkgs.pkgsStatic.util-linux}";
+      mdevd = "${pkgs.pkgsStatic.mdevd}";
+      earlyInit = "${config.system.build.earlyInit}";
+      mdevdDiskScript = "${config.system.build.mdevdDisk}/bin/mdevd-disk.sh";
+    };
+    isExecutable = true;
+  };
+
+  # スクリプトを実行して initrdEnv を生成
   initrdEnv = pkgs.runCommand "initrd-env" {} ''
-    mkdir -p $out/bin
-    # 1. BusyBox 本体の配置（書き込み権限を付与）
-    cp ${pkgs.pkgsStatic.busybox}/bin/busybox $out/bin/busybox
-    chmod 755 $out/bin/busybox
-    # 2. BusyBox の全リンク（sh, mount, mkdir等）を作成
-    $out/bin/busybox --install -s $out/bin
-    # 3. 既存の modprobe リンクを削除
-    rm -f $out/bin/modprobe
-    # 4. kmod (modprobe) を本物のバイナリで配置
-    cp ${pkgs.pkgsStatic.kmod}/bin/kmod $out/bin/modprobe
-    chmod 755 $out/bin/modprobe
-    # 5. early-init を配置（busyboxと対称的に実体コピー）
-    cp ${config.system.build.earlyInit}/bin/early-init $out/bin/early-init
-    chmod 755 $out/bin/early-init
+    export out=$out
+    ${buildInitrdEnvScript}
   '';
+
   modulesClosure = pkgs.makeModulesClosure {
     kernel = lib.getOutput "modules" config.boot.kernelPackages.kernel;
     rootModules = lib.unique config.boot.initrd.availableKernelModules;
@@ -48,6 +52,10 @@ in {
         {
           source = "${modulesClosure}/lib";
           target = "/lib";
+        }
+        {
+          source = pkgs.writeText "mdev.conf" config.services.mdevd.rules;
+          target = "/etc/mdev.conf";
         }
         {
           source = config.system.build.stage1MountPlan;
