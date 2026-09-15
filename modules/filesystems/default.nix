@@ -19,7 +19,12 @@
     computedStage1
   ));
 in {
-  imports = [./options.nix ./btrfs.nix ./ext4.nix ./9p.nix ./special.nix ./tmpfs.nix];
+  imports = [
+    ./options.nix
+    ./btrfs.nix
+    ./ext4.nix
+    ./9p.nix
+  ];
 
   config = {
     # 成果物として system.build に持たせる
@@ -29,14 +34,17 @@ in {
       "/proc" = {
         device = "proc";
         fsType = "proc";
+        neededForBoot = true;
       };
       "/sys" = {
         device = "sysfs";
         fsType = "sysfs";
+        neededForBoot = true;
       };
       "/dev" = {
         device = "devtmpfs";
         fsType = "devtmpfs";
+        neededForBoot = true;
       };
       "/dev/pts" = {
         device = "devpts";
