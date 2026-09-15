@@ -1,5 +1,0 @@
-#!@execline@/bin/execlineb -P
-foreground {
-  @systemInitBin@ @etcPackage@ @systemPath@ @kernelPath@
-}
-true
