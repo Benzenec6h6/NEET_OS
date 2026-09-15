@@ -77,14 +77,5 @@ in {
     system.build.earlyInit = earlyInit;
     # ツール自体をシステムパッケージに追加
     environment.systemPackages = [systemInit];
-
-    # 修正: system-init が求める 3 つの必須引数を正しく渡す
-    # (system-init <store-etc-path> <system-path> <kernel-path>)
-    system.activationScripts.etc = ''
-      ${config.system.etc.bin}/bin/system-init \
-        ${config.system.etc.package} \
-        ${config.system.build.toplevel or "/run/current-system"} \
-        ${config.system.modulesTree}
-    '';
   };
 }
