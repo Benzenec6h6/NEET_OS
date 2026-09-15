@@ -13,7 +13,7 @@
   virtualisation.virtio.enable = true;
 
   boot.fileSystems."/" = {
-    device = "/dev/vda";
+    device = "LABEL=NEET_OS";
     fsType = "btrfs";
     options = ["compress=zstd"];
     neededForBoot = true;
