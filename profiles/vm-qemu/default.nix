@@ -28,9 +28,4 @@
     group = "seat";
     debug = true;
   };
-
-  networking = {
-    upInterfaces = ["lo" "eth0"];
-    dhcpInterfaces = ["eth0"];
-  };
 }
