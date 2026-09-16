@@ -12,6 +12,8 @@
     ./modules/services/dbus.nix
     ./modules/services/seatd.nix
     ./modules/services/mdevd
+    ./modules/services/dhcpcd.nix
+    ./modules/services/iwd.nix
     ./modules/system
     ./modules/virtualisation/virtio.nix
   ];
@@ -30,9 +32,14 @@
   ];
 
   environment.etc = {
-    "hostname".text = "neet-os\n";
     "fonts/fonts.conf".source = "${pkgs.fontconfig.out}/etc/fonts/fonts.conf";
   };
+
+  networking.hostName = "neet-os";
+
+  programs.resolvconf.enable = true;
+  services.dhcpcd.enable = true;
+  #services.iwd.enable = true;
 
   # s6-rc サービスとしてシステム初期化・実験用サービスを定義
   system.s6-rc.services = {
