@@ -76,9 +76,58 @@ NEET_OSのベース権限設計において ~polkituser~ (UID/GID) を正しく�
 - finitはC言語で書かれた単一バイナリ構造であり、プラグイン形式で機能を拡張できる。
 - Nix Storeの制約に引っかかる要素が少なく、s6のような強引なワークアラウンドを必要とせずにスマートかつ軽量に解決していた。
 
-* 4. 結語：NEET_OSにおける到達点
+* 4. ネットワークスタック構築における暗黙のudev依存トラップ (dhcpcd)
+** 現象
+~mdevd~ を採用した非systemd・非udev環境下において、~dhcpcd~ をデーモン（~s6-rc~ の longrun サービス等）として自動起動させた際、プロセス自体は正常生存（~[manager] [ip4] [ip6]~）しているにもかかわらず、ネットワークインターフェース（~eth0~）の自動検出が行われず、IPv4アドレスの取得および ~resolvconf~ へのDNS登録がサイレントに停止（待機）状態となる。
+
+奇妙なことに、CLIから手動で対象インターフェースを名指し（~dhcpcd -d -4 eth0~）して実行した場合には即座にDHCPリースが成功し、通信可能となる。また、デーモン停止時に ~dev: unloaded udev~ というログが出力されていた。
+
+** 原因
+Nixpkgsにおける ~dhcpcd~ のパッケージ定義（~pkgs/by-name/dh/dhcpcd/package.nix~）を確認したところ、以下のデフォルトフラグが設定されていた：
+
+#+BEGIN_SRC nix
+withUdev ? stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isStatic,
+#+END_SRC
+
+Linux環境下ではデフォルトで ~withUdev = true~ と評価されるため、動的プラグインとして ~$out/lib/dhcpcd/dev/udev.so~ が強制的にビルド・同梱される。
+
+この ~udev.so~ プラグインがロードされると、~dhcpcd~ はLinuxカーネルからの直接的なインターフェース検出（netlink / sysfs）を行わず、**「~systemd-udevd~ からネットワークデバイスの初期化完了イベントが通知されるのを待機する」** 挙動へと切り替わる。
+
+しかし、NEET_OSのような ~mdevd~ 採用環境では ~systemd-udevd~ が存在しないため、イベントが一切発行されず、結果として ~dhcpcd~ は「udevからの合図を永遠に待ちぼうけ」となり、インターフェースを一切捕捉できないハング状態に陥っていた。
+（※ 手動実行時にインターフェース名を直接指定した場合は、udevのイベント待機キューをバイパスして直接デバイスをオープンしたため動作していた）
+
+先行プロジェクト（Finix）のコードを精査したところ、同様の事象を回避するために以下のオーバーライドが施されていたことが判明した：
+
+#+BEGIN_SRC nix
+package = lib.mkOption {
+  type = lib.types.package;
+  default = pkgs.dhcpcd.override {
+    withUdev = config.services.udev.enable; # udevが無効な場合は false
+  };
+  ...
+};
+#+END_SRC
+
+** 対策
+パッケージの参照時に明示的に ~withUdev = false~ を渡し、~udev.so~ プラグインのビルドを除外する。
+
+#+BEGIN_SRC nix
+package = mkOption {
+  type = types.package;
+  default = pkgs.dhcpcd.override {
+    withUdev = false; # mdevd環境のため udev プラグインを無効化
+  };
+  description = "使用する dhcpcd パッケージ";
+};
+#+END_SRC
+
+これにより、~dhcpcd~ はLinuxカーネルと直接対話（netlink経由）してインターフェースを自己検出する本来のフォールバック動作に戻り、~mdevd~ 環境下でも起動直後にサイレント待機することなくIPv4アドレスとDNS情報を正常に取得可能となった。
+
+* 5. 結語：NEET_OSにおける到達点
 先人の試行錯誤と限界を踏まえ、NEET_OSでは以下のアーキテクチャを採用する方向性を確立した：
 1. **Stage-1 の完全独立化 (Rust化):**
    initrd段階の初期化・ファイルシステム準備・~switch_root~ は、特定のイニットシステムやシェルの限界に依存しない「依存ゼロの自作Rust単一バイナリ」で完結させる。
 2. **Stage-2 イニットシステムのポリモーフィズム化:**
    Stage-1 と Stage-2 を完全に疎結合とし、~finit~ / ~dinit~ / ~s6~ などのイニットシステムを単なる「1サービス/1パッケージ」として切り替え可能（マルチInit対応）にする。
+3. **隠蔽されたsystemd/udev依存の徹底排除:**
+   D-Busやネットワークスタック等、一見独立して見えるパッケージ群がNixpkgs標準で抱え込む「暗黙のsystemd/udev結合」をパッケージ定義レベルから特定・無効化し、真にミニマルな非systemd環境を維持する。
