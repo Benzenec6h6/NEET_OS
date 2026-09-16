@@ -35,7 +35,6 @@ in {
       # 1. mdevd デーモン本体
       mdevd = {
         type = "longrun";
-        notification-fd = 4;
         run = ''
           #!/bin/execlineb -P
           export PATH /bin:${pkgs.pkgsStatic.mdevd}/bin:${pkgs.pkgsStatic.kmod}/bin
