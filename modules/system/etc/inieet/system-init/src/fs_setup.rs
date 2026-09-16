@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io;
+use std::os::unix::fs::symlink;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -89,5 +90,47 @@ fn setup_single_directory(
     fs::create_dir_all(path)?;
     let _ = chown(path, Some(user.uid), Some(user.gid));
     let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));
+    Ok(())
+}
+
+/// 基本的なシステムディレクトリと互換シンボリックリンクを整える
+pub fn setup_base_directories() -> io::Result<()> {
+    // 1. /var 配下の永続ディレクトリの準備
+    let var_dirs = ["/var/db", "/var/lib", "/var/log"];
+    for dir in &var_dirs {
+        fs::create_dir_all(dir)?;
+    }
+
+    // 2. /run 配下の一時ディレクトリの準備
+    let run_dirs = ["/run/lock"];
+    for dir in &run_dirs {
+        let path = Path::new(dir);
+        if !path.exists() {
+            fs::create_dir_all(path)?;
+            // ロックディレクトリは 1777 (sticky bit) が標準
+            let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o1777));
+        }
+    }
+
+    // 3. 互換シンボリックリンクの作成
+    //    (壊れたリンクが残っていても安全に作り直す)
+    ensure_symlink(Path::new("/run"), Path::new("/var/run"))?;
+    ensure_symlink(Path::new("/run/lock"), Path::new("/var/lock"))?;
+
+    // (オプション) /sbin を使おうとする古いツール向け
+    ensure_symlink(Path::new("/bin"), Path::new("/sbin"))?;
+
+    Ok(())
+}
+
+/// 既存のファイル/壊れたリンクを安全に削除してシンボリックリンクを保証するヘルパー
+fn ensure_symlink(src: &Path, dest: &Path) -> io::Result<()> {
+    if dest.is_symlink() || dest.exists() {
+        let _ = fs::remove_file(dest);
+    }
+    // ディレクトリとして実体が存在してしまっている場合は削除できないため回避
+    if !dest.exists() {
+        symlink(src, dest)?;
+    }
     Ok(())
 }

@@ -10,7 +10,9 @@ mod net_setup;
 mod wrappers;
 
 use std::env;
+use std::fs;
 use std::io;
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
 fn main() {
@@ -46,6 +48,12 @@ fn run(
     let plan_path = Path::new("/etc/mount-plan.json");
     fs_setup::setup_filesystems(plan_path)?;
 
+    // /run がマウントされた直後に /run/current-system を作成
+    setup_current_system(system_path)?;
+
+    // /var や /run 関連の基本ディレクトリ・互換リンクを整える
+    fs_setup::setup_base_directories()?;
+
     // 3. マウントが終わった綺麗な /run に対して Wrapper を作成する
     if let Err(e) = wrappers::setup_wrappers() {
         eprintln!("system-init: warning: failed to setup wrappers: {e}");
@@ -59,5 +67,20 @@ fn run(
     let users = etc_syncer::user_group::parse_passwd().unwrap_or_default();
     fs_setup::setup_user_directories(&users)?;
 
+    Ok(())
+}
+
+/// /run/current-system -> <system-path> のシンボリックリンクを作成する
+fn setup_current_system(system_path: &Path) -> io::Result<()> {
+    let link_path = Path::new("/run/current-system");
+
+    // 既に存在している（または壊れたリンクが残っている）場合は一旦削除
+    let _ = fs::remove_file(link_path);
+
+    symlink(system_path, link_path)?;
+    println!(
+        "system-init: created symlink /run/current-system -> {}",
+        system_path.display()
+    );
     Ok(())
 }
