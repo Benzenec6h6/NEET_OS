@@ -9,7 +9,7 @@ in {
   imports = [
     ./kernel.nix
     ./initrd.nix
-    # 将来ここに limine.nix や efi.nix を追加します
+    ./sysctl.nix
   ];
 
   options = {
