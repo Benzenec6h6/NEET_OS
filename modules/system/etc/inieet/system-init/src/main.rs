@@ -17,24 +17,83 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 4 {
-        eprintln!(
-            "usage: system-init <store-etc-path> <system-path> <kernel-path> [prune-path ...]"
-        );
-        std::process::exit(1);
-    }
+    let subcommand = args.get(1).map(|s| s.as_str());
 
-    let store_etc = PathBuf::from(&args[1]);
-    let system_path = PathBuf::from(&args[2]);
-    let kernel_path = PathBuf::from(&args[3]);
-    let prune: Vec<PathBuf> = args[4..].iter().map(PathBuf::from).collect();
+    match subcommand {
+        Some("switch") => {
+            if args.len() < 4 {
+                eprintln!(
+                    "usage: system-init switch <store-etc-path> <system-path> [prune-path ...]"
+                );
+                std::process::exit(1);
+            }
 
-    if let Err(e) = run(&store_etc, &system_path, &kernel_path, &prune) {
-        eprintln!("system-init: fatal: {e}");
-        std::process::exit(1);
+            let store_etc = PathBuf::from(&args[2]);
+            let system_path = PathBuf::from(&args[3]);
+            let prune: Vec<PathBuf> = args[4..].iter().map(PathBuf::from).collect();
+
+            if let Err(e) = run_switch(&store_etc, &system_path, &prune) {
+                eprintln!("system-init: switch failed: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        // それ以外（通常ブート時）
+        _ => {
+            if args.len() < 4 {
+                eprintln!(
+                    "usage: system-init <store-etc-path> <system-path> <kernel-path> [prune-path ...]"
+                );
+                eprintln!(
+                    "   or: system-init switch <store-etc-path> <system-path> [prune-path ...]"
+                );
+                std::process::exit(1);
+            }
+
+            let store_etc = PathBuf::from(&args[1]);
+            let system_path = PathBuf::from(&args[2]);
+            let kernel_path = PathBuf::from(&args[3]);
+            let prune: Vec<PathBuf> = args[4..].iter().map(PathBuf::from).collect();
+
+            if let Err(e) = run(&store_etc, &system_path, &kernel_path, &prune) {
+                eprintln!("system-init: fatal: {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
+/// 稼働中の動的切り替え（rebuild switch 用）
+fn run_switch(store_etc: &Path, system_path: &Path, prune: &[PathBuf]) -> io::Result<()> {
+    println!("system-init: [switch] updating system configuration...");
+
+    // 1. 新しい世代の /etc を同期 (wrappers.json などの設定も最新になる)
+    println!("system-init: [switch] syncing /etc...");
+    etc_syncer::setup_etc(store_etc, prune)?;
+
+    // 2. /run/current-system を新しい system-path に張り替える
+    setup_current_system(system_path)?;
+
+    // 3. 基本ディレクトリと互換リンクの整合性を維持
+    fs_setup::setup_base_directories()?;
+
+    // 4. 新しい wrappers.json に基づいてラッパーバイナリを再生成
+    if let Err(e) = wrappers::setup_wrappers() {
+        eprintln!("system-init: [switch] warning: failed to setup wrappers: {e}");
+    }
+
+    // 5. /bin 配下のリンクを新しい世代に更新
+    bin_setup::setup_bin(system_path)?;
+
+    // 6. 新規追加されたユーザーがいればホームディレクトリ等を準備
+    let users = etc_syncer::user_group::parse_passwd().unwrap_or_default();
+    fs_setup::setup_user_directories(&users)?;
+
+    println!("system-init: [switch] core system updated successfully.");
+    Ok(())
+}
+
+/// 起動時初期化（既存コードのまま変更なし）
 fn run(
     store_etc: &Path,
     system_path: &Path,

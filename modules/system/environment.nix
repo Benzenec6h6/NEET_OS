@@ -3,7 +3,10 @@
   lib,
   config,
   ...
-}: {
+}: let
+  # rebuild スクリプトをパッケージ化
+  neetRebuild = pkgs.writeShellScriptBin "neet-rebuild" (builtins.readFile ./rebuild.sh);
+in {
   options = {
     environment.systemPackages = lib.mkOption {
       type = lib.types.listOf lib.types.package;
@@ -25,11 +28,15 @@
   };
 
   config = {
-    environment.systemPackages = [config.environment.execline];
+    # ★ neetRebuild を追加
+    environment.systemPackages = [
+      config.environment.execline
+      neetRebuild
+    ];
+
     system.path = pkgs.buildEnv {
       name = "system-path";
       paths = config.environment.systemPackages;
-      # /bin を含めるように明示
       pathsToLink = ["/bin"];
       ignoreCollisions = true;
       postBuild = ''
@@ -45,11 +52,17 @@
       PRETTY_NAME="NEET OS v0.1"
     '';
 
-    # /etc/profile を強化
+    # /etc/profile を強化 (環境変数の一元化)
     environment.etc."profile".text = ''
-      export PATH=/run/wrappers/bin:/bin:/sbin
+      export HOME=''${HOME:-/root}
+      export PATH=/run/wrappers/bin:/run/current-system/bin:/bin:/sbin
       export TERM=linux
       export PS1='\e[1;32mNEET-OS\e[0m \w \$ '
+
+      # Nix 関連
+      export NIX_REMOTE=daemon
+      export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+      export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     '';
   };
 }
