@@ -38,14 +38,17 @@ if [ "@enableSharedStore@" = "1" ]; then
 fi
 
 if [ "@enableSharedConfig@" = "1" ]; then
+  # sourcePath が空文字の場合は、スクリプト実行時のカレントディレクトリ $(pwd) を使用する
   HOST_SRC="@sourcePath@"
   if [ -z "$HOST_SRC" ]; then
-    HOST_SRC="$PWD"
+    HOST_SRC="$(pwd)"
   fi
 
+  echo "run-vm: mounting host directory '$HOST_SRC' to /etc/neet-os"
+
   QEMU_ARGS+=(
-    -fsdev "local,security_model=none,id=fsdev-config,path=@sourcePath@"
-    -device "virtio-9p-pci,fsdev=fsdev-config,mount_tag=neet_os_src"
+    -fsdev local,security_model=none,id=fsdev-config,path="$HOST_SRC"
+    -device virtio-9p-pci,fsdev=fsdev-config,mount_tag=neet_os_src
   )
 fi
 
