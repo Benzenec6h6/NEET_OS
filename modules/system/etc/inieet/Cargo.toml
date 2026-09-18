@@ -4,4 +4,5 @@ members = [
     "init-core",
     "early-init",
     "system-init",
+    "limine-install",
 ]

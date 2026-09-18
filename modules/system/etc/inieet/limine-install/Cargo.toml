@@ -1,0 +1,7 @@
+[package]
+name = "limine-install"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# 外部クレートは最小限で。必要に応じて追加可能

@@ -21,6 +21,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
+name = "early-init"
+version = "0.1.0"
+dependencies = [
+ "init-core",
+]
+
+[[package]]
+name = "init-core"
+version = "0.1.0"
+dependencies = [
+ "nix",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -31,6 +47,10 @@ name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+
+[[package]]
+name = "limine-install"
+version = "0.1.0"
 
 [[package]]
 name = "memchr"
@@ -126,6 +146,7 @@ dependencies = [
 name = "system-init"
 version = "0.1.0"
 dependencies = [
+ "init-core",
  "nix",
  "serde",
  "serde_json",
