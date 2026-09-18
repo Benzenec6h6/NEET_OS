@@ -7,22 +7,26 @@
   cfg = config.testing.vm;
   rootFsType = config.boot.fileSystems."/".fsType;
 
+  toplevel = config.system.build.toplevel;
+
   closure = pkgs.closureInfo {
     rootPaths = [
-      config.system.build.toplevel
+      toplevel
       config.boot.kernelPackages.kernel
     ];
   };
 
-  rootfs = pkgs.runCommand "rootfs-staging" {} ''
-    mkdir -p $out/nix/store
-    while read -r path; do
-      cp -a "$path" "$out/nix/store/$(basename "$path")"
-    done < ${closure}/store-paths
-  '';
+  # スクリプトを外部ファイルとして呼び出す
+  rootfs =
+    pkgs.runCommand "rootfs-staging" {
+      nativeBuildInputs = [pkgs.nix pkgs.bash];
+      inherit closure toplevel;
+    } ''
+      bash ${./populate-rootfs.sh}
+    '';
 
   diskImage = let
-    imageSize = "2G"; # 将来的にはtesting.vm.diskSizeのようなoptionから受け取る
+    imageSize = "2G";
   in
     {
       btrfs =

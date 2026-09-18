@@ -37,4 +37,16 @@ if [ "@enableSharedStore@" = "1" ]; then
   )
 fi
 
+if [ "@enableSharedConfig@" = "1" ]; then
+  HOST_SRC="@sourcePath@"
+  if [ -z "$HOST_SRC" ]; then
+    HOST_SRC="$PWD"
+  fi
+
+  QEMU_ARGS+=(
+    -fsdev "local,security_model=none,id=fsdev-config,path=@sourcePath@"
+    -device "virtio-9p-pci,fsdev=fsdev-config,mount_tag=neet_os_src"
+  )
+fi
+
 exec "@qemuBinary@" "${QEMU_ARGS[@]}" "$@"

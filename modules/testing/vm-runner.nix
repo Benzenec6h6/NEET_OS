@@ -30,6 +30,11 @@
         if cfg.persistent
         then ""
         else ",snapshot=on";
+      enableSharedConfig =
+        if cfg.sharedConfig
+        then "1"
+        else "0";
+      sourcePath = cfg.sharedConfigPath;
     };
     isExecutable = true;
     dontPatchShebangs = true;
@@ -58,10 +63,22 @@ in {
       description = "false: snapshot=on (使い捨て), true: 永続化テスト用";
     };
     sharedStore = lib.mkEnableOption "9p経由でホストのnix storeを共有(反復開発の高速化用)";
+
+    sharedConfig = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "9p経由でホストの設定ディレクトリを/etc/neet-osに共有";
+    };
+
+    # ★ついでに共有するホスト側パスも指定できるようにしておくと柔軟
+    sharedConfigPath = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "ホスト側の共有ディレクトリパス（空なら起動スクリプト実行時のPWD）";
+    };
   };
 
   config = lib.mkIf cfg.enable {
-    # 1. VM環境でのOS側フラグ・コンソール調整 (旧 vm-variant.nix から移設)
     virtualisation.virtio.enable = lib.mkDefault true;
     boot.consoles = lib.mkDefault (
       if cfg.graphics
@@ -69,7 +86,17 @@ in {
       else ["ttyS0"]
     );
 
-    # 2. replaceVarsWith で生成したスクリプトを出力 (新 runner.nix の処理)
+    boot.fileSystems."/etc/neet-os" = lib.mkIf cfg.sharedConfig {
+      device = "neet_os_src";
+      fsType = "9p";
+      options = [
+        "trans=virtio"
+        "version=9p2000.L"
+        "msize=1048576"
+        "nofail"
+      ];
+    };
+
     system.build.vm = pkgs.stdenv.mkDerivation {
       name = "run-vm";
       buildCommand = ''
