@@ -17,6 +17,7 @@
       initrd = "${config.system.build.initrd}";
       diskImage = "${config.system.build.diskImage}";
       memorySize = toString cfg.memorySize;
+      cores = toString cfg.cores;
       cmdline = "${kernelConsoleArgs} loglevel=7 printk.time=1 console_msg_format=syslog";
       enableGraphics =
         if cfg.graphics
@@ -46,6 +47,11 @@ in {
       type = lib.types.int;
       default = 1024;
       description = "VM memory in MiB";
+    };
+    cores = lib.mkOption {
+      type = lib.types.int;
+      default = 4;
+      description = "Number of CPU cores for the VM";
     };
     graphics = lib.mkOption {
       type = lib.types.bool;
