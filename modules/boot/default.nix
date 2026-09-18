@@ -10,6 +10,7 @@ in {
     ./kernel.nix
     ./initrd.nix
     ./sysctl.nix
+    ./limine.nix
   ];
 
   options = {

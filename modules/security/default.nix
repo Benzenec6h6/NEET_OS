@@ -6,6 +6,7 @@
 }:
 with lib; {
   imports = [
+    ./ca.nix
     ./pam.nix
     ./polkit.nix
     ./shadow.nix
