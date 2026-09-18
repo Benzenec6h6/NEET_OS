@@ -6,42 +6,25 @@
     pkgs = import sources.nixpkgs {system = "x86_64-linux";};
     lib = pkgs.lib;
 
-    evalProfile = profilePath:
-      lib.evalModules {
-        specialArgs = {inherit pkgs lib;};
-        modules = [profilePath];
-      };
-
-    myOS-VM = evalProfile ./profiles/vm-qemu;
-    myOS-Desktop = evalProfile ./profiles/desktop;
-
     ci = import ./nix/ci.nix {
       inherit pkgs lib;
-      profiles = {
-        vm = myOS-VM;
-        desktop = myOS-Desktop;
-      };
+      neetModules = ./modules;
     };
   in {
-    debugConfig = {
-      vm = myOS-VM.config;
-      desktop = myOS-Desktop.config;
-    };
+    # 外部(NEET_dots)に提供するモジュール群
+    nixosModules.default = ./modules;
 
-    apps.x86_64-linux.default = {
-      type = "app";
-      program = "${myOS-VM.config.system.build.vm}/bin/run-vm";
-    };
+    # 外部から簡単に設定をビルドできるようにするヘルパー関数
+    lib.evalSystem = userModules:
+      lib.evalModules {
+        specialArgs = {inherit pkgs lib;};
+        modules = [./modules] ++ userModules;
+      };
 
-    packages.x86_64-linux = {
-      default = myOS-VM.config.system.build.diskImage;
-      vmImage = myOS-VM.config.system.build.diskImage;
-      toplevelVm = myOS-VM.config.system.build.toplevel;
-      toplevelDesktop = myOS-Desktop.config.system.build.toplevel;
-      optionsDocVm = ci.docs.optionsDocVm;
-      optionsDocDesktop = ci.docs.optionsDocDesktop;
-    };
-
+    # CI チェック
     checks.x86_64-linux = ci.checks;
+
+    # オプション仕様書 (ドキュメント)
+    packages.x86_64-linux.optionsDoc = ci.docs.optionsDoc;
   };
 }
