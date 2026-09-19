@@ -2,9 +2,8 @@
 set -eu
 
 QEMU_ARGS=(
-  -kernel "@kernel@/bzImage"
-  -initrd "@initrd@/initrd"
-  -append "@cmdline@ root=/dev/vda"
+  # ★UEFI ファームウェアを指定して起動
+  -bios "@ovmfFirmware@"
   -m "@memorySize@"
   -smp "@cores@"
   -cpu host -enable-kvm
@@ -18,7 +17,7 @@ QEMU_ARGS=(
   -drive "file=@diskImage@,if=virtio,format=raw@snapshotFlag@"
 )
 
-# グラフィック設定の条件分岐
+# グラフィック設定
 if [ "@enableGraphics@" = "1" ]; then
   QEMU_ARGS+=(
     -display gtk
@@ -31,7 +30,7 @@ else
   QEMU_ARGS+=(-nographic)
 fi
 
-# 9pストア共有の設定
+# 9pストア共有
 if [ "@enableSharedStore@" = "1" ]; then
   QEMU_ARGS+=(
     -fsdev local,security_model=none,id=fsdev-store,path=/nix/store,readonly=on
@@ -39,8 +38,8 @@ if [ "@enableSharedStore@" = "1" ]; then
   )
 fi
 
+# 9p設定ディレクトリ共有
 if [ "@enableSharedConfig@" = "1" ]; then
-  # sourcePath が空文字の場合は、スクリプト実行時のカレントディレクトリ $(pwd) を使用する
   HOST_SRC="@sourcePath@"
   if [ -z "$HOST_SRC" ]; then
     HOST_SRC="$(pwd)"

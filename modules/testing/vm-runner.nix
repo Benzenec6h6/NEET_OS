@@ -5,20 +5,15 @@
   ...
 }: let
   cfg = config.testing.vm;
-  otherConsoles = builtins.tail config.boot.consoles;
-  primaryConsole = builtins.head config.boot.consoles;
-  kernelConsoleArgs = lib.concatMapStringsSep " " (c: "console=${c}") (otherConsoles ++ [primaryConsole]);
 
   vmRunnerScript = pkgs.replaceVarsWith {
-    src = ./run-vm.sh; # 同一ディレクトリルートにあるスクリプトテンプレート
+    src = ./run-vm.sh;
     replacements = {
       qemuBinary = "${pkgs.qemu_kvm}/bin/qemu-system-x86_64";
-      kernel = "${config.system.build.kernel}";
-      initrd = "${config.system.build.initrd}";
+      ovmfFirmware = "${pkgs.OVMF.fd}/FV/OVMF.fd";
       diskImage = "${config.system.build.diskImage}";
       memorySize = toString cfg.memorySize;
       cores = toString cfg.cores;
-      cmdline = "${kernelConsoleArgs} loglevel=7 printk.time=1 console_msg_format=syslog";
       enableGraphics =
         if cfg.graphics
         then "1"
@@ -45,7 +40,7 @@ in {
     enable = lib.mkEnableOption "Build this configuration as a QEMU test VM";
     memorySize = lib.mkOption {
       type = lib.types.int;
-      default = 1024;
+      default = 2048;
       description = "VM memory in MiB";
     };
     cores = lib.mkOption {
@@ -56,31 +51,28 @@ in {
     graphics = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Enable GTK display output (false = headless/serial only)";
+      description = "Enable GTK display output";
     };
     diskSize = lib.mkOption {
       type = lib.types.int;
-      default = 2048;
+      default = 4096;
       description = "Disk image size in MiB";
     };
     persistent = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "false: snapshot=on (使い捨て), true: 永続化テスト用";
+      description = "false: snapshot=on (使い捨て), true: 変更をディスクに永続化";
     };
-    sharedStore = lib.mkEnableOption "9p経由でホストのnix storeを共有(反復開発の高速化用)";
-
+    sharedStore = lib.mkEnableOption "9p経由でホストのnix storeを共有";
     sharedConfig = lib.mkOption {
       type = lib.types.bool;
       default = true;
       description = "9p経由でホストの設定ディレクトリを/etc/neet-osに共有";
     };
-
-    # ★ついでに共有するホスト側パスも指定できるようにしておくと柔軟
     sharedConfigPath = lib.mkOption {
       type = lib.types.str;
       default = "";
-      description = "ホスト側の共有ディレクトリパス（空なら起動スクリプト実行時のPWD）";
+      description = "ホスト側の共有ディレクトリパス";
     };
   };
 
