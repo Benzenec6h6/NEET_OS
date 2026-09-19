@@ -24,11 +24,11 @@
       bash ${./populate-rootfs.sh}
     '';
 
-  # ★サイズを MiB 単位で定義
-  espSizeM = 512; # ESP (FAT32): 512 MiB
-  rootSizeM = 3584; # Root (Btrfs): 3584 MiB (3.5 GiB)
-  # 全体: 先頭1MB + ESP(512MB) + Root(3584MB) + 末尾バックアップGPT用(1MB)
-  diskSizeM = 1 + espSizeM + rootSizeM + 1;
+  # ★ VM 設定の diskSize (8192 MiB) から各サイズを動的に計算
+  diskSizeM = cfg.diskSize;
+  espSizeM = 512;
+  # 全体から [先頭GPT 1MB] + [ESP 512MB] + [末尾GPT 1MB] を引いた残りを Root に割り当てる
+  rootSizeM = diskSizeM - espSizeM - 2;
 
   diskImage =
     pkgs.runCommand "neet-os-disk-image" {
@@ -42,7 +42,7 @@
       ];
     } ''
       # 1. ESP (FAT32) イメージの作成
-      echo "Creating ESP image..."
+      echo "Creating ESP image (${toString espSizeM}M)..."
       truncate -s ${toString espSizeM}M esp.img
       mkfs.vfat -F 32 -n NEET_BOOT esp.img
 
@@ -66,27 +66,26 @@
       mcopy -i esp.img limine.conf ::/limine.conf
 
       # 2. RootFS (Btrfs) イメージの作成
-      echo "Creating RootFS image (${rootFsType})..."
+      # 7.5GB ほどの十分な空き枠を取ってから流し込むので、mkfs がサイズを拡大することはない
+      echo "Creating RootFS image (${toString rootSizeM}M)..."
       truncate -s ${toString rootSizeM}M rootfs.img
 
-      # ★超重要: -b (バイトサイズ) を指定して、mkfs が勝手にサイズを拡張するのを防ぐ
       ${
         if rootFsType == "btrfs"
-        then "mkfs.btrfs -b ${toString (rootSizeM * 1024 * 1024)} -L NEET_OS -r ${rootfs} rootfs.img"
+        then "mkfs.btrfs -L NEET_OS -r ${rootfs} rootfs.img"
         else if rootFsType == "ext4"
-        then "mkfs.ext4 -L NEET_OS -d ${rootfs} rootfs.img ${toString rootSizeM}M"
+        then "mkfs.ext4 -L NEET_OS -d ${rootfs} rootfs.img"
         else throw "未対応の fsType です"
       }
 
       # 3. GPT ディスクの構築
-      echo "Assembling GPT disk image..."
+      echo "Assembling GPT disk image (${toString diskSizeM}M)..."
       truncate -s ${toString diskSizeM}M $out
 
-      # GPT テーブル初期化 & パーティション作成
       sgdisk -Z $out
-      # p1: 1MB(2048セクタ) から 512MB
+      # p1: ESP (1MB から 512MB)
       sgdisk -n 1:2048:+${toString espSizeM}M -t 1:ef00 -c 1:"EFI" $out
-      # p2: 513MB から 3584MB
+      # p2: Root (513MB から 残りすべて)
       sgdisk -n 2:${toString ((1 + espSizeM) * 2048)}:+${toString rootSizeM}M -t 2:8300 -c 2:"root" $out
 
       # 結合 (conv=notrunc)
