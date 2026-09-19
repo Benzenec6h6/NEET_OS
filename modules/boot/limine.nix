@@ -9,21 +9,31 @@
   # inieet から Rust 製の limine-install バイナリを取得
   inherit (import ../system/etc/inieet {inherit pkgs lib;}) limineInstall;
 
-  # Limine のパッケージ
   liminePkg = cfg.package;
 
   # ブートローダのインストール・更新を行うスクリプト
   installBootloader = pkgs.writeShellScript "install-limine" ''
-    set -e
+    set -euo pipefail
+
     BOOT_DIR="${cfg.bootDir}"
     LIMINE_PKG="${liminePkg}"
+    export LIMINE_TIMEOUT="${toString cfg.timeout}"
 
+    # 1. ディレクトリの存在確認
     if [ ! -d "$BOOT_DIR" ]; then
       echo "limine-install: error: boot directory '$BOOT_DIR' does not exist!" >&2
       exit 1
     fi
 
-    # Rust 製の limine-install を実行
+    # 2. 実機安全対策: /boot が独立パーティションとして正しくマウントされているか確認
+    # (util-linux の mountpoint コマンドを使用)
+    if ! ${pkgs.util-linux}/bin/mountpoint -q "$BOOT_DIR"; then
+      echo "limine-install: error: target '$BOOT_DIR' is not a mountpoint!" >&2
+      echo "limine-install: please ensure the EFI System Partition is mounted at $BOOT_DIR." >&2
+      exit 1
+    fi
+
+    # 3. Rust 製の limine-install を実行
     exec ${limineInstall}/bin/limine-install "$BOOT_DIR" "$LIMINE_PKG"
   '';
 in {
@@ -52,10 +62,8 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    # 成果物として installBootLoader を登録 (rebuild スクリプトやインストーラが呼ぶ)
     system.build.installBootLoader = installBootloader;
 
-    # 手動実行やデバッグ用に環境にも入れておく
     environment.systemPackages = [
       limineInstall
       (pkgs.writeScriptBin "update-limine" ''

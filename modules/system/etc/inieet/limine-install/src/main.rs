@@ -40,8 +40,13 @@ fn main() -> io::Result<()> {
     }
 
     // 4. 各世代のカーネルと initrd を /boot/kernels に配置し、limine.conf を組み立てる
+    let timeout: u32 = env::var("LIMINE_TIMEOUT")
+        .ok()
+        .and_then(|t| t.parse().ok())
+        .unwrap_or(5);
+
     let mut limine_conf = String::new();
-    limine_conf.push_str("timeout: 5\n\n");
+    limine_conf.push_str(&format!("timeout: {}\n\n", timeout));
 
     let mut keep_kernel_files = HashSet::new();
 
