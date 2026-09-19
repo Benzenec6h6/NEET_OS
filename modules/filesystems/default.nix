@@ -20,6 +20,7 @@
   ));
 in {
   imports = [
+    ./vfat.nix
     ./options.nix
     ./btrfs.nix
     ./ext4.nix
