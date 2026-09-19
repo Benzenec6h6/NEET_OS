@@ -63,30 +63,30 @@ with lib; let
       else "/home/${name}";
   in "${name}:x:${toString u.uid}:${toString u.gid}:${u.description}:${homeDir}:${u.shell}";
 
+  # 共有グループ (config.neet.gids) に登録済みの GID リスト
+  sharedGids = attrValues config.neet.gids;
+
   # 2. ユーザー個人の主グループを動的抽出
-  userGroups = mapAttrs (_name: u: u.gid) cfg;
+  userGroups = filterAttrs (_name: gid: !elem gid sharedGids) (mapAttrs (_name: u: u.gid) cfg);
 
   # 3. システム定義の共有グループとユーザー個人のグループを安全に合体
-  allGroups = let
-    # 重複しているグループ名を取得
-    overlapGroupNames = attrNames (intersectAttrs config.neet.gids userGroups);
-
-    # GIDが一致していない不整合なグループを検出
-    mismatched = filter (name: config.neet.gids.${name} != userGroups.${name}) overlapGroupNames;
-  in
-    if mismatched != []
-    then throw "GID不一致エラー: グループ [ ${concatStringsSep ", " mismatched} ] の GID が neet.gids と neet.users 間で一致していません。"
-    else config.neet.gids // userGroups;
+  allGroups = config.neet.gids // userGroups;
 
   # 4. 各グループの所属メンバーを取得
-  getUsersInGroup = groupName: let
-    matchingUsers = filterAttrs (username: userCfg: elem groupName userCfg.extraGroups) cfg;
+  getUsersInGroup = groupName: gid: let
+    matchingUsers =
+      filterAttrs (
+        username: userCfg:
+          elem groupName userCfg.extraGroups
+          || (hasAttr groupName config.neet.gids && userCfg.gid == gid)
+      )
+      cfg;
   in
     attrNames matchingUsers;
 
   # 5. /etc/group の1行をフォーマット生成
   mkGroupLine = groupName: gid: let
-    members = getUsersInGroup groupName;
+    members = getUsersInGroup groupName gid;
     memberStr = concatStringsSep "," members;
   in "${groupName}:x:${toString gid}:${memberStr}";
 
