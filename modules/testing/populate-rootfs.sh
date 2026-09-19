@@ -31,7 +31,8 @@ ln -s "/nix/var/nix/profiles/system" "$out/nix/var/nix/gcroots/current-system"
 
 # 5. root ホームディレクトリの作成
 mkdir -p -m 0700 "$out/root"
-
+# ESP をマウントするための空ディレクトリ
+mkdir -p -m 0755 "$out/boot"
 # 6. /nix/var の書き込み権限を確実に付与 (サンドボックス特有の read-only を解除)
 chmod -R u+w "$out/nix/var"
 
