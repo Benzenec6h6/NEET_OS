@@ -41,6 +41,7 @@
 in {
   imports = [
     ./etc
+    ./console.nix
     ./users.nix
     ./environment.nix
   ];
