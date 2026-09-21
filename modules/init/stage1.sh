@@ -42,8 +42,6 @@ fi
 
 echo "NEET OS Stage 1: Preparing Stage 2 env..."
 mkdir -p /mnt/bin /mnt/etc /mnt/run /mnt/root /mnt/proc /mnt/sys /mnt/dev /mnt/tmp /mnt/var/log
-cp /bin/busybox /mnt/bin/busybox
-/mnt/bin/busybox --install -s /mnt/bin
 
 for f in "/mnt@systemPath@/bin/"*; do
     [ -e "$f" ] || continue
