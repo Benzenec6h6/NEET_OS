@@ -60,6 +60,7 @@ in {
     environment.etc."s6-rc/compiled".source = config.system.build.s6-rc-db;
     environment.systemPackages = [
       pkgs.s6
+      pkgs.s6-rc
     ];
   };
 }
