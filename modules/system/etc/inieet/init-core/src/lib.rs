@@ -128,14 +128,6 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path) -> io::Result<()> {
             data_str.as_deref(),
         );
 
-        let result = mount(
-            Some(&dev_path),
-            &target,
-            Some(entry.fs_type.as_str()),
-            flags,
-            data_str.as_deref(),
-        );
-
         match result {
             Ok(_) | Err(nix::errno::Errno::EBUSY) => {}
             Err(e) => eprintln!(
