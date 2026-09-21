@@ -2,7 +2,6 @@ use nix::mount::{mount, MsFlags};
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::unistd::sync;
 use std::io;
-use std::process::Command;
 
 pub enum Action {
     Poweroff,
@@ -17,7 +16,6 @@ pub fn do_shutdown(action: Action) -> io::Result<()> {
 
     // 1. s6-rc で稼働中の全サービスを停止
     println!("system-init: stopping services via s6-rc...");
-    // let _ = Command::new("s6-rc").args(["-a", "-da", "change"]).status();
 
     // 2. ディスクのキャッシュをフラッシュ
     println!("system-init: syncing disks...");

@@ -26,5 +26,16 @@ pub fn setup_bin(system_path: &Path) -> io::Result<()> {
         let _ = fs::remove_file(&dest);
         symlink(entry.path(), &dest)?;
     }
+
+    // /bin/system-init が存在する前提で、poweroff / reboot のリンクを作成
+    let bin_dir = Path::new(BIN_DIR);
+    let system_init = bin_dir.join("system-init");
+
+    for cmd in &["poweroff", "reboot"] {
+        let dest = bin_dir.join(cmd);
+        let _ = fs::remove_file(&dest);
+        symlink(&system_init, &dest)?;
+    }
+
     Ok(())
 }

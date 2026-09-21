@@ -10,7 +10,6 @@ mod net_setup;
 mod shutdown;
 mod wrappers;
 
-use shutdown::{do_shutdown, Action};
 use std::env;
 use std::fs;
 use std::io;
@@ -19,14 +18,33 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let subcommand = args.get(1).map(|s| s.as_str());
 
+    // 実行されたバイナリの名前（/bin/poweroff なら "poweroff"）を取得
+    let prog_name = Path::new(&args[0])
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    // 1. "poweroff" や "reboot" という名前で直接叩かれた場合の分岐
+    match prog_name {
+        "poweroff" => {
+            let _ = shutdown::do_shutdown(shutdown::Action::Poweroff);
+            std::process::exit(0);
+        }
+        "reboot" => {
+            let _ = shutdown::do_shutdown(shutdown::Action::Reboot);
+            std::process::exit(0);
+        }
+        _ => {}
+    }
+
+    let subcommand = args.get(1).map(|s| s.as_str());
     match subcommand {
         Some("poweroff") => {
-            let _ = do_shutdown(Action::Poweroff);
+            let _ = shutdown::do_shutdown(shutdown::Action::Poweroff);
         }
         Some("reboot") => {
-            let _ = do_shutdown(Action::Reboot);
+            let _ = shutdown::do_shutdown(shutdown::Action::Reboot);
         }
         Some("switch") => {
             if args.len() < 4 {
