@@ -51,17 +51,15 @@ in {
     # コンパイル済みDBの構築
     system.build.s6-rc-db =
       pkgs.runCommand "s6-rc-compiled-db" {
-        nativeBuildInputs = [pkgs.pkgsStatic.s6-rc];
+        nativeBuildInputs = [pkgs.s6-rc];
       } ''
         s6-rc-compile $out ${s6SourceDir}
       '';
 
     # 配置
     environment.etc."s6-rc/compiled".source = config.system.build.s6-rc-db;
+    environment.systemPackages = [
+      pkgs.s6
+    ];
   };
-
-  environment.systemPackages = [
-    pkgs.pkgsStatic.s6
-    pkgs.pkgsStatic.s6-rc
-  ];
 }

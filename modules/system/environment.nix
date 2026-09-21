@@ -14,7 +14,7 @@ in {
     };
     environment.execline = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.pkgsStatic.execline;
+      default = pkgs.execline;
       description = ''
         execline package. /bin/execlineb from this package is relied upon,
         by literal absolute path, as the interpreter for PID 1's init script

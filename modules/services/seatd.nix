@@ -24,7 +24,7 @@ in {
   };
 
   config = mkIf cfg.enable {
-    environment.systemPackages = [pkgs.pkgsStatic.seatd];
+    environment.systemPackages = [pkgs.seatd];
 
     system.s6-rc.services.seatd = {
       type = "longrun";
@@ -32,7 +32,7 @@ in {
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1
-        ${pkgs.pkgsStatic.seatd}/bin/seatd -u root -g ${cfg.group} ${optionalString cfg.debug "-l debug"}
+        ${pkgs.seatd}/bin/seatd -u root -g ${cfg.group} ${optionalString cfg.debug "-l debug"}
       '';
     };
   };
