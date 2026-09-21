@@ -59,4 +59,9 @@ in {
     # 配置
     environment.etc."s6-rc/compiled".source = config.system.build.s6-rc-db;
   };
+
+  environment.systemPackages = [
+    pkgs.pkgsStatic.s6
+    pkgs.pkgsStatic.s6-rc
+  ];
 }

@@ -24,4 +24,9 @@ in {
   config = {
     system.build.kernel = kernel;
   };
+
+  environment.systemPackages = [
+    pkgs.pkgsStatic.busybox
+    pkgs.pkgsStatic.util-linux
+  ];
 }
