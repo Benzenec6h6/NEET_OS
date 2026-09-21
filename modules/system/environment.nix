@@ -32,6 +32,9 @@ in {
     environment.systemPackages = [
       config.environment.execline
       neetRebuild
+      pkgs.busybox
+      pkgs.util-linux
+      pkgs.coreutils
     ];
 
     system.path = pkgs.buildEnv {
