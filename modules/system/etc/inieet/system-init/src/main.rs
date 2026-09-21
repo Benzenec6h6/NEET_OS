@@ -7,8 +7,10 @@ mod etc_syncer;
 mod fs_setup;
 mod modules_setup;
 mod net_setup;
+mod shutdown;
 mod wrappers;
 
+use shutdown::{do_shutdown, Action};
 use std::env;
 use std::fs;
 use std::io;
