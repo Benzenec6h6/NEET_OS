@@ -32,7 +32,6 @@ in {
     environment.systemPackages = [
       config.environment.execline
       neetRebuild
-      pkgs.busybox
       pkgs.util-linux
       pkgs.coreutils
     ];
@@ -42,11 +41,6 @@ in {
       paths = config.environment.systemPackages;
       pathsToLink = ["/bin"];
       ignoreCollisions = true;
-      postBuild = ''
-        if [ -x $out/bin/busybox ]; then
-          $out/bin/busybox --install -s $out/bin
-        fi
-      '';
     };
 
     environment.etc."os-release".text = ''
