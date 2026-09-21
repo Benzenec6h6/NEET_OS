@@ -7,7 +7,6 @@ QEMU_ARGS=(
   -m "@memorySize@"
   -smp "@cores@"
   -cpu host -enable-kvm
-  -no-reboot
   -device virtio-rng-pci
   -device intel-hda
   -device hda-duplex
