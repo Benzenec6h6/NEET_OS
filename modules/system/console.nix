@@ -33,7 +33,7 @@ in {
         #!/bin/sh
         # /dev/tty0 (仮想コンソール) が存在する場合のみキーマップを流し込む
         if [ -c /dev/tty0 ]; then
-          busybox loadkmap < ${binaryKeyMap}
+          ${pkgs.busybox}/bin/busybox loadkmap < ${binaryKeyMap}
         fi
       '';
     };

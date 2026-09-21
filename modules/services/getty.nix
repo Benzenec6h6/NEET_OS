@@ -11,9 +11,9 @@
       type = "longrun";
       run = ''
         #!/bin/execlineb -P
-        # ここで agetty / getty を起動
-        # (自動ログインさせたい場合は -a root や -l /bin/sh 等を付与)
-        getty 115200 ${tty}
+        # util-linux の agetty を使用する場合: TTY名 -> ボーレート の順
+        # 画面制御（VT）や自動ログイン等のオプションも必要に応じて付与
+        ${pkgs.util-linux}/bin/agetty ${tty} 115200
       '';
     };
   };
