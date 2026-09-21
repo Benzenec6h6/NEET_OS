@@ -20,6 +20,12 @@ fn main() {
     let subcommand = args.get(1).map(|s| s.as_str());
 
     match subcommand {
+        Some("poweroff") => {
+            let _ = do_shutdown(Action::Poweroff);
+        }
+        Some("reboot") => {
+            let _ = do_shutdown(Action::Reboot);
+        }
         Some("switch") => {
             if args.len() < 4 {
                 eprintln!(
