@@ -8,6 +8,7 @@
     ./filesystems
     ./init
     ./networking
+    ./programs/coreutils.nix
     ./security
     ./services
     ./system

@@ -33,7 +33,6 @@ in {
       config.environment.execline
       neetRebuild
       pkgs.util-linux
-      pkgs.coreutils
     ];
 
     system.path = pkgs.buildEnv {
