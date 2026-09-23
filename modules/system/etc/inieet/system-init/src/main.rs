@@ -4,6 +4,7 @@
 
 mod bin_setup;
 mod etc_syncer;
+mod firmware_setup;
 mod fs_setup;
 mod modules_setup;
 mod net_setup;
@@ -146,6 +147,7 @@ fn run(
 
     // 4. その他の初期化 (パスをマウント済みの / に対して行う)
     modules_setup::setup_kernel_modules(kernel_path)?;
+    firmware_setup::setup_firmware(firmware_path)?;
     net_setup::setup_existing_network()?;
     bin_setup::setup_bin(system_path)?;
 

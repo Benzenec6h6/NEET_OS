@@ -5,7 +5,7 @@ foreground { echo "[stage2] Starting stage2 init sequence..." }
 
 # ここで /etc と /run を含む各種マウントを組み立てる (system-init 経由)
 foreground { echo "[stage2] Running activation script (system-init)..." }
-if { @systemInitBin@ @etcPackage@ @systemPath@ @kernelPath@ }
+if { @systemInitBin@ @etcPackage@ @systemPath@ @kernelPath@ @firmwarePackage@ }
 foreground { echo "[stage2] Activation done." }
 
 # /run のマウントが完了した後で、s6-rc 用のディレクトリを作る

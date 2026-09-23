@@ -12,6 +12,7 @@
       systemInitBin = "${config.system.etc.bin}/bin/system-init";
       etcPackage = "${config.system.etc.package}";
       kernelPath = "${config.system.modulesTree}";
+      firmwarePackage = "${config.hardware.firmware}";
     };
     isExecutable = true;
   };

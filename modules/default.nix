@@ -6,6 +6,7 @@
   imports = [
     ./boot
     ./filesystems
+    ./hardware/firmware.nix
     ./init
     ./networking
     ./programs/coreutils.nix
