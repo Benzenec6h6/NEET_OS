@@ -67,7 +67,7 @@ fn main() {
 
         // それ以外（通常ブート時）
         _ => {
-            if args.len() < 4 {
+            if args.len() < 5 {
                 eprintln!(
                     "usage: system-init <store-etc-path> <system-path> <kernel-path> [prune-path ...]"
                 );
@@ -80,9 +80,16 @@ fn main() {
             let store_etc = PathBuf::from(&args[1]);
             let system_path = PathBuf::from(&args[2]);
             let kernel_path = PathBuf::from(&args[3]);
-            let prune: Vec<PathBuf> = args[4..].iter().map(PathBuf::from).collect();
+            let firmware_path = PathBuf::from(&args[4]);
+            let prune: Vec<PathBuf> = args[5..].iter().map(PathBuf::from).collect();
 
-            if let Err(e) = run(&store_etc, &system_path, &kernel_path, &prune) {
+            if let Err(e) = run(
+                &store_etc,
+                &system_path,
+                &kernel_path,
+                &firmware_path,
+                &prune,
+            ) {
                 eprintln!("system-init: fatal: {e}");
                 std::process::exit(1);
             }
@@ -125,6 +132,7 @@ fn run(
     store_etc: &Path,
     system_path: &Path,
     kernel_path: &Path,
+    firmware_path: &Path,
     prune: &[PathBuf],
 ) -> io::Result<()> {
     // 1. /etc の同期を最優先（mount-plan.json や wrappers.json を配置するため）
