@@ -20,6 +20,14 @@
       ln -s ${config.system.path} $out/system-path
       ln -s ${config.system.etc.package} $out/etc
 
+       # === グラフィックスドライバ (rebuild.sh での比較用) ===
+      ${lib.optionalString (config.hardware.graphics.enable or false) ''
+        ln -s ${config.system.build.graphicsDrivers} $out/graphics-drivers
+        ${lib.optionalString (config.hardware.graphics.enable32Bit or false) ''
+          ln -s ${config.system.build.graphicsDrivers32} $out/graphics-drivers-32bit
+        ''}
+      ''}
+
       # === ブート用 ===
       # カーネル
       if [ -f "${config.system.build.kernel}/bzImage" ]; then
@@ -41,7 +49,6 @@
 in {
   imports = [
     ./etc
-    ./console.nix
     ./users.nix
     ./environment.nix
   ];

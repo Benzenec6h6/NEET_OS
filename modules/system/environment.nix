@@ -37,8 +37,22 @@ in {
 
     system.path = pkgs.buildEnv {
       name = "system-path";
-      paths = config.environment.systemPackages;
-      pathsToLink = ["/bin"];
+      paths =
+        config.environment.systemPackages
+        ++ lib.optionals (config.hardware.graphics.enable or false) [
+          (pkgs.runCommand "graphics-drivers-syspath" {} ''
+            mkdir -p $out
+            ln -s ${config.system.build.graphicsDrivers} $out/graphics-drivers
+            ${lib.optionalString (config.hardware.graphics.enable32Bit or false) ''
+              ln -s ${config.system.build.graphicsDrivers32} $out/graphics-drivers-32bit
+            ''}
+          '')
+        ];
+      pathsToLink = [
+        "/bin"
+        "/graphics-drivers"
+        "/graphics-drivers-32bit"
+      ];
       ignoreCollisions = true;
     };
 

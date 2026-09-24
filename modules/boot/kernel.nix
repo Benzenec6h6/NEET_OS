@@ -36,6 +36,9 @@
       (lib.getOutput "modules" config.boot.kernelPackages.kernel)
     ];
 
+    environment.etc."modules.conf".text =
+      (lib.concatStringsSep "\n" config.boot.kernelModules) + "\n";
+
     # デフォルトのカーネルパラメータ（シリアルコンソール等）
     boot.kernelParams = lib.mkDefault [
       "console=ttyS0"

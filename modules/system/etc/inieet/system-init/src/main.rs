@@ -145,6 +145,8 @@ fn run(
     // /run がマウントされた直後に /run/current-system を作成
     setup_current_system(system_path)?;
 
+    let _ = fs_setup::ensure_symlink(kernel_path, Path::new("/run/booted-kernel"));
+
     // /var や /run 関連の基本ディレクトリ・互換リンクを整える
     fs_setup::setup_base_directories()?;
 
@@ -155,6 +157,7 @@ fn run(
 
     // 4. その他の初期化 (パスをマウント済みの / に対して行う)
     modules_setup::setup_kernel_modules(kernel_path)?;
+    let _ = modules_setup::load_configured_modules();
     firmware_setup::setup_firmware(firmware_path)?;
     net_setup::setup_existing_network()?;
     bin_setup::setup_bin(system_path)?;

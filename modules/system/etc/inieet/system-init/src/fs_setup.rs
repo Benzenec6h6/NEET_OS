@@ -120,15 +120,24 @@ pub fn setup_base_directories() -> io::Result<()> {
     // (オプション) /sbin を使おうとする古いツール向け
     ensure_symlink(Path::new("/bin"), Path::new("/sbin"))?;
 
+    // グラフィックスドライバのリンク
+    let gfx = Path::new("/run/current-system/graphics-drivers");
+    if gfx.exists() {
+        ensure_symlink(gfx, Path::new("/run/opengl-driver"))?;
+    }
+    let gfx32 = Path::new("/run/current-system/graphics-drivers-32bit");
+    if gfx32.exists() {
+        ensure_symlink(gfx32, Path::new("/run/opengl-driver-32"))?;
+    }
+
     Ok(())
 }
 
 /// 既存のファイル/壊れたリンクを安全に削除してシンボリックリンクを保証するヘルパー
-fn ensure_symlink(src: &Path, dest: &Path) -> io::Result<()> {
+pub(crate) fn ensure_symlink(src: &Path, dest: &Path) -> io::Result<()> {
     if dest.is_symlink() || dest.exists() {
         let _ = fs::remove_file(dest);
     }
-    // ディレクトリとして実体が存在してしまっている場合は削除できないため回避
     if !dest.exists() {
         symlink(src, dest)?;
     }
