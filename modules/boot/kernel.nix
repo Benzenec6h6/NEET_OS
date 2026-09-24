@@ -24,6 +24,12 @@
       description = "Stage 2 で自動ロードするモジュール";
     };
 
+    boot.extraModulePackages = lib.mkOption {
+      type = lib.types.listOf lib.types.package;
+      default = [];
+      description = "カーネルツリーに含める外部カーネルモジュールパッケージ (nvidia等)";
+    };
+
     system.modulesTree = lib.mkOption {
       type = lib.types.path;
       internal = true;
@@ -32,9 +38,10 @@
 
   config = {
     # カーネル本体と追加モジュールを1つのツリーにまとめる
-    system.modulesTree = pkgs.aggregateModules [
-      (lib.getOutput "modules" config.boot.kernelPackages.kernel)
-    ];
+    system.modulesTree = pkgs.aggregateModules (
+      [(lib.getOutput "modules" config.boot.kernelPackages.kernel)]
+      ++ config.boot.extraModulePackages
+    );
 
     environment.etc."modules.conf".text =
       (lib.concatStringsSep "\n" config.boot.kernelModules) + "\n";
