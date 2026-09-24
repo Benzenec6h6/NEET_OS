@@ -51,13 +51,6 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    assertions = [
-      {
-        assertion = cfg.enable32Bit -> pkgs.stdenv.hostPlatform.isx86_64;
-        message = "`hardware.graphics.enable32Bit` only makes sense on a 64-bit system.";
-      }
-    ];
-
     hardware.graphics.package = lib.mkDefault pkgs.mesa;
     hardware.graphics.package32 = lib.mkDefault pkgs.pkgsi686Linux.mesa;
 
