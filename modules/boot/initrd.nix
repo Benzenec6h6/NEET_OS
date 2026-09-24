@@ -31,15 +31,23 @@
     allowMissing = true;
   };
 in {
-  options.boot.initrd.availableKernelModules = lib.mkOption {
-    type = lib.types.listOf lib.types.str;
-    default = [];
-    description = "Stage 1 で利用可能にするモジュール";
+  options.boot.initrd = {
+    availableKernelModules = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      description = "Stage 1 で利用可能にするモジュール";
+    };
+    prepend = lib.mkOption {
+      type = lib.types.listOf lib.types.path;
+      default = [];
+      description = "initrd の先頭に連結する非圧縮 cpio イメージのリスト（マイクロコード等）";
+    };
   };
   config = {
     system.build.debugModulesClosure = modulesClosure;
     system.build.initrd = pkgs.makeInitrdNG {
       name = "stage1-initrd";
+      prepend = config.boot.initrd.prepend;
       contents = [
         {
           source = config.system.build.stage1Script;
