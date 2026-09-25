@@ -22,6 +22,15 @@ in {
       description = "Directories to be symlinked in system-path";
     };
 
+    environment.execline = lib.mkOption {
+      type = lib.types.package;
+      default = pkgs.execline;
+      description = ''
+        execline package. /bin/execlineb from this package is relied upon,
+        by literal absolute path, as the interpreter for PID 1's init script.
+      '';
+    };
+
     system.path = lib.mkOption {
       internal = true;
       type = lib.types.path;
