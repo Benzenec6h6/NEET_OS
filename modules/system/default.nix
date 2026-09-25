@@ -51,6 +51,7 @@ in {
     ./etc
     ./users.nix
     ./environment.nix
+    ./shells.nix
   ];
 
   options = {
