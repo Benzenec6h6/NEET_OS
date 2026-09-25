@@ -46,6 +46,7 @@ in {
       # 基本の UNIX ツール群
       util-linux
       findutils
+      iputils
       gnugrep
       gawk
       procps
