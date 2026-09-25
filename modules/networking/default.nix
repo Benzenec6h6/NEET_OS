@@ -31,5 +31,7 @@ in {
 
     environment.etc."network/up_interfaces".text =
       concatStringsSep "\n" cfg.upInterfaces + "\n";
+
+    environment.etc."protocols".source = "${pkgs.iana-etc}/etc/protocols";
   };
 }
