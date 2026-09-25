@@ -9,7 +9,7 @@
     ./hardware
     ./init
     ./networking
-    ./programs/coreutils.nix
+    ./programs
     ./security
     ./services
     ./system
