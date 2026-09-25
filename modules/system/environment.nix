@@ -53,6 +53,19 @@ in {
       less
     ];
 
+    environment.variables = {
+      PATH = [
+        "/run/wrappers/bin"
+        "/run/current-system/bin"
+        "/bin"
+        "/sbin"
+      ];
+      TERM = "linux";
+      NIX_REMOTE = "daemon";
+      SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+      CURL_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
+    };
+
     system.path = pkgs.buildEnv {
       name = "system-path";
       paths =
