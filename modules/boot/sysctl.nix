@@ -85,6 +85,7 @@ in {
     boot.kernel.sysctl = {
       "kernel.kptr_restrict" = mkDefault 1;
       "vm.max_map_count" = mkDefault 1048576;
+      "net.ipv4.ping_group_range" = mkDefault "0 2147483647";
     };
   };
 }
