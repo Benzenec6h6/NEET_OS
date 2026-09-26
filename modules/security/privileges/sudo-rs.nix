@@ -14,19 +14,11 @@ in {
       default = pkgs.sudo-rs;
       description = "使用する sudo-rs パッケージ";
     };
-
-    wheelNeedsPassword = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "wheel グループにパスワードを要求するか";
-    };
   };
 
   config = lib.mkIf isBackend {
-    # 抽象プロバイダーへの出力（他のモジュールが参照するパス）
     neet.security.privileges.command = "/run/wrappers/bin/sudo";
 
-    # 1. 共通ルール (privileges.rules) から /etc/sudoers のテキストを生成
     environment.etc."sudoers" = {
       mode = "0440";
       source = let
@@ -52,7 +44,7 @@ in {
 
           root ALL=(ALL:ALL) ALL
           %wheel ALL=(ALL:ALL) ${
-            if cfg.wheelNeedsPassword
+            if privCfg.wheelNeedsPassword
             then "ALL"
             else "NOPASSWD: ALL"
           }
@@ -60,13 +52,11 @@ in {
           ${rulesText}
         '';
       in
-        # ビルド時に visudo で構文をチェック
         pkgs.runCommand "sudoers-validated" {
           src = pkgs.writeText "sudoers.in" rawContent;
         } "${pkgs.buildPackages.sudo-rs}/bin/visudo -f $src -c && cp $src $out";
     };
 
-    # 2. Setuid Wrapper への登録
     neet.security.wrappers = {
       sudo = {
         source = "${cfg.package}/bin/sudo";
