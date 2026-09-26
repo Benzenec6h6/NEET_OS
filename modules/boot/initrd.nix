@@ -25,9 +25,10 @@
   '';
 
   modulesClosure = pkgs.makeModulesClosure {
-    kernel = lib.getOutput "modules" config.boot.kernelPackages.kernel;
+    #kernel = lib.getOutput "modules" config.boot.kernelPackages.kernel;
+    kernel = config.system.modulesTree;
     rootModules = lib.unique config.boot.initrd.availableKernelModules;
-    firmware = pkgs.linux-firmware;
+    firmware = config.hardware.firmware;
     allowMissing = true;
   };
 in {
