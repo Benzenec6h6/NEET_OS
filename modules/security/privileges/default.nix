@@ -1,11 +1,9 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }: let
   cfg = config.neet.security.privileges;
-  pam_unix = "${pkgs.pam}/lib/security/pam_unix.so";
 in {
   imports = [
     ./sudo-rs.nix
@@ -66,16 +64,11 @@ in {
   };
 
   config = {
-    # 選択されたバックエンドに応じた PAM サービスを自動定義
+    # 選択されたバックエンドの PAM サービスを有効化するだけ（内容は pam.nix のデフォルトが使われる）
     neet.security.pam.services.${
       if cfg.backend == "sudo-rs"
       then "sudo"
       else "doas"
-    } = ''
-      auth      required    ${pam_unix} nullok
-      account   required    ${pam_unix}
-      password  required    ${pam_unix} sha512 shadow nullok
-      session   required    ${pam_unix}
-    '';
+    } = {};
   };
 }

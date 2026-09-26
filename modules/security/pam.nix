@@ -25,44 +25,54 @@ in {
       default = true;
       description = "/etc/pam.d 設定ファイルの生成を有効化するかどうか";
     };
+
     services = mkOption {
-      type = types.attrsOf types.str;
+      type = types.attrsOf (types.submodule {
+        options = {
+          text = mkOption {
+            type = types.str;
+            default = defaultPamService;
+            description = "PAM 設定内容。未指定時は標準 unix 認証が使われる";
+          };
+        };
+      });
       default = {};
       example = literalExpression ''
         {
-          login = "...";
-          sudo = "...";
+          # デフォルトの unix 認証を使う場合
+          doas = {};
+          # カスタム設定を渡す場合
+          su.text = "auth sufficient ...";
         }
       '';
-      description = "追加・オーバーライドする /etc/pam.d/<service> のカスタム設定";
+      description = "/etc/pam.d/<name> に配置するサービス定義";
     };
   };
 
-  config = lib.mkIf config.neet.security.pam.enable {
-    # 1. デフォルトの PAM サービス設定を出力
+  config = mkIf cfg.enable {
+    # 組み込みサービスの登録（sudo は privileges 側に任せるためここから削除）
+    neet.security.pam.services = {
+      # 一般ログイン / Console
+      login = {};
+
+      # su コマンド用
+      su.text = ''
+        auth      sufficient  ${pam_rootok}
+        ${defaultPamService}
+      '';
+    };
+
+    # /etc/pam.d/ の生成
     environment.etc =
       {
-        # フォールバック用設定（定義がないサービス用）
+        # フォールバック用設定（未定義サービス用）
         "pam.d/other".text = ''
           auth      required    ${pam_deny}
           account   required    ${pam_deny}
           password  required    ${pam_deny}
           session   required    ${pam_deny}
         '';
-
-        # 一般ログイン / Console
-        "pam.d/login".text = defaultPamService;
-
-        # su コマンド用
-        "pam.d/su".text = ''
-          auth      sufficient  ${pam_rootok}
-          ${defaultPamService}
-        '';
-
-        # sudo / sudo-rs 用
-        "pam.d/sudo".text = defaultPamService;
       }
-      # 2. ユーザーが custom services を定義していた場合に動的追加
-      // (mapAttrs' (name: content: nameValuePair "pam.d/${name}" {text = content;}) cfg.services);
+      // (mapAttrs' (name: svc: nameValuePair "pam.d/${name}" {text = svc.text;}) cfg.services);
   };
 }
