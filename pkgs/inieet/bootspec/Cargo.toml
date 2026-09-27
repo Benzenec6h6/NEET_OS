@@ -1,0 +1,16 @@
+[package]
+name = "bootspec"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# src/bin/bootspec-write.rs を置けば Cargo が自動認識しますが、明示しておくと確実です
+[[bin]]
+name = "bootspec-write"
+path = "src/bin/bootspec-write.rs"
+
+[lib]
+path = "src/lib.rs"

@@ -26,4 +26,11 @@ in {
     cargoLock.lockFile = cargoLockFile;
     buildAndTestSubdir = "limine-install";
   };
+  bootspecWrite = pkgs.rustPlatform.buildRustPackage {
+    pname = "bootspec-write";
+    version = "0.1.0";
+    inherit src;
+    cargoLock.lockFile = cargoLockFile;
+    buildAndTestSubdir = "bootspec";
+  };
 }
