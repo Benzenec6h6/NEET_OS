@@ -45,10 +45,13 @@
 
       # カーネルパラメータ
       echo "${kernelParamsStr}" > $out/kernel-params
+
+      ${config.system.build.generateBootspec}
     '';
 in {
   imports = [
-    ./etc
+    ./etc.nix
+    ./inieet.nix
     ./users.nix
     ./environment.nix
     ./shells.nix
