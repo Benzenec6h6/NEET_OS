@@ -6,12 +6,12 @@
 }: let
   cfg = config.boot.loader.limine;
 
-  # inieet から Rust 製の limine-install バイナリを取得
-  inherit (import ../system/etc/inieet {inherit pkgs lib;}) limineInstall;
+  # ★ inieet.nix が system.build に登録したバイナリを参照
+  limineInstall = config.system.build.limineInstall;
 
   liminePkg = cfg.package;
 
-  # ブートローダのインストール・更新を行うスクリプト
+  # ブートローダのインストール・更新を行うスクリプト本体
   installBootloader = pkgs.writeShellScript "install-limine" ''
     set -euo pipefail
 
@@ -26,7 +26,6 @@
     fi
 
     # 2. 実機安全対策: /boot が独立パーティションとして正しくマウントされているか確認
-    # (util-linux の mountpoint コマンドを使用)
     if ! ${pkgs.util-linux}/bin/mountpoint -q "$BOOT_DIR"; then
       echo "limine-install: error: target '$BOOT_DIR' is not a mountpoint!" >&2
       echo "limine-install: please ensure the EFI System Partition is mounted at $BOOT_DIR." >&2
@@ -62,11 +61,20 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    # NixOS 互換のシステムフック
     system.build.installBootLoader = installBootloader;
 
     environment.systemPackages = [
       limineInstall
+
+      # 既存の update-limine (互換用)
       (pkgs.writeScriptBin "update-limine" ''
+        #!${pkgs.execline}/bin/execlineb -P
+        ${installBootloader}
+      '')
+
+      # ★ 抽象コマンド名 install-bootloader (rebuild.sh から呼べる共通名)
+      (pkgs.writeScriptBin "install-bootloader" ''
         #!${pkgs.execline}/bin/execlineb -P
         ${installBootloader}
       '')
