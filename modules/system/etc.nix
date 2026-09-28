@@ -4,10 +4,7 @@
   config,
   ...
 }: let
-  # 1. 内部で Rust ツールをビルド（Clean Source を適用）
-  inherit (import ./inieet {inherit pkgs lib;}) earlyInit systemInit;
-
-  # 2. etc フォルダ内の各ファイルの設定
+  # etc フォルダ内の各ファイルの設定
   etcOpts = {
     name,
     config,
@@ -39,7 +36,7 @@
     config.source = lib.mkIf (config.text != null) (pkgs.writeText "etc-${name}" config.text);
   };
 
-  # 3. ストア内の etc ディレクトリ構造の生成
+  # ストア内の etc ディレクトリ構造の生成
   etcDirectory = pkgs.runCommand "etc-static-dir" {} ''
     mkdir -p $out
     ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: value: ''
@@ -73,9 +70,7 @@ in {
 
   config = {
     system.etc.package = etcDirectory;
-    system.etc.bin = systemInit;
-    system.build.earlyInit = earlyInit;
-    # ツール自体をシステムパッケージに追加
-    environment.systemPackages = [systemInit];
+    # inieet.nix が定義した systemInit を参照
+    system.etc.bin = config.system.build.systemInit;
   };
 }
