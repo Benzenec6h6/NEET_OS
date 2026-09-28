@@ -20,7 +20,7 @@
       ln -s ${config.system.path} $out/system-path
       ln -s ${config.system.etc.package} $out/etc
 
-       # === グラフィックスドライバ (rebuild.sh での比較用) ===
+      # === グラフィックスドライバ (rebuild.sh での比較用) ===
       ${lib.optionalString (config.hardware.graphics.enable or false) ''
         ln -s ${config.system.build.graphicsDrivers} $out/graphics-drivers
         ${lib.optionalString (config.hardware.graphics.enable32Bit or false) ''
@@ -43,10 +43,20 @@
         ln -s ${config.system.build.initrd} $out/initrd
       fi
 
-      # カーネルパラメータ
+      # カーネルパラメータ (旧方式との後方互換用)
       echo "${kernelParamsStr}" > $out/kernel-params
 
-      ${config.system.build.generateBootspec}
+      # === Bootspec (boot.json) の生成 ===
+      # inieet.nix で定義された bootspecWrite を直接叩く
+      ${config.system.build.bootspecWrite}/bin/bootspec-write \
+        --system ${pkgs.stdenv.hostPlatform.system} \
+        --kernel $out/kernel \
+        --initrd $out/initrd \
+        --init $out/init \
+        --kernel-params "${kernelParamsStr}" \
+        --label "NEET_OS (Linux ${config.boot.kernelPackages.kernel.modDirVersion})" \
+        --toplevel $out \
+        --out $out/boot.json
     '';
 in {
   imports = [
