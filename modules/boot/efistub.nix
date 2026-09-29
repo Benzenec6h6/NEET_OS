@@ -44,7 +44,7 @@ in {
 
   config = lib.mkIf cfg.enable {
     # 1. efivarfs の自動マウント
-    fileSystems."/sys/firmware/efi/efivars" = {
+    boot.fileSystems."/sys/firmware/efi/efivars" = {
       device = "efivarfs";
       fsType = "efivarfs";
       options = ["defaults" "nofail"];
