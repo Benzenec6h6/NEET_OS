@@ -4,7 +4,7 @@
   pkgs,
   ...
 }: let
-  virtualFsTypes = ["auto" "proc" "sysfs" "devtmpfs" "tmpfs" "devpts"];
+  virtualFsTypes = ["auto" "proc" "sysfs" "devtmpfs" "tmpfs" "devpts" "efivarfs"];
   computedStage1 = lib.filterAttrs (n: fs: fs.neededForBoot) config.boot.fileSystems;
   computedStage2 = lib.mapAttrs (n: fs: fs // {alreadyMounted = fs.neededForBoot or false;}) (
     config.boot.virtualFileSystems // config.boot.fileSystems
