@@ -1,9 +1,19 @@
 #!/bin/sh
 set -eu
 
+# 一時作業ディレクトリを作成（終了時に自動削除）
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR"' EXIT
+
+# NVRAM 変数領域をコピーして書き込み可能にする
+cp "@ovmfVars@" "$TMPDIR/OVMF_VARS.fd"
+chmod 600 "$TMPDIR/OVMF_VARS.fd"
+
 QEMU_ARGS=(
   # ★UEFI ファームウェアを指定して起動
-  -bios "@ovmfFirmware@"
+  -drive "if=pflash,format=raw,unit=0,readonly=on,file=@ovmfCode@"
+  -drive "if=pflash,format=raw,unit=1,file=$TMPDIR/OVMF_VARS.fd"
+
   -m "@memorySize@"
   -smp "@cores@"
   -cpu host -enable-kvm

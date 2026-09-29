@@ -10,7 +10,8 @@
     src = ./run-vm.sh;
     replacements = {
       qemuBinary = "${pkgs.qemu_kvm}/bin/qemu-system-x86_64";
-      ovmfFirmware = "${pkgs.OVMF.fd}/FV/OVMF.fd";
+      ovmfCode = "${pkgs.OVMF.firmware}";
+      ovmfVars = "${pkgs.OVMF.variables}";
       diskImage = "${config.system.build.diskImage}";
       memorySize = toString cfg.memorySize;
       cores = toString cfg.cores;
