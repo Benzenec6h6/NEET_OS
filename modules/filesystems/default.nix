@@ -20,6 +20,7 @@
   ));
 in {
   imports = [
+    ./efivarfs.nix
     ./vfat.nix
     ./options.nix
     ./btrfs.nix
