@@ -10,17 +10,95 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+fn err(msg: String) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, msg)
+}
+
+/// /proc/mounts を確認して efivarfs がマウントされているか判定
+fn efivarfs_mounted() -> bool {
+    fs::read_to_string("/proc/mounts")
+        .map(|s| {
+            s.lines()
+                .any(|l| l.split_whitespace().nth(2) == Some("efivarfs"))
+        })
+        .unwrap_or(false)
+}
+
+/// boot_dir のマウント元から (親ディスク, パーティション番号) を自己完結で求める
+fn detect_esp(boot_dir: &Path) -> io::Result<(String, String)> {
+    let canonical_boot = fs::canonicalize(boot_dir)?;
+
+    // 1. /proc/mounts から boot_dir のマウント元デバイスを探す (findmnt 依存を排除)
+    let mounts = fs::read_to_string("/proc/mounts")?;
+    let mut source = None;
+    for line in mounts.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 2 && Path::new(parts[1]) == canonical_boot {
+            source = Some(parts[0].to_string());
+            break;
+        }
+    }
+
+    let source = source.ok_or_else(|| {
+        err(format!(
+            "cannot find mount source for {}",
+            boot_dir.display()
+        ))
+    })?;
+
+    // 2. シンボリックリンク (/dev/disk/by-label 等) を実体 (/dev/vda1, /dev/nvme1n1p1) に解決
+    let real_dev = fs::canonicalize(&source)?;
+    let dev_name = real_dev
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| err(format!("bad device path: {}", real_dev.display())))?;
+
+    let sys_block = Path::new("/sys/class/block").join(dev_name);
+
+    // 3. sysfs からパーティション番号を取得
+    let part_num = fs::read_to_string(sys_block.join("partition"))
+        .map_err(|e| err(format!("{} is not a partition: {e}", real_dev.display())))?
+        .trim()
+        .to_string();
+
+    // 4. sysfs の symlink 親ディレクトリから親ディスク名を取得
+    let disk_dev = fs::canonicalize(&sys_block)?
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .map(|n| format!("/dev/{n}"))
+        .ok_or_else(|| err("cannot determine parent disk".into()))?;
+
+    Ok((disk_dev, part_num))
+}
+
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 4 {
-        eprintln!("usage: efistub-install <boot-dir> <disk-device> <part-num>");
-        eprintln!("example: efistub-install /boot /dev/nvme0n1 1");
+    if args.len() < 2 {
+        eprintln!("usage: efistub-install <boot-dir> [disk-device] [part-num]");
+        eprintln!("example: efistub-install /boot");
+        eprintln!("     or: efistub-install /boot /dev/nvme0n1 1");
         std::process::exit(1);
     }
 
+    // 0. efivarfs のマウント確認 (Rust 側でチェック)
+    if !efivarfs_mounted() {
+        return Err(err(
+            "efivarfs is not mounted at /sys/firmware/efi/efivars!".into()
+        ));
+    }
+
     let boot_dir = Path::new(&args[1]);
-    let disk_dev = &args[2];
-    let part_num = &args[3];
+
+    // 引数で指定があればそれを使い、無ければ自動検出
+    let (disk_dev, part_num) = match (args.get(2), args.get(3)) {
+        (Some(d), Some(p)) if !d.is_empty() && !p.is_empty() => (d.clone(), p.clone()),
+        _ => {
+            let (d, p) = detect_esp(boot_dir)?;
+            println!("efistub-install: auto-detected disk: {d}, partition: {p}");
+            (d, p)
+        }
+    };
 
     println!("efistub-install: target ESP = {}", boot_dir.display());
 
@@ -69,7 +147,6 @@ fn main() -> io::Result<()> {
         keep_files.insert(initrd_name.clone());
 
         // 4. efibootmgr 用のパラメータ構築
-        // UEFI パスはバックスラッシュ区切り (例: \EFI\NEET\...)
         let uefi_loader_path = format!(r"\EFI\NEET\{kernel_name}");
         let uefi_initrd_path = format!(r"\EFI\NEET\{initrd_name}");
 
@@ -81,7 +158,6 @@ fn main() -> io::Result<()> {
             spec.kernel_params.join(" ")
         );
 
-        // 既にこの世代の NVRAM エントリが存在するか確認
         if let Some(boot_num) = existing_entries.get(&label) {
             println!("efistub-install: Entry '{label}' already exists as Boot{boot_num}");
         } else {
@@ -90,9 +166,9 @@ fn main() -> io::Result<()> {
                 .args([
                     "--create",
                     "--disk",
-                    disk_dev,
+                    &disk_dev,
                     "--part",
-                    part_num,
+                    &part_num,
                     "--label",
                     &label,
                     "--loader",

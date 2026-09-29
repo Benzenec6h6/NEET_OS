@@ -7,32 +7,11 @@
   cfg = config.boot.loader.efistub;
   efistubInstall = config.system.build.efistubInstall;
 
+  # シェル側の複雑な判定はすべて撤廃し、Rust バイナリに委ねる
   installBootloader = pkgs.writeShellScript "install-efistub" ''
     set -euo pipefail
-
-    # efivarfs がマウントされているか確認
-    if [ ! -d "/sys/firmware/efi/efivars" ] || [ -z "$(ls -A /sys/firmware/efi/efivars 2>/dev/null)" ]; then
-      echo "efistub: error: efivarfs is not mounted at /sys/firmware/efi/efivars!" >&2
-      exit 1
-    fi
-
-    BOOT_DIR="${cfg.bootDir}"
-    EFI_DISK="${cfg.efiDisk}"
-    EFI_PART="${toString cfg.efiPartition}"
-
-    # efiDisk が指定されていない場合は自動検出
-    if [ -z "$EFI_DISK" ]; then
-      echo "efistub: auto-detecting ESP device for $BOOT_DIR..."
-      BOOT_DEV="$(${pkgs.util-linux}/bin/findmnt -n -o SOURCE "$BOOT_DIR")"
-      REAL_DEV="$(realpath "$BOOT_DEV")"
-
-      EFI_DISK="/dev/$(${pkgs.util-linux}/bin/lsblk -no PKNAME "$REAL_DEV")"
-      EFI_PART="$(${pkgs.util-linux}/bin/lsblk -no PARTN "$REAL_DEV")"
-
-      echo "efistub: detected disk: $EFI_DISK, partition: $EFI_PART"
-    fi
-
-    exec ${efistubInstall}/bin/efistub-install "$BOOT_DIR" "$EFI_DISK" "$EFI_PART"
+    exec ${efistubInstall}/bin/efistub-install \
+      "${cfg.bootDir}" "${cfg.efiDisk}" "${toString cfg.efiPartition}"
   '';
 in {
   options.boot.loader.efistub = {
@@ -46,7 +25,7 @@ in {
 
     efiDisk = lib.mkOption {
       type = lib.types.str;
-      default = "";
+      default = ""; # 空なら Rust 側で自動検出
       description = "ESP が存在するディスクデバイス名 (空の場合は自動検出)";
     };
 
@@ -58,12 +37,8 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    # ★ efivarfs のマウント定義は filesystems/efivarfs.nix が担当するため削除
-
-    # 依存パッケージと共通コマンドの提供
     environment.systemPackages = [
       pkgs.efibootmgr
-      pkgs.util-linux
       efistubInstall
       (pkgs.writeScriptBin "install-bootloader" ''
         #!${pkgs.execline}/bin/execlineb -P
