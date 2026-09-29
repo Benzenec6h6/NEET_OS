@@ -26,9 +26,11 @@ echo "==> [neet-rebuild] Updating system profile..."
 nix-env -p /nix/var/nix/profiles/system --set "$TOPLEVEL"
 
 # 3. Limine ブートローダの更新 (boot と switch の両方で実行)
-echo "==> [neet-rebuild] Updating Limine bootloader..."
-if command -v update-limine >/dev/null 2>&1; then
-  update-limine
+echo "==> [neet-rebuild] Updating bootloader..."
+if command -v install-bootloader >/dev/null 2>&1; then
+  install-bootloader
+else
+  echo "==> [neet-rebuild] warning: 'install-bootloader' not found. Skipping bootloader update."
 fi
 
 # 4. switch の場合のみ、稼働中のシステムを動的切り替え
