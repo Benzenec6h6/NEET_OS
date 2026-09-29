@@ -50,6 +50,7 @@
 
       inherit toplevel rootfs rootFsType diskSizeM espSizeM rootSizeM bootloader;
       liminePkg = pkgs.limine;
+      uefiShellPkg = "${pkgs.edk2-uefi-shell}/shell.efi";
     } ''
       bash ${./build-disk-image.sh}
     '';
