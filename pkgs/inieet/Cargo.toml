@@ -6,4 +6,5 @@ members = [
     "early-init",
     "system-init",
     "limine-install",
+    "efistub-install",
 ]

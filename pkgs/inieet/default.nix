@@ -26,6 +26,13 @@ in {
     cargoLock.lockFile = cargoLockFile;
     buildAndTestSubdir = "limine-install";
   };
+  efistubInstall = pkgs.rustPlatform.buildRustPackage {
+    pname = "efistub-install";
+    version = "0.1.0";
+    inherit src;
+    cargoLock.lockFile = cargoLockFile;
+    buildAndTestSubdir = "efistub-install";
+  };
   bootspecWrite = pkgs.rustPlatform.buildRustPackage {
     pname = "bootspec-write";
     version = "0.1.0";

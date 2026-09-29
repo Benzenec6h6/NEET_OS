@@ -9,6 +9,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
 
 [[package]]
+name = "bootspec"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -25,6 +33,15 @@ name = "early-init"
 version = "0.1.0"
 dependencies = [
  "init-core",
+]
+
+[[package]]
+name = "efistub-install"
+version = "0.1.0"
+dependencies = [
+ "bootspec",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -51,6 +68,11 @@ checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 [[package]]
 name = "limine-install"
 version = "0.1.0"
+dependencies = [
+ "bootspec",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "memchr"
