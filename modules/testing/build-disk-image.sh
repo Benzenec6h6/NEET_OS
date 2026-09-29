@@ -45,16 +45,18 @@ EOF
   mcopy -i esp.img limine.conf ::/limine.conf
 
 elif [ "$bootloader" = "efistub" ]; then
-  echo "build-disk-image: configuring EFISTUB fallback on ESP..."
+  : "${uefiShellPkg:?uefiShellPkg must be set}"
+  echo "build-disk-image: configuring EFISTUB via UEFI Shell..."
 
   mmd -i esp.img ::/EFI/NEET
   mcopy -i esp.img "${toplevel}/kernel" ::/EFI/NEET/gen-1-vmlinuz.efi
   mcopy -i esp.img "${toplevel}/initrd" ::/EFI/NEET/gen-1-initrd.img
 
-  # 初回ブート用フォールバック (BOOTX64.EFI)
-  mcopy -i esp.img "${toplevel}/kernel" ::/EFI/BOOT/BOOTX64.EFI
+  # ★ カーネルではなく、UEFI Shell を BOOTX64.EFI にする
+  # (edk2-uefi-shell パッケージの Shell.efi を配置)
+  mcopy -i esp.img "${uefiShellPkg}" ::/EFI/BOOT/BOOTX64.EFI
 
-  # UEFI Shell 自動起動スクリプト (startup.nsh)
+  # startup.nsh を配置
   cat <<EOF > startup.nsh
 \EFI\NEET\gen-1-vmlinuz.efi initrd=\EFI\NEET\gen-1-initrd.img init=${toplevel}/init $(cat "${toplevel}/kernel-params")
 EOF
