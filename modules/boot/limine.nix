@@ -67,12 +67,6 @@ in {
     environment.systemPackages = [
       limineInstall
 
-      # 既存の update-limine (互換用)
-      (pkgs.writeScriptBin "update-limine" ''
-        #!${pkgs.execline}/bin/execlineb -P
-        ${installBootloader}
-      '')
-
       # ★ 抽象コマンド名 install-bootloader (rebuild.sh から呼べる共通名)
       (pkgs.writeScriptBin "install-bootloader" ''
         #!${pkgs.execline}/bin/execlineb -P
