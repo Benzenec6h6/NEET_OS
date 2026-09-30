@@ -25,7 +25,6 @@
   '';
 
   modulesClosure = pkgs.makeModulesClosure {
-    #kernel = lib.getOutput "modules" config.boot.kernelPackages.kernel;
     kernel = config.system.modulesTree;
     rootModules = lib.unique config.boot.initrd.availableKernelModules;
     firmware = config.hardware.firmware;
