@@ -19,7 +19,7 @@
   # ★ pkgs.systemd (フル版) を使用する
   stubPath = "${pkgs.systemd}/lib/systemd/boot/efi/linux${efiArch}.efi.stub";
 
-  cmdlineText = "init=${config.system.build.earlyInit}/bin/early-init ${toString config.boot.kernelParams}";
+  cmdlineText = "${toString config.boot.kernelParams}";
 
   ukiBinary =
     pkgs.runCommand "neet-os-uki.efi" {
