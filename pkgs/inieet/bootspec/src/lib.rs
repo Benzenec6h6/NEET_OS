@@ -13,6 +13,8 @@ pub struct BootspecV1 {
     pub kernel_params: Vec<String>,
     pub label: String,
     pub toplevel: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub uki: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -131,54 +131,94 @@ fn main() -> io::Result<()> {
 
         let spec = &doc.bootspec;
 
-        let kernel_name = format!("gen-{gen_num}-vmlinuz.efi");
-        let initrd_name = format!("gen-{gen_num}-initrd.img");
+        if let Some(ref uki_src) = spec.uki {
+            // --- パターン A: UKI が有効な場合 ---
+            let uki_name = format!("gen-{gen_num}-uki.efi");
+            let dest_uki = efi_neet_dir.join(&uki_name);
 
-        let dest_kernel = efi_neet_dir.join(&kernel_name);
-        let dest_initrd = efi_neet_dir.join(&initrd_name);
+            // 1. UKI のみをコピー
+            install_file_if_changed(Path::new(uki_src), &dest_uki)?;
+            keep_files.insert(uki_name.clone());
 
-        // カーネルと initrd を ESP にコピー
-        install_file_if_changed(Path::new(&spec.kernel), &dest_kernel)?;
-        if let Some(ref initrd_src) = spec.initrd {
-            install_file_if_changed(Path::new(initrd_src), &dest_initrd)?;
-        }
+            let uefi_loader_path = format!(r"\EFI\NEET\{uki_name}");
+            let label = format!("NEET OS (Generation {gen_num})");
 
-        keep_files.insert(kernel_name.clone());
-        keep_files.insert(initrd_name.clone());
-
-        // 4. efibootmgr 用のパラメータ構築
-        let uefi_loader_path = format!(r"\EFI\NEET\{kernel_name}");
-        let uefi_initrd_path = format!(r"\EFI\NEET\{initrd_name}");
-
-        let label = format!("NEET OS (Generation {gen_num})");
-        let cmdline = format!(
-            "initrd={} init={} {}",
-            uefi_initrd_path,
-            spec.init,
-            spec.kernel_params.join(" ")
-        );
-
-        if let Some(boot_num) = existing_entries.get(&label) {
-            println!("efistub-install: Entry '{label}' already exists as Boot{boot_num}");
+            if let Some(boot_num) = existing_entries.get(&label) {
+                println!("efistub-install: Entry '{label}' already exists as Boot{boot_num}");
+            } else {
+                println!("efistub-install: Creating NVRAM entry for '{label}' (UKI)...");
+                // 2. 引数 (-u) は一切渡さずに登録！
+                let status = Command::new("efibootmgr")
+                    .args([
+                        "--create",
+                        "--disk",
+                        &disk_dev,
+                        "--part",
+                        &part_num,
+                        "--label",
+                        &label,
+                        "--loader",
+                        &uefi_loader_path,
+                        // ★ -u (cmdline) は渡さない！UKI 自身が引数と initrd を内包しているため
+                    ])
+                    .status()?;
+                if !status.success() {
+                    eprintln!(
+                        "efistub-install: warning: failed to create boot entry via efibootmgr"
+                    );
+                }
+            }
         } else {
-            println!("efistub-install: Creating NVRAM entry for '{label}'...");
-            let status = Command::new("efibootmgr")
-                .args([
-                    "--create",
-                    "--disk",
-                    &disk_dev,
-                    "--part",
-                    &part_num,
-                    "--label",
-                    &label,
-                    "--loader",
-                    &uefi_loader_path,
-                    "-u",
-                    &cmdline,
-                ])
-                .status()?;
-            if !status.success() {
-                eprintln!("efistub-install: warning: failed to create boot entry via efibootmgr");
+            // --- パターン B: 従来の EFISTUB (カーネル単体 + initrd) ---
+            let kernel_name = format!("gen-{gen_num}-vmlinuz.efi");
+            let initrd_name = format!("gen-{gen_num}-initrd.img");
+
+            let dest_kernel = efi_neet_dir.join(&kernel_name);
+            let dest_initrd = efi_neet_dir.join(&initrd_name);
+
+            install_file_if_changed(Path::new(&spec.kernel), &dest_kernel)?;
+            if let Some(ref initrd_src) = spec.initrd {
+                install_file_if_changed(Path::new(initrd_src), &dest_initrd)?;
+            }
+
+            keep_files.insert(kernel_name.clone());
+            keep_files.insert(initrd_name.clone());
+
+            let uefi_loader_path = format!(r"\EFI\NEET\{kernel_name}");
+            let uefi_initrd_path = format!(r"\EFI\NEET\{initrd_name}");
+
+            let label = format!("NEET OS (Generation {gen_num})");
+            let cmdline = format!(
+                "initrd={} init={} {}",
+                uefi_initrd_path,
+                spec.init,
+                spec.kernel_params.join(" ")
+            );
+
+            if let Some(boot_num) = existing_entries.get(&label) {
+                println!("efistub-install: Entry '{label}' already exists as Boot{boot_num}");
+            } else {
+                println!("efistub-install: Creating NVRAM entry for '{label}'...");
+                let status = Command::new("efibootmgr")
+                    .args([
+                        "--create",
+                        "--disk",
+                        &disk_dev,
+                        "--part",
+                        &part_num,
+                        "--label",
+                        &label,
+                        "--loader",
+                        &uefi_loader_path,
+                        "-u",
+                        &cmdline,
+                    ])
+                    .status()?;
+                if !status.success() {
+                    eprintln!(
+                        "efistub-install: warning: failed to create boot entry via efibootmgr"
+                    );
+                }
             }
         }
     }

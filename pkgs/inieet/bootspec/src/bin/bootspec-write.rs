@@ -25,6 +25,7 @@ fn main() {
         kernel_params,
         label: get("--label"),
         toplevel: get("--toplevel"),
+        uki: Some(get("--uki")).filter(|s| !s.is_empty()),
     };
 
     // ★ Document でラップして "org.nixos.bootspec.v1" キーを持たせる

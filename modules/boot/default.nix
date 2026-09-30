@@ -12,6 +12,7 @@ in {
     ./sysctl.nix
     ./limine.nix
     ./efistub.nix
+    ./uki.nix
   ];
 
   options = {
