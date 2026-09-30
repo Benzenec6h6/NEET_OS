@@ -9,54 +9,34 @@
 
   toplevel =
     pkgs.runCommand "neet-os-toplevel" {
+      nativeBuildInputs = [pkgs.bash];
+
+      # スクリプトに渡す環境変数
+      stage2Init = stage2Init;
+      systemPath = config.system.path;
+      etc = config.system.etc.package;
+
+      graphicsDrivers = lib.optionalString (config.hardware.graphics.enable or false) config.system.build.graphicsDrivers;
+      graphicsDrivers32 = lib.optionalString (config.hardware.graphics.enable32Bit or false) config.system.build.graphicsDrivers32;
+
+      kernel = config.system.build.kernel;
+      initrd = config.system.build.initrd;
+      kernelParams = kernelParamsStr;
+
+      bootspecWrite = "${config.system.build.bootspecWrite}/bin/bootspec-write";
+      hostSystem = pkgs.stdenv.hostPlatform.system;
+      kernelVersion = config.boot.kernelPackages.kernel.modDirVersion;
+
+      # UKI が有効ならパスを渡し、無効なら空文字
+      uki = lib.optionalString (config.boot.uki.enable or false) "${config.system.build.uki}";
+
       passthru = {
         inherit stage2Init;
         systemPath = config.system.path;
         etc = config.system.etc.package;
       };
     } ''
-      mkdir -p $out
-      ln -s ${stage2Init} $out/init
-      ln -s ${config.system.path} $out/system-path
-      ln -s ${config.system.etc.package} $out/etc
-
-      # === グラフィックスドライバ (rebuild.sh での比較用) ===
-      ${lib.optionalString (config.hardware.graphics.enable or false) ''
-        ln -s ${config.system.build.graphicsDrivers} $out/graphics-drivers
-        ${lib.optionalString (config.hardware.graphics.enable32Bit or false) ''
-          ln -s ${config.system.build.graphicsDrivers32} $out/graphics-drivers-32bit
-        ''}
-      ''}
-
-      # === ブート用 ===
-      # カーネル
-      if [ -f "${config.system.build.kernel}/bzImage" ]; then
-        ln -s ${config.system.build.kernel}/bzImage $out/kernel
-      else
-        ln -s ${config.system.build.kernel} $out/kernel
-      fi
-
-      # initrd: ディレクトリ内の実ファイル (initrd) を指すように変更
-      if [ -f "${config.system.build.initrd}/initrd" ]; then
-        ln -s ${config.system.build.initrd}/initrd $out/initrd
-      else
-        ln -s ${config.system.build.initrd} $out/initrd
-      fi
-
-      # カーネルパラメータ (旧方式との後方互換用)
-      echo "${kernelParamsStr}" > $out/kernel-params
-
-      # === Bootspec (boot.json) の生成 ===
-      # inieet.nix で定義された bootspecWrite を直接叩く
-      ${config.system.build.bootspecWrite}/bin/bootspec-write \
-        --system ${pkgs.stdenv.hostPlatform.system} \
-        --kernel $out/kernel \
-        --initrd $out/initrd \
-        --init $out/init \
-        --kernel-params "${kernelParamsStr}" \
-        --label "NEET_OS (Linux ${config.boot.kernelPackages.kernel.modDirVersion})" \
-        --toplevel $out \
-        --out $out/boot.json
+      bash ${./build-toplevel.sh}
     '';
 in {
   imports = [

@@ -24,8 +24,8 @@
       objcopy \
         --add-section .osrel="os-release.txt" --change-section-vma .osrel=0x20000 \
         --add-section .cmdline="cmdline.txt"  --change-section-vma .cmdline=0x30000 \
-        --add-section .initrd="${config.system.build.initrd}" --change-section-vma .initrd=0x40000 \
-        --add-section .linux="${config.boot.kernelPackages.kernel}/bzImage" --change-section-vma .linux=0x2000000 \
+        --add-section .initrd="${config.system.build.initrd}/initrd" --change-section-vma .initrd=0x40000 \
+        --add-section .linux="${config.boot.kernelPackages.kernel}/bzImage" --change-section-vma .linux=0x4000000 \
         "$STUB" "$out"
     '';
 in {
