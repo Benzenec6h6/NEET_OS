@@ -50,6 +50,19 @@ mount --move /proc /mnt/proc
 mount --move /sys /mnt/sys
 mount --move /dev /mnt/dev
 
+TARGET_INIT="@stage2Init@"
+
+if [ -f /proc/cmdline ]; then
+    for param in $(cat /proc/cmdline); do
+        case "$param" in
+            init=*)
+                TARGET_INIT="${param#init=}"
+                echo "NEET OS Stage 1: Overriding init with $TARGET_INIT"
+                ;;
+        esac
+    done
+fi
+
 echo "NEET OS Stage 1: Linking stage2 init..."
 ln -sf "@stage2Init@" /mnt/init
 echo "NEET OS Stage 1: switch_root!"
