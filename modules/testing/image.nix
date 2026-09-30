@@ -51,6 +51,12 @@
       inherit toplevel rootfs rootFsType diskSizeM espSizeM rootSizeM bootloader;
       liminePkg = pkgs.limine;
       uefiShellPkg = "${pkgs.edk2-uefi-shell}/shell.efi";
+
+      # ★ ここを追加: UKI が有効ならそのパスを渡し、無効なら空文字
+      ukiFile =
+        if (config.boot.uki.enable or false)
+        then "${config.system.build.uki}"
+        else "";
     } ''
       bash ${./build-disk-image.sh}
     '';

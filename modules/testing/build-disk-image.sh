@@ -45,22 +45,30 @@ EOF
   mcopy -i esp.img limine.conf ::/limine.conf
 
 elif [ "$bootloader" = "efistub" ]; then
-  : "${uefiShellPkg:?uefiShellPkg must be set}"
-  echo "build-disk-image: configuring EFISTUB via UEFI Shell..."
 
-  mmd -i esp.img ::/EFI/NEET
-  mcopy -i esp.img "${toplevel}/kernel" ::/EFI/NEET/gen-1-vmlinuz.efi
-  mcopy -i esp.img "${toplevel}/initrd" ::/EFI/NEET/gen-1-initrd.img
+  # ★ UKI がある場合のワンクッション分岐
+  if [ -n "${ukiFile:-}" ]; then
+    echo "build-disk-image: configuring pure UKI direct boot (No UEFI Shell, No startup.nsh!)..."
 
-  # ★ カーネルではなく、UEFI Shell を BOOTX64.EFI にする
-  # (edk2-uefi-shell パッケージの Shell.efi を配置)
-  mcopy -i esp.img "${uefiShellPkg}" ::/EFI/BOOT/BOOTX64.EFI
+    # UKI そのものをデフォルトのブートローダパスに配置するだけ！
+    mcopy -i esp.img "${ukiFile}" ::/EFI/BOOT/BOOTX64.EFI
 
-  # startup.nsh を配置
-  cat <<EOF > startup.nsh
+  else
+    # 従来の EFISTUB (UEFI Shell による世話焼き)
+    : "${uefiShellPkg:?uefiShellPkg must be set}"
+    echo "build-disk-image: configuring EFISTUB via UEFI Shell..."
+
+    mmd -i esp.img ::/EFI/NEET
+    mcopy -i esp.img "${toplevel}/kernel" ::/EFI/NEET/gen-1-vmlinuz.efi
+    mcopy -i esp.img "${toplevel}/initrd" ::/EFI/NEET/gen-1-initrd.img
+
+    mcopy -i esp.img "${uefiShellPkg}" ::/EFI/BOOT/BOOTX64.EFI
+
+    cat <<EOF > startup.nsh
 \EFI\NEET\gen-1-vmlinuz.efi initrd=\EFI\NEET\gen-1-initrd.img init=${toplevel}/init $(cat "${toplevel}/kernel-params")
 EOF
-  mcopy -i esp.img startup.nsh ::/startup.nsh
+    mcopy -i esp.img startup.nsh ::/startup.nsh
+  fi
 
 else
   echo "build-disk-image: error: unsupported bootloader '$bootloader'" >&2
