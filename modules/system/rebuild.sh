@@ -25,7 +25,7 @@ fi
 echo "==> [neet-rebuild] Updating system profile..."
 nix-env -p /nix/var/nix/profiles/system --set "$TOPLEVEL"
 
-# 3. Limine ブートローダの更新 (boot と switch の両方で実行)
+# 3. ブートローダの更新 (boot と switch の両方で実行)
 echo "==> [neet-rebuild] Updating bootloader..."
 if command -v install-bootloader >/dev/null 2>&1; then
   install-bootloader
