@@ -76,46 +76,50 @@ fn main() -> io::Result<()> {
         let kernel_params = spec.kernel_params.join(" ");
 
         // ファイル名定義
-        let kernel_dest_name = format!("gen-{gen_num}-vmlinuz");
-        let initrd_dest_name = format!("gen-{gen_num}-initrd");
+        if let Some(ref uki_src) = spec.uki {
+            // --- パターン A: UKI モード (efi_chainload) ---
+            let uki_dest_name = format!("gen-{gen_num}-uki.efi");
+            let uki_dest = kernels_dir.join(&uki_dest_name);
 
-        let kernel_dest = kernels_dir.join(&kernel_dest_name);
-        let initrd_dest = kernels_dir.join(&initrd_dest_name);
+            install_file_if_changed(Path::new(uki_src), &uki_dest)?;
+            keep_kernel_files.insert(uki_dest_name.clone());
 
-        // カーネルのコピー
-        install_file_if_changed(kernel_src, &kernel_dest)?;
-        keep_kernel_files.insert(kernel_dest_name.clone());
-
-        // initrd が存在する場合はコピーしてモジュールパスに登録
-        let mut module_line = String::new();
-        if let Some(initrd_path) = initrd_src {
-            if initrd_path.exists() {
-                install_file_if_changed(initrd_path, &initrd_dest)?;
-                keep_kernel_files.insert(initrd_dest_name.clone());
-                module_line = format!("    module_path: boot():/kernels/{initrd_dest_name}\n");
-            }
-        }
-
-        let title = if is_latest {
-            format!("/NEET OS (Generation {gen_num} - Current)")
+            limine_conf.push_str(&format!("{title}\n"));
+            limine_conf.push_str("    protocol: efi_chainload\n");
+            limine_conf.push_str(&format!(
+                "    image_path: boot():/kernels/{uki_dest_name}\n\n"
+            ));
         } else {
-            format!("/NEET OS (Generation {gen_num})")
-        };
+            // --- パターン B: 従来モード (protocol: linux) ---
+            let kernel_dest_name = format!("gen-{gen_num}-vmlinuz");
+            let initrd_dest_name = format!("gen-{gen_num}-initrd");
 
-        // Limine エントリの記述
-        limine_conf.push_str(&format!("{title}\n"));
-        limine_conf.push_str("    protocol: linux\n");
-        limine_conf.push_str(&format!(
-            "    kernel_path: boot():/kernels/{kernel_dest_name}\n"
-        ));
-        if !module_line.is_empty() {
-            limine_conf.push_str(&module_line);
+            let kernel_dest = kernels_dir.join(&kernel_dest_name);
+            let initrd_dest = kernels_dir.join(&initrd_dest_name);
+
+            install_file_if_changed(kernel_src, &kernel_dest)?;
+            keep_kernel_files.insert(kernel_dest_name.clone());
+
+            let mut module_line = String::new();
+            if let Some(initrd_path) = initrd_src {
+                if initrd_path.exists() {
+                    install_file_if_changed(initrd_path, &initrd_dest)?;
+                    keep_kernel_files.insert(initrd_dest_name.clone());
+                    module_line = format!("    module_path: boot():/kernels/{initrd_dest_name}\n");
+                }
+            }
+
+            limine_conf.push_str(&format!("{title}\n"));
+            limine_conf.push_str("    protocol: linux\n");
+            limine_conf.push_str(&format!(
+                "    kernel_path: boot():/kernels/{kernel_dest_name}\n"
+            ));
+            if !module_line.is_empty() {
+                limine_conf.push_str(&module_line);
+            }
+            // ★ 不要になった init={} は削除し、純粋な kernel_params だけにする
+            limine_conf.push_str(&format!("    cmdline: {}\n\n", kernel_params));
         }
-        limine_conf.push_str(&format!(
-            "    cmdline: init={} {}\n\n",
-            init_src.display(),
-            kernel_params
-        ));
     }
 
     // 5. limine.conf をアトミックに書き込み
