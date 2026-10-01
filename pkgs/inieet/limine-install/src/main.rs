@@ -72,10 +72,18 @@ fn main() -> io::Result<()> {
         // bootspec から各パスを取得
         let kernel_src = Path::new(&spec.kernel);
         let initrd_src = spec.initrd.as_ref().map(Path::new);
-        let init_src = Path::new(&spec.init);
         let kernel_params = spec.kernel_params.join(" ");
 
-        // ファイル名定義
+        // ★ ここに移動: 分岐の前で title を作っておく
+        let title = if is_latest {
+            format!("/NEET OS (Generation {gen_num} - Current)")
+        } else {
+            format!("/NEET OS (Generation {gen_num})")
+        };
+
+        // =============================================================
+        // ★ UKI の有無によるワンクッション分岐
+        // =============================================================
         if let Some(ref uki_src) = spec.uki {
             // --- パターン A: UKI モード (efi_chainload) ---
             let uki_dest_name = format!("gen-{gen_num}-uki.efi");
@@ -117,7 +125,6 @@ fn main() -> io::Result<()> {
             if !module_line.is_empty() {
                 limine_conf.push_str(&module_line);
             }
-            // ★ 不要になった init={} は削除し、純粋な kernel_params だけにする
             limine_conf.push_str(&format!("    cmdline: {}\n\n", kernel_params));
         }
     }
