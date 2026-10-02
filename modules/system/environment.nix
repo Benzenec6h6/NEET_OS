@@ -5,6 +5,7 @@
   ...
 }: let
   neetRebuild = pkgs.writeShellScriptBin "neet-rebuild" (builtins.readFile ./rebuild.sh);
+  neetGC = pkgs.writeShellScriptBin "neet-gc" (builtins.readFile ./gc.sh);
 in {
   options = {
     environment.systemPackages = lib.mkOption {
@@ -41,6 +42,7 @@ in {
     # 必須の基幹ツール群を標準で含める
     environment.systemPackages = with pkgs; [
       neetRebuild
+      neetGC
       config.environment.execline
 
       # 基本の UNIX ツール群
