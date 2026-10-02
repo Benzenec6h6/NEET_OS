@@ -1,9 +1,8 @@
 [package]
-name = "efistub-install"
+name = "esp-sync"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 bootspec = { path = "../bootspec" }
-serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

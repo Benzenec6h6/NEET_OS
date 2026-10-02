@@ -36,11 +36,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "efistub-install"
+name = "efistub-sync"
 version = "0.1.0"
 dependencies = [
  "bootspec",
- "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "esp-sync"
+version = "0.1.0"
+dependencies = [
+ "bootspec",
  "serde_json",
 ]
 

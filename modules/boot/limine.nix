@@ -5,13 +5,10 @@
   ...
 }: let
   cfg = config.boot.loader.limine;
-
-  # ★ inieet.nix が system.build に登録したバイナリを参照
+  espSync = config.system.build.espSync;
   limineInstall = config.system.build.limineInstall;
-
   liminePkg = cfg.package;
 
-  # ブートローダのインストール・更新を行うスクリプト本体
   installBootloader = pkgs.writeShellScript "install-limine" ''
     set -euo pipefail
 
@@ -19,20 +16,20 @@
     LIMINE_PKG="${liminePkg}"
     export LIMINE_TIMEOUT="${toString cfg.timeout}"
 
-    # 1. ディレクトリの存在確認
     if [ ! -d "$BOOT_DIR" ]; then
       echo "limine-install: error: boot directory '$BOOT_DIR' does not exist!" >&2
       exit 1
     fi
 
-    # 2. 実機安全対策: /boot が独立パーティションとして正しくマウントされているか確認
     if ! ${pkgs.util-linux}/bin/mountpoint -q "$BOOT_DIR"; then
       echo "limine-install: error: target '$BOOT_DIR' is not a mountpoint!" >&2
-      echo "limine-install: please ensure the EFI System Partition is mounted at $BOOT_DIR." >&2
       exit 1
     fi
 
-    # 3. Rust 製の limine-install を実行
+    echo "==> [install-limine] 1/2: Synchronizing payloads to ESP..."
+    ${espSync}/bin/esp-sync "$BOOT_DIR"
+
+    echo "==> [install-limine] 2/2: Updating Limine binaries and config..."
     exec ${limineInstall}/bin/limine-install "$BOOT_DIR" "$LIMINE_PKG"
   '';
 in {
@@ -61,13 +58,11 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    # NixOS 互換のシステムフック
     system.build.installBootLoader = installBootloader;
 
     environment.systemPackages = [
+      espSync
       limineInstall
-
-      # ★ 抽象コマンド名 install-bootloader (rebuild.sh から呼べる共通名)
       (pkgs.writeScriptBin "install-bootloader" ''
         #!${pkgs.execline}/bin/execlineb -P
         ${installBootloader}

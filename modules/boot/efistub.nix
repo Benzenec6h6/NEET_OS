@@ -5,12 +5,18 @@
   ...
 }: let
   cfg = config.boot.loader.efistub;
-  efistubInstall = config.system.build.efistubInstall;
+  espSync = config.system.build.espSync;
+  efistubSync = config.system.build.efistubSync;
 
-  # シェル側の複雑な判定はすべて撤廃し、Rust バイナリに委ねる
+  # パイプライン: ESP の成果物配置・GC -> NVRAM の同期・GC
   installBootloader = pkgs.writeShellScript "install-efistub" ''
     set -euo pipefail
-    exec ${efistubInstall}/bin/efistub-install \
+
+    echo "==> [install-efistub] 1/2: Synchronizing payloads to ESP..."
+    ${espSync}/bin/esp-sync "${cfg.bootDir}"
+
+    echo "==> [install-efistub] 2/2: Synchronizing UEFI NVRAM entries..."
+    exec ${efistubSync}/bin/efistub-sync \
       "${cfg.bootDir}" "${cfg.efiDisk}" "${toString cfg.efiPartition}"
   '';
 in {
@@ -25,7 +31,7 @@ in {
 
     efiDisk = lib.mkOption {
       type = lib.types.str;
-      default = ""; # 空なら Rust 側で自動検出
+      default = "";
       description = "ESP が存在するディスクデバイス名 (空の場合は自動検出)";
     };
 
@@ -39,7 +45,8 @@ in {
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [
       pkgs.efibootmgr
-      efistubInstall
+      espSync
+      efistubSync
       (pkgs.writeScriptBin "install-bootloader" ''
         #!${pkgs.execline}/bin/execlineb -P
         ${installBootloader}

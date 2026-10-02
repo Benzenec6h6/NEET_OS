@@ -1,0 +1,8 @@
+[package]
+name = "efistub-sync"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bootspec = { path = "../bootspec" }
+serde_json = "1.0"
