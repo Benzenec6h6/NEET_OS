@@ -9,7 +9,7 @@ in {
   options.filesystems.efivarfs = {
     enable = lib.mkOption {
       type = lib.types.bool;
-      default = config.boot.loader.efistub.enable or false;
+      default = true;
       description = "Enable efivarfs support and mount at /sys/firmware/efi/efivars";
     };
   };
