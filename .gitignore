@@ -1,5 +1,5 @@
 memo.org
 pkgs/inieet/target
-pkgs/flake.nix
-pkgs/flake.lock
+pkgs/shell.nix
 pkgs/.envrc
+pkgs/.direnv
