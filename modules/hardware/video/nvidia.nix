@@ -147,6 +147,15 @@ in {
       nvidia_uvm      0:0 666 ! @${nvidiaMdevScript}
     '';
 
+    # gardendevd 用
+    services.udev.extraRules = ''
+      KERNEL=="nvidiactl", MODE="0666"
+      KERNEL=="nvidia[0-9]*", MODE="0666"
+      KERNEL=="nvidia-modeset", MODE="0666"
+      KERNEL=="nvidia-uvm", MODE="0666"
+      KERNEL=="nvidia-uvm-tools", MODE="0666"
+    '';
+
     # 4. graphics.nix へのライブラリ合流
     hardware.graphics.extraPackages =
       [

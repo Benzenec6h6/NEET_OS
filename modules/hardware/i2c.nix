@@ -28,5 +28,9 @@ in {
     services.mdevd.rules = ''
       i2c-[0-9]*  0:${gidOf cfg.group} 660
     '';
+    # gardendevd 用
+    services.udev.extraRules = ''
+      KERNEL=="i2c-[0-9]*", GROUP="${cfg.group}", MODE="0660"
+    '';
   };
 }

@@ -23,5 +23,9 @@ in {
     services.mdevd.rules = ''
       -SUBSYSTEM=misc;uinput 0:${gidOf cfg.group} 0660
     '';
+    # gardendevd 用
+    services.udev.extraRules = ''
+      KERNEL=="uinput", GROUP="${cfg.group}", MODE="0660"
+    '';
   };
 }
