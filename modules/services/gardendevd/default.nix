@@ -69,27 +69,27 @@ in {
     # gardendevd 付属ルール
     services.udev.packages = [cfg.package];
 
-    # hwdb.bin の生成
-    environment.etc."udev/hwdb.bin".source =
-      pkgs.runCommand "gardendevd-hwdb.bin"
-      {
-        __structuredAttrs = true;
-        preferLocalBuild = true;
-        allowSubstitutes = false;
-        packages = lib.unique config.services.udev.packages;
-      }
-      ''
-        shopt -s nullglob
-        mkdir -p root/etc/udev/hwdb.d
-        for i in "''${packages[@]}"; do
-          for j in "$i"/{etc,lib,var/lib}/udev/hwdb.d/*; do
-            ln -s "$j" "root/etc/udev/hwdb.d/$(basename "$j")"
-          done
-        done
-
-        ${cfg.package}/bin/gardendev-hwdb update --root "$PWD/root"
-        mv root/etc/udev/hwdb.bin "$out"
-      '';
+    # hwdb.bin の生成は現在開発版のみ
+    #environment.etc."udev/hwdb.bin".source =
+    #  pkgs.runCommand "gardendevd-hwdb.bin"
+    #  {
+    #    __structuredAttrs = true;
+    #    preferLocalBuild = true;
+    #    allowSubstitutes = false;
+    #    packages = lib.unique config.services.udev.packages;
+    #  }
+    #  ''
+    #    shopt -s nullglob
+    #    mkdir -p root/etc/udev/hwdb.d
+    #    for i in "''${packages[@]}"; do
+    #      for j in "$i"/{etc,lib,var/lib}/udev/hwdb.d/*; do
+    #        ln -s "$j" "root/etc/udev/hwdb.d/$(basename "$j")"
+    #      done
+    #    done
+    #
+    #    ${cfg.package}/bin/gardendev-hwdb update --root "$PWD/root"
+    #    mv root/etc/udev/hwdb.bin "$out"
+    #  '';
 
     # rules.d の生成
     environment.etc."udev/rules.d".source = let
