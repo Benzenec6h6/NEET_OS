@@ -16,5 +16,6 @@
     ./testing/image.nix
     ./testing/vm-runner.nix
     ./virtualisation/virtio.nix
+    ./xdg
   ];
 }
