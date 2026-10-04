@@ -148,23 +148,15 @@ in {
         done
       '';
 
-    system.activation.scripts.gardendevd = lib.mkIf config.boot.kernel.enable {
-      text = ''
-        if [ -e /proc/sys/kernel/hotplug ]; then
-          echo "" > /proc/sys/kernel/hotplug
-        fi
-        if [ -e /sys/module/firmware_class/parameters/path ]; then
-          echo -n "${config.hardware.firmware}/lib/firmware" > /sys/module/firmware_class/parameters/path
-        fi
-      '';
-    };
-
     system.s6-rc.services = {
       # 1. デーモン本体 (共通名 devd)
       devd = {
         type = "longrun";
         run = ''
           #!/bin/sh
+          # レガシーな uevent ヘルパーを無効化 (もし残っていれば)
+          [ -e /proc/sys/kernel/hotplug ] && echo "" > /proc/sys/kernel/hotplug 2>/dev/null || true
+
           export PATH="${lib.makeBinPath cfg.path}:$PATH"
           exec ${cfg.package}/bin/gardendevd ${lib.escapeShellArgs cfg.extraArgs}
         '';
