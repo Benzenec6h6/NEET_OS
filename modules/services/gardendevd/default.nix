@@ -5,21 +5,6 @@
   ...
 }: let
   cfg = config.services.gardendevd;
-
-  package = pkgs.gardendevd.overrideAttrs (old: {
-    version = "0.2-unstable-2026-07-03";
-
-    src = old.src.override {
-      tag = null;
-      rev = "ec73dc569382404bc6620c9857b7e09206bc282e";
-      hash = "sha256-8VOJFz5QtlyLbAf87rtNXSvnrfPoyQVAKwuD+YkfzdQ=";
-    };
-
-    mesonFlags = [
-      (lib.mesonEnable "dracut" false)
-      (lib.mesonEnable "uaccess" true)
-    ];
-  });
 in {
   options.services.udev = {
     packages = lib.mkOption {
@@ -38,7 +23,8 @@ in {
   options.services.gardendevd = {
     package = lib.mkOption {
       type = lib.types.package;
-      default = package;
+      default = pkgs.gardendevd; # 公式パッケージをそのまま利用
+      defaultText = lib.literalExpression "pkgs.gardendevd";
       description = "gardendevd パッケージ";
     };
 
@@ -154,7 +140,6 @@ in {
         type = "longrun";
         run = ''
           #!/bin/sh
-          # レガシーな uevent ヘルパーを無効化 (もし残っていれば)
           [ -e /proc/sys/kernel/hotplug ] && echo "" > /proc/sys/kernel/hotplug 2>/dev/null || true
 
           export PATH="${lib.makeBinPath cfg.path}:$PATH"
