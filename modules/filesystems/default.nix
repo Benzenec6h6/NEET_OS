@@ -51,7 +51,7 @@ in {
       "/sys/fs/cgroup" = {
         device = "cgroup2";
         fsType = "cgroup2";
-        options = ["nosuid" "nodev" "noexec" "relatime" "nsdelegate"];
+        options = ["nosuid" "nodev" "noexec" "relatime"];
       };
       "/dev/pts" = {
         device = "devpts";
