@@ -3,7 +3,20 @@
 
   outputs = {self}: let
     sources = import ./npins;
-    pkgs = import sources.nixpkgs {system = "x86_64-linux";};
+    pkgs = import sources.nixpkgs {
+      system = "x86_64-linux";
+      overlays = [
+        (final: prev: {
+          mdevd = prev.mdevd.overrideAttrs (old: {
+            nativeBuildInputs =
+              (old.nativeBuildInputs or [])
+              ++ [
+                final.buildPackages.pkg-config
+              ];
+          });
+        })
+      ];
+    };
     lib = pkgs.lib;
 
     ci = import ./nix/ci.nix {
