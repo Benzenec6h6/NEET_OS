@@ -25,6 +25,18 @@ in {
     #    ※ gardendevd 有効時でも initrd はこれらを参照する
     # ==============================================================
     {
+      # mdevd 公式パッケージの pkg-config 欠落バグを修正する Overlay
+      nixpkgs.overlays = [
+        (final: prev: {
+          mdevd = prev.mdevd.overrideAttrs (old: {
+            nativeBuildInputs =
+              (old.nativeBuildInputs or [])
+              ++ [
+                final.buildPackages.pkg-config
+              ];
+          });
+        })
+      ];
       # initrd.nix が参照するスクリプト実体
       system.build.mdevdDisk = mdevd-disk;
 
