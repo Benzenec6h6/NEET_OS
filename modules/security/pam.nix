@@ -53,9 +53,18 @@ in {
     # 組み込みサービスの登録（sudo は privileges 側に任せるためここから削除）
     neet.security.pam.services = {
       # 一般ログイン / Console
-      login = {};
+      login.text = ''
+        auth      required    ${pam_unix} nullok
+        account   required    ${pam_unix}
+        password  required    ${pam_unix} sha512 shadow nullok
+        session   required    ${pam_unix}
+        ${
+          optionalString config.services.sessiond.enable
+          "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"
+        }
+      '';
 
-      # su コマンド用
+      # su コマンド用 (pam_sessiond は入れない)
       su.text = ''
         auth      sufficient  ${pam_rootok}
         ${defaultPamService}

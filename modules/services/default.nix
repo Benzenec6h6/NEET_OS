@@ -13,5 +13,7 @@
     ./dhcpcd.nix
     ./iwd.nix
     ./getty.nix
+    ./sessiond
+    ./sessiond-uaccess
   ];
 }
