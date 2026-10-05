@@ -13,6 +13,14 @@
               ++ [
                 final.buildPackages.pkg-config
               ];
+            # クロス用の <arch>-pkg-config をプレーンな pkg-config として呼べるようにリンク
+            preConfigure =
+              (old.preConfigure or "")
+              + ''
+                mkdir -p "$TMPDIR/bin"
+                ln -sf "$(command -v "''${PKG_CONFIG:-${final.stdenv.cc.targetPrefix}pkg-config}")" "$TMPDIR/bin/pkg-config"
+                export PATH="$TMPDIR/bin:$PATH"
+              '';
           });
         })
       ];
