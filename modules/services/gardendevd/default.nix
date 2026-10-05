@@ -152,8 +152,8 @@ in {
         type = "oneshot";
         dependencies = ["devd"];
         up = ''
-          #!/bin/sh
-          ${cfg.package}/bin/gardendevctl trigger -c add -t all
+          #!/bin/execlineb -P
+          foreground { ${cfg.package}/bin/gardendevctl trigger -c add -t all }
           ${cfg.package}/bin/gardendevctl settle -t 30
         '';
       };

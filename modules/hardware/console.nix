@@ -30,11 +30,10 @@ in {
     system.s6-rc.services.loadkmap = {
       type = "oneshot";
       up = ''
-        #!/bin/sh
-        # /dev/tty0 (仮想コンソール) が存在する場合のみキーマップを流し込む
-        if [ -c /dev/tty0 ]; then
-          ${pkgs.busybox}/bin/busybox loadkmap < ${binaryKeyMap}
-        fi
+        #!/bin/execlineb -P
+        if { test -c /dev/tty0 }
+        redirfd -r 0 ${binaryKeyMap}
+        ${pkgs.busybox}/bin/busybox loadkmap
       '';
     };
 
