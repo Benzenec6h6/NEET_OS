@@ -48,6 +48,11 @@ in {
         fsType = "devtmpfs";
         neededForBoot = true;
       };
+      "/sys/fs/cgroup" = {
+        device = "cgroup2";
+        fsType = "cgroup2";
+        options = ["nosuid" "nodev" "noexec" "relatime" "nsdelegate"];
+      };
       "/dev/pts" = {
         device = "devpts";
         fsType = "devpts";

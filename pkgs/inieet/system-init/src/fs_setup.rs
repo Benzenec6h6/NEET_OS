@@ -30,11 +30,36 @@ pub fn setup_filesystems(plan_path: &Path) -> io::Result<()> {
         return Ok(());
     }
 
-    // init-core 側で JSON をロード・深さ順ソートして読み込む
     let entries = init_core::load_plan(plan_path)?;
+    init_core::apply_plan(&entries, Path::new("/"))?;
 
-    // stage2 ではルート（"/"）に対してプランを適用
-    init_core::apply_plan(&entries, Path::new("/"))
+    // --- cgroup v2 のコントローラー有効化 ---
+    setup_cgroups()?;
+
+    Ok(())
+}
+
+/// cgroup v2 のルートコントローラーを子サブツリーに委譲する
+fn setup_cgroups() -> io::Result<()> {
+    let controllers_path = Path::new("/sys/fs/cgroup/cgroup.controllers");
+    let subtree_path = Path::new("/sys/fs/cgroup/cgroup.subtree_control");
+
+    if controllers_path.exists() && subtree_path.exists() {
+        if let Ok(controllers) = fs::read_to_string(controllers_path) {
+            // 利用可能な全コントローラー（例: "cpu memory pids"）の先頭に "+" を付けて書き込む
+            let enable_str = controllers
+                .split_whitespace()
+                .map(|c| format!("+{c}"))
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            if !enable_str.is_empty() {
+                let _ = fs::write(subtree_path, enable_str);
+                println!("system-init: cgroup v2 controllers enabled in subtree_control");
+            }
+        }
+    }
+    Ok(())
 }
 
 /// ユーザーディレクトリ群（/home/<user>, /run/user/<uid>）の設定
