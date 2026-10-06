@@ -31,7 +31,7 @@ pub fn setup_filesystems(plan_path: &Path) -> io::Result<()> {
     }
 
     let entries = init_core::load_plan(plan_path)?;
-    init_core::apply_plan(&entries, Path::new("/"))?;
+    init_core::apply_plan(&entries, Path::new("/"), false)?;
 
     // --- cgroup v2 のコントローラー有効化 ---
     setup_cgroups()?;

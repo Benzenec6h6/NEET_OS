@@ -128,7 +128,7 @@ fn fatal(msg: String) -> io::Error {
 ///
 /// bind マウントの失敗、btrfs リセットの失敗は `Err` を返す。
 /// それ以外のマウント失敗は警告に留めて続行する。
-pub fn apply_plan(entries: &[MountEntry], root: &Path) -> io::Result<()> {
+pub fn apply_plan(entries: &[MountEntry], root: &Path, strict: bool) -> io::Result<()> {
     for entry in entries {
         if entry.already_mounted {
             println!("init-core: skipping already mounted {}", entry.mount_point);
@@ -195,7 +195,7 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path) -> io::Result<()> {
 
         if let Err(e) = fs::create_dir_all(&target) {
             let msg = format!("failed to create {}: {e}", target.display());
-            if is_bind {
+            if is_bind || strict {
                 return Err(fatal(msg));
             }
             eprintln!("init-core: warning: {msg}");
@@ -214,7 +214,7 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path) -> io::Result<()> {
                     target.display(),
                     entry.device
                 );
-                if is_bind {
+                if is_bind || strict {
                     return Err(fatal(msg));
                 }
                 eprintln!("init-core: warning: {msg}");
