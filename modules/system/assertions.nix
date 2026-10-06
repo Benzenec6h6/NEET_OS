@@ -17,6 +17,16 @@
     else lib.foldr (w: acc: builtins.trace "warning: ${w}" acc) value config.warnings;
 in {
   options = {
+    # 注意: system.build 配下には置かないこと。system.build は attrsOf raw なので、
+    # どの system.build.* を読んでも全属性の定義値が WHNF まで評価される。
+    # toplevel の定義が config.system.build.<何か> を必要とすると無限再帰になる。
+    system.withAssertions = lib.mkOption {
+      type = lib.types.unspecified;
+      internal = true;
+      readOnly = true;
+      description = "値を assertions / warnings の検査を通してから返す関数。";
+    };
+
     assertions = lib.mkOption {
       type = lib.types.listOf lib.types.unspecified;
       internal = true;
@@ -32,6 +42,5 @@ in {
     };
   };
 
-  # system.build は attrsOf raw なので、関数もそのまま入れられる（宣言は不要）
-  config.system.build.checked = checked;
+  config.system.withAssertions = checked;
 }
