@@ -6,17 +6,25 @@
   cfg = config.impermanence;
   fileSystems = config.boot.fileSystems;
 
-  rootFs = fileSystems."/" or null;
+  rootFs = fileSystems."/" or {};
   rootFsType = rootFs.fsType or "";
 
   # 永続化用ストレージ（缶）のマウント定義
-  persistFs = fileSystems."${cfg.persistPath}" or null;
+  persistFs = fileSystems.${cfg.persistPath} or null;
 
   # リセット対象として指定されているマウント一覧
   resetMounts = lib.filterAttrs (n: fs: fs.resetOnBoot) fileSystems;
 
-  # 既存マウントと衝突しているディレクトリの検出
-  conflictingDirs = lib.filter (dir: builtins.hasAttr dir fileSystems) cfg.directories;
+  # directories 内の重複（同じパスを2回書いた）
+  # ※ 旧 assertion 6 は「自分が注入した boot.fileSystems」を見ていたため
+  #   directories が空でない限り必ず失敗していた。削除し、検査対象を cfg 側に移す。
+  duplicateDirs = lib.filter (d: lib.count (x: x == d) cfg.directories > 1) (lib.unique cfg.directories);
+
+  # 絶対パスでないもの
+  relativeDirs = lib.filter (d: !(lib.hasPrefix "/" d)) cfg.directories;
+
+  # persistPath 配下を指しているもの（bind元と bind先が循環する）
+  underPersist = lib.filter (d: d == cfg.persistPath || lib.hasPrefix "${cfg.persistPath}/" d) cfg.directories;
 in {
   options.impermanence = {
     enable = lib.mkEnableOption "Impermanence (stateless root)";
@@ -30,7 +38,7 @@ in {
     directories = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [];
-      example = ["/var/log" "/etc/machine-id"];
+      example = ["/var/log" "/var/lib/iwd"];
       description = "永続化するディレクトリ群（bind mount されます）";
     };
   };
@@ -49,13 +57,13 @@ in {
         message = "Impermanence: ルートが btrfs の場合、boot.fileSystems.\"/\".resetOnBoot = true が必要です。";
       }
 
-      # 3. 事故防止: 永続化ストレージ (/persist) 自身がリセット対象になっていないこと
+      # 3. 永続化ストレージ自身がリセット対象になっていないこと
       {
         assertion = !(builtins.hasAttr cfg.persistPath resetMounts);
         message = "Impermanence: 永続化ストレージ (${cfg.persistPath}) に resetOnBoot = true が設定されています！データが消去されてしまいます。";
       }
 
-      # 4. 事故防止: ルートが tmpfs なのに /persist の実ストレージ定義が抜けていないか
+      # 4. ルートが tmpfs なのに /persist の実ストレージ定義が抜けていないか
       {
         assertion = rootFsType != "tmpfs" || persistFs != null;
         message = "Impermanence: ルートが tmpfs ですが、${cfg.persistPath} に実ディスクが割り当てられていません。";
@@ -67,24 +75,29 @@ in {
         message = "Impermanence: ${cfg.persistPath} には neededForBoot = true が必要です。";
       }
 
-      # 6. マウント先が既存のファイルシステムと重複していないこと
+      # 6. directories 自体の整合性（cfg だけを見る。注入結果は見ない）
       {
-        assertion = conflictingDirs == [];
-        message = "Impermanence: 以下のパスは既に boot.fileSystems で定義されているため重複できません: ${toString conflictingDirs}";
+        assertion = duplicateDirs == [];
+        message = "Impermanence: directories に重複があります: ${toString duplicateDirs}";
+      }
+      {
+        assertion = relativeDirs == [];
+        message = "Impermanence: directories は絶対パスで指定してください: ${toString relativeDirs}";
+      }
+      {
+        assertion = underPersist == [];
+        message = "Impermanence: ${cfg.persistPath} 配下は directories に指定できません: ${toString underPersist}";
       }
     ];
 
-    # 永続化パスをすべて boot.fileSystems の bind マウントに自動変換して注入！
-    boot.fileSystems = lib.listToAttrs (map (dir: {
-        name = dir;
-        value = {
-          mountPoint = dir;
-          device = "${cfg.persistPath}${dir}";
-          fsType = "none";
-          options = ["bind"];
-          neededForBoot = false; # Stage 2 でマウント
-        };
-      })
-      cfg.directories);
+    # 永続化パスを boot.fileSystems の bind マウントに変換して注入する。
+    # ユーザーが同じキーに device を定義していれば、モジュールシステムが
+    # 「複数箇所で定義されている」エラーを出すので、別途の衝突検知は不要。
+    boot.fileSystems = lib.genAttrs cfg.directories (dir: {
+      device = "${cfg.persistPath}${dir}";
+      fsType = "none";
+      options = ["bind"];
+      neededForBoot = false; # Stage 2 でマウント
+    });
   };
 }

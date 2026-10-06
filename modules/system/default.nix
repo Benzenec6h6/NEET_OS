@@ -40,6 +40,7 @@
     '';
 in {
   imports = [
+    ./assertions.nix
     ./etc.nix
     ./inieet.nix
     ./users.nix
@@ -56,6 +57,6 @@ in {
   };
 
   config = {
-    system.build.toplevel = toplevel;
+    system.build.toplevel = config.system.build.checked toplevel;
   };
 }
