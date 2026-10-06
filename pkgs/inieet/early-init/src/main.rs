@@ -18,7 +18,9 @@ fn main() {
             exit(1);
         }
     };
-    if let Err(e) = init_core::apply_plan(&entries, root) {
+
+    // stage 1 は strict: どのマウント失敗も致命的として扱う
+    if let Err(e) = init_core::apply_plan(&entries, root, true) {
         eprintln!("early-init: fatal: {e}");
         exit(1);
     }
