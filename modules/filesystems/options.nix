@@ -22,6 +22,11 @@
         default = false;
         description = "true の場合、このマウントは Stage 1 (initrd) で行われ、Stage 2 では alreadyMounted として扱われる";
       };
+      resetOnBoot = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "true の場合、Btrfs サブボリューム等の場合にマウント直前で初期化・ロールバックを行う";
+      };
       dump = lib.mkOption {
         type = lib.types.int;
         default = 0;

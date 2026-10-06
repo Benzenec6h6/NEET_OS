@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
@@ -18,6 +19,8 @@ pub struct MountEntry {
     pub options: Vec<String>,
     #[serde(rename = "alreadyMounted", default)]
     pub already_mounted: bool,
+    #[serde(rename = "resetOnBoot", default)]
+    pub reset_on_boot: bool,
 }
 
 impl MountEntry {
@@ -98,8 +101,41 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path) -> io::Result<()> {
         let target = join_root(root, &entry.mount_point);
         let dev_path = resolve_device_path(&entry.device);
 
-        // 実デバイスのみ待機（仮想FSはスキップ）
         entry.wait_device(&dev_path);
+
+        let (flags, data_options) = parse_mount_options(&entry.options);
+
+        // === ① bind マウントのソース自動作成 ===
+        // マウント元が存在しないと mount が失敗するため、事前に作成する
+        if flags.contains(MsFlags::MS_BIND) && !dev_path.exists() {
+            println!(
+                "init-core: creating bind source directory {}",
+                dev_path.display()
+            );
+            if let Err(e) = fs::create_dir_all(&dev_path) {
+                eprintln!(
+                    "init-core: warning: failed to create bind source {}: {}",
+                    dev_path.display(),
+                    e
+                );
+            }
+        }
+
+        // === ② btrfs の安全な自動ロールバック ===
+        // resetOnBoot が true かつ btrfs の場合、マウント直前にサブボリュームを再作成する
+        if entry.reset_on_boot && entry.fs_type == "btrfs" {
+            println!(
+                "init-core: resetting btrfs subvolume for {}",
+                entry.mount_point
+            );
+            if let Err(e) = reset_btrfs_subvolume(&dev_path, &entry.options) {
+                // サイレント失敗を防ぐため、エラー時はパニック（ブート停止）させる
+                panic!(
+                    "init-core: FATAL: failed to reset btrfs subvolume for {}: {}",
+                    entry.mount_point, e
+                );
+            }
+        }
 
         println!(
             "init-core: mounting {} ({}) on {} ({})",
@@ -118,7 +154,6 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path) -> io::Result<()> {
             continue;
         }
 
-        let (flags, data_options) = parse_mount_options(&entry.options);
         let data_str = (!data_options.is_empty()).then(|| data_options.join(","));
         let result = mount(
             Some(&dev_path),
@@ -138,6 +173,67 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path) -> io::Result<()> {
             ),
         }
     }
+    Ok(())
+}
+
+/// Btrfs のサブボリュームを空の状態で再作成する関数
+fn reset_btrfs_subvolume(dev_path: &Path, options: &[String]) -> io::Result<()> {
+    // options から "subvol=@root" などのサブボリューム名を抽出
+    let subvol_name = options
+        .iter()
+        .find_map(|opt| opt.strip_prefix("subvol="))
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "btrfs reset requires subvol= option",
+            )
+        })?;
+
+    let tmp_mnt = Path::new("/tmp_btrfs_reset");
+    fs::create_dir_all(tmp_mnt)?;
+
+    // トップレベル (subvolid=5) で一時マウント
+    let status = Command::new("mount")
+        .args([
+            "-t",
+            "btrfs",
+            "-o",
+            "subvolid=5",
+            dev_path.to_str().unwrap(),
+            tmp_mnt.to_str().unwrap(),
+        ])
+        .status()?;
+    if !status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "failed to mount btrfs root (subvolid=5)",
+        ));
+    }
+
+    let target_subvol = tmp_mnt.join(subvol_name.trim_start_matches('/'));
+
+    // 既存のサブボリュームが存在する場合は削除
+    if target_subvol.exists() {
+        let _ = Command::new("btrfs")
+            .args(["subvolume", "delete", target_subvol.to_str().unwrap()])
+            .status();
+    }
+
+    // 新規作成
+    let status = Command::new("btrfs")
+        .args(["subvolume", "create", target_subvol.to_str().unwrap()])
+        .status()?;
+
+    let _ = Command::new("umount").arg(tmp_mnt).status();
+    let _ = fs::remove_dir(tmp_mnt);
+
+    if !status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "failed to create new btrfs subvolume",
+        ));
+    }
+
     Ok(())
 }
 

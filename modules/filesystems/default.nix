@@ -14,7 +14,7 @@
   # Stage 1 用の mount-plan.json を生成する derivation
   stage1MountPlan = pkgs.writeText "stage1-mount-plan.json" (builtins.toJSON (
     lib.mapAttrs (name: fs: {
-      inherit (fs) device mountPoint fsType options dump pass;
+      inherit (fs) device mountPoint fsType options resetOnBoot dump pass;
     })
     computedStage1
   ));
@@ -26,6 +26,7 @@ in {
     ./btrfs.nix
     ./ext4.nix
     ./9p.nix
+    ./impermanence.nix
   ];
 
   config = {
