@@ -57,6 +57,6 @@ in {
   };
 
   config = {
-    system.build.toplevel = config.system.build.checked toplevel;
+    system.build.toplevel = config.system.withAssertions toplevel;
   };
 }
