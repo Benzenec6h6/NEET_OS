@@ -127,13 +127,13 @@ pub fn setup_base_directories() -> io::Result<()> {
     }
 
     // 2. /run 配下の一時ディレクトリの準備
-    let run_dirs = ["/run/lock"];
-    for dir in &run_dirs {
+    let run_dirs: &[(&str, u32)] = &[("/run/lock", 0o1777), ("/run/sessiond", 0o755)];
+
+    for (dir, mode) in run_dirs {
         let path = Path::new(dir);
         if !path.exists() {
             fs::create_dir_all(path)?;
-            // ロックディレクトリは 1777 (sticky bit) が標準
-            let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o1777));
+            let _ = fs::set_permissions(path, fs::Permissions::from_mode(*mode));
         }
     }
 
