@@ -29,6 +29,16 @@ chmod 755 "$out/bin/"*
 cp "@busybox@/bin/busybox" "$out/bin/busybox"
 chmod 755 "$out/bin/busybox"
 
+# --- 3. 有効なファイルシステムの専用ツール (btrfs 等) の配置 ---
+if [ -d "@extraBin@/bin" ]; then
+  for bin in "@extraBin@/bin/"*; do
+    if [ -f "$bin" ]; then
+      cp -f "$bin" "$out/bin/"
+    fi
+  done
+fi
+chmod 755 "$out/bin/"*
+
 # -s -f でリンクを張るが、既存の専用バイナリがある場合は上書きさせない
 # （Busybox の --install は既存ファイルがあるとスキップします）
 "$out/bin/busybox" --install -s "$out/bin"

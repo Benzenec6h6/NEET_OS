@@ -4,6 +4,11 @@
   lib,
   ...
 }: let
+  extraFsPackages = lib.concatLists (
+    lib.catAttrs "packages" (lib.attrValues (
+      lib.filterAttrs (n: fs: fs.enable) config.boot.initrd.supportedFilesystems
+    ))
+  );
   # ビルド用スクリプトの生成（変数の注入）
   buildInitrdEnvScript = pkgs.replaceVarsWith {
     src = ./build-initrd.sh;
@@ -14,6 +19,10 @@
       mdevd = "${pkgs.pkgsStatic.mdevd}";
       earlyInit = "${config.system.build.earlyInit}";
       mdevdDiskScript = "${config.system.build.mdevdDisk}/bin/mdevd-disk.sh";
+      extraBin = "${pkgs.buildEnv {
+        name = "initrd-extra-bin";
+        paths = extraFsPackages;
+      }}";
     };
     isExecutable = true;
   };
