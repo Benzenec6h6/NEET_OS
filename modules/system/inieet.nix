@@ -13,6 +13,7 @@ in {
     system.build.efistubSync = inieet.efistubSync;
     system.build.espSync = inieet.espSync;
     system.build.bootspecWrite = inieet.bootspecWrite;
+    system.build.diskSetup = inieet.diskSetup;
 
     # システムの一般 PATH に systemInit などを登録
     environment.systemPackages = [

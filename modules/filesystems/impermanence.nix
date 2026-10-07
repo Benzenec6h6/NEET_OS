@@ -97,7 +97,7 @@ in {
 
       # ★ 追加 8: /nix 自体がリセット対象になっていないこと
       {
-        assertion = !(fileSystems."/nix".resetOnBoot or false) && !(fileSystems."/nix/store".resetOnBoot or false);
+        assertion = !((fileSystems."/nix" or {}).resetOnBoot or false) && !((fileSystems."/nix/store" or {}).resetOnBoot or false);
         message = "Impermanence: /nix または /nix/store に resetOnBoot = true が設定されています！OSが破壊されます。";
       }
 

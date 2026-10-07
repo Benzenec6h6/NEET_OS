@@ -5,35 +5,31 @@ set -euo pipefail
 : "${out:?out must be set}"
 : "${toplevel:?toplevel must be set}"
 : "${rootfs:?rootfs must be set}"
-: "${rootFsType:?rootFsType must be set}"
+: "${diskPlan:?diskPlan must be set}"
 : "${diskSizeM:?diskSizeM must be set}"
-: "${espSizeM:?espSizeM must be set}"
-: "${rootSizeM:?rootSizeM must be set}"
+: "${espMount:?espMount must be set}"
 : "${bootloader:?bootloader must be set}" # "limine" または "efistub"
 
-echo "build-disk-image: starting assemble disk image (${diskSizeM}M)..."
+echo "build-disk-image: assembling disk image (${diskSizeM}M, plan: ${diskPlan})..."
 
 # ==========================================
-# 1. ESP (FAT32) イメージの作成
+# 1. ブートローダのファイルを「完成後のルート階層」の ESP の位置に用意する
+#    （パーティション分割・mkfs・書き込みは disk-setup が plan に従って行う）
 # ==========================================
-echo "build-disk-image: creating ESP image (${espSizeM}M)..."
-truncate -s "${espSizeM}M" esp.img
-mkfs.vfat -F 32 -n NEET_BOOT esp.img
+layer="$PWD/layer"
+esp="${layer}${espMount}"
+mkdir -p "$esp/EFI/BOOT"
 
-mmd -i esp.img ::/EFI
-mmd -i esp.img ::/EFI/BOOT
-
-# ブートローダごとの ESP 構築
 if [ "$bootloader" = "limine" ]; then
   : "${liminePkg:?liminePkg must be set for limine}"
-  echo "build-disk-image: configuring Limine on ESP..."
+  echo "build-disk-image: configuring Limine..."
 
-  mmd -i esp.img ::/kernels
-  mcopy -i esp.img "${liminePkg}/share/limine/BOOTX64.EFI" ::/EFI/BOOT/BOOTX64.EFI
-  mcopy -i esp.img "${toplevel}/kernel" ::/kernels/gen-1-vmlinuz
-  mcopy -i esp.img "${toplevel}/initrd" ::/kernels/gen-1-initrd
+  mkdir -p "$esp/kernels"
+  cp "${liminePkg}/share/limine/BOOTX64.EFI" "$esp/EFI/BOOT/BOOTX64.EFI"
+  cp "${toplevel}/kernel" "$esp/kernels/gen-1-vmlinuz"
+  cp "${toplevel}/initrd" "$esp/kernels/gen-1-initrd"
 
-  cat <<EOF > limine.conf
+  cat <<EOT > "$esp/limine.conf"
 timeout: 5
 
 /NEET OS (Generation 1 - Current)
@@ -41,75 +37,40 @@ timeout: 5
     kernel_path: boot():/kernels/gen-1-vmlinuz
     module_path: boot():/kernels/gen-1-initrd
     cmdline: init=${toplevel}/init $(cat "${toplevel}/kernel-params")
-EOF
-  mcopy -i esp.img limine.conf ::/limine.conf
+EOT
 
 elif [ "$bootloader" = "efistub" ]; then
-
-  # ★ UKI がある場合のワンクッション分岐
   if [ -n "${ukiFile:-}" ]; then
-    echo "build-disk-image: configuring pure UKI direct boot (No UEFI Shell, No startup.nsh!)..."
-
-    # UKI そのものをデフォルトのブートローダパスに配置するだけ！
-    mcopy -i esp.img "${ukiFile}" ::/EFI/BOOT/BOOTX64.EFI
-
+    echo "build-disk-image: configuring pure UKI direct boot..."
+    cp "${ukiFile}" "$esp/EFI/BOOT/BOOTX64.EFI"
   else
-    # 従来の EFISTUB (UEFI Shell による世話焼き)
     : "${uefiShellPkg:?uefiShellPkg must be set}"
     echo "build-disk-image: configuring EFISTUB via UEFI Shell..."
 
-    mmd -i esp.img ::/EFI/NEET
-    mcopy -i esp.img "${toplevel}/kernel" ::/EFI/NEET/gen-1-vmlinuz.efi
-    mcopy -i esp.img "${toplevel}/initrd" ::/EFI/NEET/gen-1-initrd.img
+    mkdir -p "$esp/EFI/NEET"
+    cp "${toplevel}/kernel" "$esp/EFI/NEET/gen-1-vmlinuz.efi"
+    cp "${toplevel}/initrd" "$esp/EFI/NEET/gen-1-initrd.img"
+    cp "${uefiShellPkg}" "$esp/EFI/BOOT/BOOTX64.EFI"
 
-    mcopy -i esp.img "${uefiShellPkg}" ::/EFI/BOOT/BOOTX64.EFI
-
-    cat <<EOF > startup.nsh
+    cat <<EOT > "$esp/startup.nsh"
 \EFI\NEET\gen-1-vmlinuz.efi initrd=\EFI\NEET\gen-1-initrd.img init=${toplevel}/init $(cat "${toplevel}/kernel-params")
-EOF
-    mcopy -i esp.img startup.nsh ::/startup.nsh
+EOT
   fi
-
 else
   echo "build-disk-image: error: unsupported bootloader '$bootloader'" >&2
   exit 1
 fi
 
 # ==========================================
-# 2. RootFS イメージの作成
+# 2. disk-setup でイメージ化
+#    --tree は後ろが前を上書き。rootfs（読み取り専用）の上に ESP 用レイヤを重ねる
 # ==========================================
-echo "build-disk-image: creating RootFS image (${rootSizeM}M, ${rootFsType})..."
-truncate -s "${rootSizeM}M" rootfs.img
+args=(image "$diskPlan" --out "$out" --size-m "$diskSizeM"
+  --tree "$rootfs" --tree "$layer" --work "$PWD/work")
+if [ -n "${diskName:-}" ]; then
+  args+=(--disk "$diskName")
+fi
 
-case "$rootFsType" in
-  btrfs)
-    mkfs.btrfs -L NEET_OS -r "$rootfs" rootfs.img
-    ;;
-  ext4)
-    mkfs.ext4 -L NEET_OS -d "$rootfs" rootfs.img
-    ;;
-  *)
-    echo "build-disk-image: error: unsupported fsType '$rootFsType'" >&2
-    exit 1
-    ;;
-esac
-
-# ==========================================
-# 3. GPT ディスクの構築と結合
-# ==========================================
-echo "build-disk-image: assembling GPT partition table..."
-truncate -s "${diskSizeM}M" "$out"
-
-sgdisk -Z "$out"
-# p1: ESP (1MB から espSizeM まで)
-sgdisk -n "1:2048:+${espSizeM}M" -t 1:ef00 -c 1:"EFI" "$out"
-# p2: Root (ESP の後ろから rootSizeM 分)
-rootStartSector=$(( (1 + espSizeM) * 2048 ))
-sgdisk -n "2:${rootStartSector}:+${rootSizeM}M" -t 2:8300 -c 2:"root" "$out"
-
-# 結合
-echo "build-disk-image: writing partitions into disk image..."
-dd if=esp.img of="$out" bs=1M seek=1 conv=notrunc status=none
-dd if=rootfs.img of="$out" bs=1M seek=$(( 1 + espSizeM )) conv=notrunc status=none
+disk-setup "${args[@]}"
 
 echo "build-disk-image: disk image successfully created at $out"

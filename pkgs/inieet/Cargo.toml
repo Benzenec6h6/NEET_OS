@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "bootspec",
+    "disk-setup",
     "init-core",
     "early-init",
     "system-init",

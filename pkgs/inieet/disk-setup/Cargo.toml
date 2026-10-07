@@ -1,0 +1,17 @@
+[package]
+name = "disk-setup"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "disk_setup"
+path = "src/lib.rs"
+
+[[bin]]
+name = "disk-setup"
+path = "src/main.rs"
+
+[dependencies]
+init-core = { path = "../init-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

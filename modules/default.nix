@@ -5,6 +5,7 @@
 }: {
   imports = [
     ./boot
+    ./disks
     ./filesystems
     ./hardware
     ./init

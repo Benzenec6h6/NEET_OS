@@ -27,6 +27,10 @@
         default = false;
         description = "true の場合、Btrfs サブボリューム等の場合にマウント直前で初期化・ロールバックを行う";
       };
+      keepOldRoots = lib.mkOption {
+        type = lib.types.ints.unsigned;
+        default = 3;
+      };
       dump = lib.mkOption {
         type = lib.types.int;
         default = 0;
@@ -43,7 +47,7 @@ in {
     fileSystems = lib.mkOption {
       type = lib.types.attrsOf (lib.types.submodule mountOpts);
       default = {};
-      description = "実ディスク上のファイルシステム定義（唯一の情報源）";
+      description = "実ディスク上のファイルシステム定義";
     };
     # OS側が内部的に必要とする固定の仮想マウント（proc, sysなど）。ユーザーは通常触らない。
     virtualFileSystems = lib.mkOption {

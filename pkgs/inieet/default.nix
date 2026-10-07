@@ -47,4 +47,11 @@ in {
     cargoLock.lockFile = cargoLockFile;
     buildAndTestSubdir = "bootspec";
   };
+  diskSetup = pkgs.rustPlatform.buildRustPackage {
+    pname = "disk-setup";
+    version = "0.1.0";
+    inherit src;
+    cargoLock.lockFile = cargoLockFile;
+    buildAndTestSubdir = "disk-setup";
+  };
 }
