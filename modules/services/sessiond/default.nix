@@ -49,6 +49,10 @@ in {
     system.s6-rc.services.sessiond = {
       type = "longrun";
       dependencies = ["dbus"];
+
+      # ★ s6 に通知を受け取る準備をさせる (通常 fd 3 を使う)
+      notification-fd = 3;
+
       run = ''
         #!/bin/sh
         export LOG_LEVEL="${
@@ -56,7 +60,11 @@ in {
           then "debug"
           else "info"
         }"
-        exec ${lib.getExe' cfg.package "sessiond"} --config ${configFile} --log-target stderr
+
+        # ★ s6-notify-fd-from-socket を挟んで起動
+        # (pkgs.s6 の中に含まれています)
+        exec ${pkgs.s6}/bin/s6-notify-fd-from-socket -3 3 \
+          ${lib.getExe' cfg.package "sessiond"} --config ${configFile} --log-target stderr
       '';
     };
   };
