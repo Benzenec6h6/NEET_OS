@@ -1,4 +1,8 @@
-{lib, ...}: let
+{
+  lib,
+  pkgs,
+  ...
+}: let
   inherit (lib) mkOption types;
 
   subvolumeOpts = {
@@ -137,8 +141,8 @@ in {
       '';
     };
     package = mkOption {
-      type = types.nullOr types.package;
-      default = null;
+      type = types.package;
+      default = (pkgs.callPackage ../../pkgs/inieet {}).diskSetup;
       description = "disk-setup バイナリを含むパッケージ（pkgs/inieet のビルド成果物）";
     };
   };
