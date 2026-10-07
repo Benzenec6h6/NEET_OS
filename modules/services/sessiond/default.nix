@@ -55,6 +55,11 @@ in {
 
       run = ''
         #!/bin/sh
+        export RUST_LOG="${
+          if cfg.debug
+          then "debug,daemon=trace"
+          else "info"
+        }"
         export LOG_LEVEL="${
           if cfg.debug
           then "debug"
