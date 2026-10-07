@@ -88,6 +88,25 @@ in {
         assertion = underPersist == [];
         message = "Impermanence: ${cfg.persistPath} 配下は directories に指定できません: ${toString underPersist}";
       }
+
+      # ★ 追加 7: ルートがリセット対象なのに、/nix の独立マウントがない構成を弾く
+      {
+        assertion = !(rootFs.resetOnBoot or false) || (fileSystems ? "/nix" || fileSystems ? "/nix/store");
+        message = "Impermanence: ルートが resetOnBoot = true ですが、/nix または /nix/store のマウント定義がありません！Nix Store が退避・消去されてしまいます。";
+      }
+
+      # ★ 追加 8: /nix 自体がリセット対象になっていないこと
+      {
+        assertion = !(fileSystems."/nix".resetOnBoot or false) && !(fileSystems."/nix/store".resetOnBoot or false);
+        message = "Impermanence: /nix または /nix/store に resetOnBoot = true が設定されています！OSが破壊されます。";
+      }
+
+      # ★ 追加 9: resetOnBoot = true をつけたマウントはすべて neededForBoot = true が必須
+      # (理由: Btrfs リセットは Stage 1 の early-init で実行するため)
+      {
+        assertion = lib.all (fs: !fs.resetOnBoot || fs.neededForBoot) (lib.attrValues fileSystems);
+        message = "Impermanence: resetOnBoot = true を設定したファイルシステムは、すべて neededForBoot = true である必要があります。";
+      }
     ];
 
     # 永続化パスを boot.fileSystems の bind マウントに変換して注入する。

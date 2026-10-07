@@ -270,6 +270,20 @@ fn reset_btrfs_subvolume(dev_path: &Path, options: &[String], keep: u32) -> io::
         ))
     })?;
 
+    let target = tmp_mnt.join(subvol);
+
+    // ★ 根本対策: 退避対象の中に実体の /nix/store が入っていないか検証
+    let nix_store_inside = target.join("nix/store");
+    if nix_store_inside.exists() {
+        // ※ もしマウント計画に独立した /nix がないのに、ここに nix/store があるなら絶対に消してはいけない
+        return Err(fatal(format!(
+            "REFUSING to reset subvolume '{}': it contains '/nix/store'! \
+            Moving this subvolume will destroy the operating system. \
+            Ensure '/nix' is mounted from a separate subvolume.",
+            subvol
+        )));
+    }
+
     let result = rotate_and_recreate(tmp_mnt, subvol, keep);
 
     if let Err(e) = umount(tmp_mnt) {
