@@ -43,6 +43,7 @@ pub enum FsKind {
     Ext4,
     Btrfs,
     Swap,
+    Luks,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -51,7 +52,6 @@ pub struct Content {
     #[serde(rename = "type")]
     pub kind: FsKind,
     pub label: String,
-    /// vfat は "ABCD-1234"（ボリュームID）、それ以外は UUID
     pub uuid: String,
     #[serde(default)]
     pub mount_point: Option<String>,
@@ -61,6 +61,14 @@ pub struct Content {
     pub mkfs_args: Vec<String>,
     #[serde(default)]
     pub subvolumes: Vec<Subvolume>,
+
+    // ★ LUKS 用に追加
+    #[serde(default)]
+    pub luks_name: Option<String>,
+    #[serde(default)]
+    pub extra_luks_args: Vec<String>,
+    #[serde(default)]
+    pub content: Option<Box<Content>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -88,12 +96,15 @@ impl Content {
             FsKind::Ext4 => "ext4",
             FsKind::Btrfs => "btrfs",
             FsKind::Swap => "swap",
+            FsKind::Luks => "luks",
         }
     }
 
     pub fn mounts(&self) -> Vec<MountSpec> {
         match self.kind {
             FsKind::Swap => vec![],
+            // ★ 追加: LUKS の場合は内部コンテンツのマウント一覧を返す
+            FsKind::Luks => self.content.as_ref().map_or(vec![], |c| c.mounts()),
             FsKind::Btrfs if !self.subvolumes.is_empty() => self
                 .subvolumes
                 .iter()
@@ -229,7 +240,11 @@ pub(crate) mod tests {
         assert!(p.validate().is_err());
 
         let mut p = sample();
-        p.disks[0].partitions[0].content.as_mut().unwrap().mount_point = Some("/nix".into());
+        p.disks[0].partitions[0]
+            .content
+            .as_mut()
+            .unwrap()
+            .mount_point = Some("/nix".into());
         assert!(p.validate().unwrap_err().contains("duplicate"));
     }
 

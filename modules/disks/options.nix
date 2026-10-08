@@ -39,33 +39,33 @@
   contentOpts = {
     options = {
       type = mkOption {
-        type = types.enum ["vfat" "ext4" "btrfs" "swap"];
-        description = "ファイルシステムの種類";
+        type = types.enum ["vfat" "ext4" "btrfs" "swap" "luks"];
+        description = "ファイルシステムまたはコンテナの種類";
       };
       label = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "null の場合はパーティション名（vfat は大文字、種類ごとの最大長に切り詰め）";
+        description = "null の場合はパーティション名";
       };
       uuid = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "mkfs に渡す UUID（vfat は ABCD-1234 形式）。null の場合は <disk>/<partition> から決定的に生成";
+        description = "mkfs / luksFormat に渡す UUID";
       };
       mountPoint = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "マウント先。btrfs で subvolumes を使う場合は null にして subvolume 側で指定する";
+        description = "マウント先（btrfs subvolume や LUKS の場合は null）";
       };
       options = mkOption {
         type = types.listOf types.str;
         default = ["defaults"];
-        description = "マウントオプション（subvolumes を使わない場合）";
+        description = "マウントオプション";
       };
       neededForBoot = mkOption {
         type = types.nullOr types.bool;
         default = null;
-        description = "null の場合は自動判定（subvolume 側の説明を参照）";
+        description = "起動時に必要かどうかの明示指定";
       };
       extraMkfsArgs = mkOption {
         type = types.listOf types.str;
@@ -75,7 +75,24 @@
       subvolumes = mkOption {
         type = types.attrsOf (types.submodule subvolumeOpts);
         default = {};
-        description = "btrfs の subvolume（名前がそのまま subvol= の値になる。'/' は含められない）";
+        description = "btrfs の subvolume";
+      };
+
+      # ★ LUKS 専用オプション
+      luksName = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "マッパー名 (/dev/mapper/<name>)。null の場合は 'crypt_<partition.name>'";
+      };
+      content = mkOption {
+        type = types.nullOr (types.submodule contentOpts);
+        default = null;
+        description = "LUKS 内部のコンテンツ (btrfs, ext4 など)";
+      };
+      extraLuksArgs = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = "cryptsetup luksFormat に追加で渡す引数";
       };
     };
   };

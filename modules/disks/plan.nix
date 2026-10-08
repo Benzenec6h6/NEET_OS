@@ -8,7 +8,7 @@
   imp = config.impermanence;
   inherit (builtins) substring hashString attrNames elem;
 
-  # ---- 識別子は eval 時に確定させる（UUID が eval 時に分からない問題の回避） ----
+  # ---- 識別子は eval 時に確定させる ----
   hash = seed: hashString "sha256" seed;
   mkUuid = seed: let
     h = hash seed;
@@ -22,12 +22,14 @@
     ext4 = 16;
     btrfs = 255;
     swap = 15;
+    luks = 255;
   };
   defaultTypeCode = {
     vfat = "ef00";
     ext4 = "8300";
     btrfs = "8300";
     swap = "8200";
+    luks = "8309"; # Linux LUKS
   };
 
   alwaysNeeded = ["/" "/nix" "/nix/store" "/usr"] ++ lib.optional imp.enable imp.persistPath;
@@ -36,14 +38,27 @@
     then explicit
     else reset || elem mp alwaysNeeded;
 
-  # ---- 宣言 → 確定済みの値 ----
-  resolveContent = seed: part: c: {
+  # ---- 宣言 → 確定済みの値（再帰対応） ----
+  resolveContent = seed: part: c: let
+    isLuks = c.type == "luks";
+    luksName =
+      if isLuks
+      then
+        (
+          if c.luksName != null
+          then c.luksName
+          else "crypt_${part.name}"
+        )
+      else null;
+  in {
     inherit (c) type;
     label =
       if c.label != null
       then c.label
+      else if isLuks
+      then luksName
       else
-        lib.substring 0 labelMax.${c.type} (
+        lib.substring 0 (labelMax.${c.type} or 255) (
           if c.type == "vfat"
           then lib.toUpper part.name
           else part.name
@@ -59,8 +74,16 @@
     mkfsArgs = c.extraMkfsArgs;
     subvolumes = map (name: {
       inherit name;
-      inherit (c.subvolumes.${name}) mountPoint options;
+      inherit (c.subvolumes.${name}) mountPoint options neededForBoot resetOnBoot keepOldRoots;
     }) (attrNames c.subvolumes);
+
+    # LUKS 専用フィールド
+    inherit luksName;
+    extraLuksArgs = c.extraLuksArgs or [];
+    content =
+      if isLuks && c.content != null
+      then resolveContent "${seed}/inner" part c.content
+      else null;
   };
 
   resolvePartition = diskName: p: let
@@ -93,52 +116,78 @@
     })
     diskNames;
 
-  # ---- 宣言 → boot.fileSystems ----
-  deviceFor = rp:
-    if cfg.deviceReference == "partuuid"
-    then "PARTUUID=${rp.guid}"
-    else "UUID=${rp.content.uuid}";
-
-  fsEntriesFor = p: rp: let
-    c = p.content;
-    device = deviceFor rp;
-  in
+  # ---- 宣言 → boot.fileSystems 生成ヘルパー ----
+  # content とデバイス文字列を受け取って FS エントリを返す（通常FSとLUKS内部FSで共用）
+  makeFsEntries = device: c:
     if c == null || c.type == "swap"
     then []
-    else if c.type == "btrfs" && c.subvolumes != {}
+    else if c.type == "btrfs" && c.subvolumes != []
     then
-      lib.concatMap (name: let
-        sv = c.subvolumes.${name};
-      in
+      lib.concatMap (sv:
         lib.optional (sv.mountPoint != null) {
           name = sv.mountPoint;
           value = {
             inherit device;
             fsType = "btrfs";
-            options = ["subvol=${name}"] ++ sv.options;
-            neededForBoot = neededFor sv.mountPoint sv.neededForBoot sv.resetOnBoot;
+            options = ["subvol=${sv.name}"] ++ sv.options;
+            neededForBoot = neededFor sv.mountPoint sv.neededForBoot (sv.resetOnBoot or false);
             inherit (sv) resetOnBoot keepOldRoots;
           };
-        }) (attrNames c.subvolumes)
+        })
+      c.subvolumes
     else
       lib.optional (c.mountPoint != null) {
         name = c.mountPoint;
         value = {
           inherit device;
           fsType = c.type;
-          inherit (c) options;
+          options = c.mountOptions;
           neededForBoot = neededFor c.mountPoint c.neededForBoot false;
         };
       };
 
-  allEntries =
-    lib.concatMap (
-      dname:
-        lib.concatMap (p: fsEntriesFor p (resolvePartition dname p)) cfg.devices.${dname}.partitions
-    )
-    diskNames;
+  # パーティション1つ分の FS エントリを導出
+  fsEntriesFor = rp: let
+    c = rp.content;
+  in
+    if c == null
+    then []
+    # LUKS の場合: 内部 FS を UUID で参照（mdevd が /dev/disk/by-uuid/<inner> を作る）
+    else if c.type == "luks"
+    then
+      if c.content != null
+      then makeFsEntries "UUID=${c.content.uuid}" c.content
+      else []
+    # 通常 FS の場合: PARTUUID または UUID を参照
+    else let
+      device =
+        if cfg.deviceReference == "partuuid"
+        then "PARTUUID=${rp.guid}"
+        else "UUID=${c.uuid}";
+    in
+      makeFsEntries device c;
 
+  allEntries = lib.concatMap (d: lib.concatMap fsEntriesFor d.partitions) resolvedDisks;
   allMountPoints = map (e: e.name) allEntries;
+
+  # ---- boot.initrd.luks.devices 自動導出 ----
+  luksPartitions =
+    lib.concatMap (
+      d:
+        lib.filter (p: p.content != null && p.content.type == "luks") d.partitions
+    )
+    resolvedDisks;
+
+  luksDevices = lib.listToAttrs (map (p: let
+      name = p.content.luksName;
+    in {
+      inherit name;
+      value = {
+        inherit name;
+        device = "/dev/disk/by-partuuid/${p.guid}";
+      };
+    })
+    luksPartitions);
 
   # ---- assertions 用 ----
   allPartitions = lib.concatMap (dname: map (p: {inherit dname p;}) cfg.devices.${dname}.partitions) diskNames;
@@ -160,12 +209,13 @@
   subvolOnNonBtrfs = lib.filter (x: x.p.content.type != "btrfs" && x.p.content.subvolumes != {}) withContent;
   mixedMount = lib.filter (x: x.p.content.type == "btrfs" && x.p.content.subvolumes != {} && x.p.content.mountPoint != null) withContent;
   swapMounted = lib.filter (x: x.p.content.type == "swap" && x.p.content.mountPoint != null) withContent;
+  luksMounted = lib.filter (x: x.p.content.type == "luks" && x.p.content.mountPoint != null) withContent;
   resetWithoutMount = lib.concatMap (x:
     lib.filter (n: let sv = x.p.content.subvolumes.${n}; in sv.resetOnBoot && sv.mountPoint == null) (attrNames x.p.content.subvolumes))
   withContent;
   unstableDevices = lib.filter (d: d != null && !(lib.hasPrefix "/dev/disk/by-" d)) (map (n: cfg.devices.${n}.device) diskNames);
 
-  diskTools = with pkgs; [gptfdisk dosfstools mtools btrfs-progs e2fsprogs util-linux coreutils findutils];
+  diskTools = with pkgs; [gptfdisk dosfstools mtools btrfs-progs e2fsprogs util-linux cryptsetup coreutils findutils];
 
   diskPlan = pkgs.writeText "disk-plan.json" (builtins.toJSON {
     version = 1;
@@ -215,6 +265,10 @@ in {
         message = "disks: swap に mountPoint は指定できません。";
       }
       {
+        assertion = luksMounted == [];
+        message = "disks: LUKS 自体に mountPoint は指定できません。inner content 側で指定してください。";
+      }
+      {
         assertion = resetWithoutMount == [];
         message = "disks: resetOnBoot = true の subvolume には mountPoint が必要です: ${toString resetWithoutMount}";
       }
@@ -230,6 +284,9 @@ in {
         value = lib.mapAttrs (_: lib.mkDefault) e.value;
       })
       allEntries);
+
+    # LUKS デバイス一覧を自動設定（手動での上書きも可能）
+    boot.initrd.luks.devices = lib.mapAttrs (_: lib.mkDefault) luksDevices;
 
     system.build.diskPlan = diskPlan;
 

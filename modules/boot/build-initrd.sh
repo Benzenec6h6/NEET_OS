@@ -37,6 +37,14 @@ if [ -d "@extraBin@/bin" ]; then
     fi
   done
 fi
+# ★ 追加: sbin にインストールされるバイナリも拾う
+if [ -d "@extraBin@/sbin" ]; then
+  for bin in "@extraBin@/sbin/"*; do
+    if [ -f "$bin" ]; then
+      cp -f "$bin" "$out/bin/"
+    fi
+  done
+fi
 chmod 755 "$out/bin/"*
 
 # -s -f でリンクを張るが、既存の専用バイナリがある場合は上書きさせない

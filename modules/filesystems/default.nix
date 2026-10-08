@@ -27,6 +27,7 @@ in {
     ./ext4.nix
     ./9p.nix
     ./impermanence.nix
+    ./luks.nix
   ];
 
   config = {

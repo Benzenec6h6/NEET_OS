@@ -76,7 +76,10 @@ pub fn partition_cmds(device: &str, parts: &[Partition], extents: &[Extent]) -> 
         args.push(format!("--partition-guid={n}:{}", p.guid));
     }
     args.push(device.to_string());
-    vec![Cmd::new("sgdisk", ["--zap-all", device]), Cmd::new("sgdisk", args)]
+    vec![
+        Cmd::new("sgdisk", ["--zap-all", device]),
+        Cmd::new("sgdisk", args),
+    ]
 }
 
 /// mkfs（swap は mkswap）。
@@ -88,7 +91,9 @@ pub fn mkfs_cmds(device: &str, c: &Content, rootdir: Option<&Path>) -> Vec<Cmd> 
     let mut a: Vec<String> = Vec::new();
     let prog = match c.kind {
         FsKind::Vfat => {
-            a.extend(["-F", "32", "-n", &c.label, "-i", &c.uuid.replace('-', "")].map(String::from));
+            a.extend(
+                ["-F", "32", "-n", &c.label, "-i", &c.uuid.replace('-', "")].map(String::from),
+            );
             "mkfs.vfat"
         }
         FsKind::Ext4 => {
@@ -112,6 +117,8 @@ pub fn mkfs_cmds(device: &str, c: &Content, rootdir: Option<&Path>) -> Vec<Cmd> 
             a.extend(["-L", &c.label, "-U", &c.uuid].map(String::from));
             "mkswap"
         }
+        // ★ 追加: LUKS 自体は mkfs ではなく luks_format_cmd を使うため空を返す
+        FsKind::Luks => return vec![],
     };
     a.extend(c.mkfs_args.iter().cloned());
     a.push(device.to_string());
@@ -128,10 +135,36 @@ pub fn vfat_populate_cmd(image: &Path, dir: &Path) -> io::Result<Option<Cmd>> {
         return Ok(None);
     }
     entries.sort();
-    let mut args = vec!["-i".to_string(), image.display().to_string(), "-s".into(), "-m".into()];
+    let mut args = vec![
+        "-i".to_string(),
+        image.display().to_string(),
+        "-s".into(),
+        "-m".into(),
+    ];
     args.extend(entries);
     args.push("::/".into());
     Ok(Some(Cmd::new("mcopy", args)))
+}
+
+pub fn luks_format_cmd(device: &str, c: &Content) -> Cmd {
+    let mut args = vec![
+        "luksFormat".to_string(),
+        "--type".to_string(),
+        "luks2".to_string(),
+        "--uuid".to_string(),
+        c.uuid.clone(),
+    ];
+    args.extend(c.extra_luks_args.iter().cloned());
+    args.push(device.to_string());
+    Cmd::new("cryptsetup", args)
+}
+
+pub fn luks_open_cmd(device: &str, name: &str) -> Cmd {
+    Cmd::new("cryptsetup", ["open", device, name])
+}
+
+pub fn luks_close_cmd(name: &str) -> Cmd {
+    Cmd::new("cryptsetup", ["close", name])
 }
 
 #[cfg(test)]
@@ -151,8 +184,14 @@ mod tests {
         let p = sample();
         let d = &p.disks[0];
         let ext = [
-            Extent { start_sector: 2048, end_sector: 1050623 },
-            Extent { start_sector: 1050624, end_sector: 9999999 },
+            Extent {
+                start_sector: 2048,
+                end_sector: 1050623,
+            },
+            Extent {
+                start_sector: 1050624,
+                end_sector: 9999999,
+            },
         ];
         let cmds = partition_cmds("/dev/x", &d.partitions, &ext);
         assert_eq!(cmds[0].args, ["--zap-all", "/dev/x"]);
@@ -174,7 +213,10 @@ mod tests {
         let c = &mkfs_cmds("/dev/p2", btrfs, Some(Path::new("/stage")))[0];
         assert_eq!(c.prog, "mkfs.btrfs");
         let r = c.render();
-        assert!(r.contains("-r /stage --subvol @root --subvol @nix --subvol @scratch /dev/p2"), "{r}");
+        assert!(
+            r.contains("-r /stage --subvol @root --subvol @nix --subvol @scratch /dev/p2"),
+            "{r}"
+        );
     }
 
     #[test]

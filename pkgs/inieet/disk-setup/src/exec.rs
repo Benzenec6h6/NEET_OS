@@ -3,7 +3,9 @@
 use crate::err;
 use crate::layout::{compute_layout, parse_size, Extent};
 use crate::plan::{Disk, FsKind, Plan};
-use crate::steps::{mkfs_cmds, partition_cmds, partition_path, Cmd};
+use crate::steps::{
+    luks_format_cmd, luks_open_cmd, mkfs_cmds, partition_cmds, partition_path, Cmd,
+};
 use std::fs;
 use std::io;
 use std::os::unix::fs::FileTypeExt;
@@ -86,9 +88,15 @@ fn btrfs_roots(disk: &Disk, base: &Path) -> Vec<(usize, PathBuf)> {
         .iter()
         .enumerate()
         .filter(|(_, p)| {
-            p.content
-                .as_ref()
-                .is_some_and(|c| c.kind == FsKind::Btrfs && !c.subvolumes.is_empty())
+            p.content.as_ref().is_some_and(|c| {
+                // LUKS の場合は内部を見る
+                let target = if c.kind == FsKind::Luks {
+                    c.content.as_deref()
+                } else {
+                    Some(c)
+                };
+                target.is_some_and(|tc| tc.kind == FsKind::Btrfs && !tc.subvolumes.is_empty())
+            })
         })
         .map(|(i, _)| (i, base.join(format!("part-{}", i + 1))))
         .collect()
@@ -124,12 +132,29 @@ pub fn format_disk(disk: &Disk, o: &FormatOpts) -> io::Result<()> {
         let node = partition_path(&real, i + 1);
         fs_cmds.push(Cmd::new("wipefs", ["--all", &node]));
         if let Some(c) = &p.content {
-            let rootdir = roots.iter().find(|(j, _)| *j == i).map(|(_, d)| d.as_path());
-            fs_cmds.extend(mkfs_cmds(&node, c, rootdir));
+            let rootdir = roots
+                .iter()
+                .find(|(j, _)| *j == i)
+                .map(|(_, d)| d.as_path());
+            // ★ LUKS の場合は luksFormat -> open -> 内部 mkfs を順に並べる
+            if c.kind == FsKind::Luks {
+                let luks_name = c.luks_name.as_deref().unwrap_or("cryptroot");
+                let mapper_dev = format!("/dev/mapper/{luks_name}");
+                fs_cmds.push(luks_format_cmd(&node, c));
+                fs_cmds.push(luks_open_cmd(&node, luks_name));
+                if let Some(inner) = &c.content {
+                    fs_cmds.extend(mkfs_cmds(&mapper_dev, inner, rootdir));
+                }
+            } else {
+                fs_cmds.extend(mkfs_cmds(&node, c, rootdir));
+            }
         }
     }
 
-    println!("disk-setup: target {dev_arg} -> {real} ({} bytes, sector {sector})", total);
+    println!(
+        "disk-setup: target {dev_arg} -> {real} ({} bytes, sector {sector})",
+        total
+    );
     let sigs = existing_signatures(&real)?;
     if !sigs.is_empty() {
         println!("disk-setup: WARNING existing signatures found:\n{sigs}");
@@ -147,8 +172,15 @@ pub fn format_disk(disk: &Disk, o: &FormatOpts) -> io::Result<()> {
 
     for (i, dir) in &roots {
         if let Some(c) = &disk.partitions[*i].content {
-            for sv in &c.subvolumes {
-                fs::create_dir_all(dir.join(&sv.name))?;
+            let target = if c.kind == FsKind::Luks {
+                c.content.as_deref()
+            } else {
+                Some(c)
+            };
+            if let Some(target) = target {
+                for sv in &target.subvolumes {
+                    fs::create_dir_all(dir.join(&sv.name))?;
+                }
             }
         }
     }
@@ -158,7 +190,9 @@ pub fn format_disk(disk: &Disk, o: &FormatOpts) -> io::Result<()> {
             c.run()?;
         }
         // カーネルにパーティションテーブルを読み直させ、ノードの出現を待つ
-        let _ = Command::new("blockdev").args(["--rereadpt", &real]).status();
+        let _ = Command::new("blockdev")
+            .args(["--rereadpt", &real])
+            .status();
         for i in 0..disk.partitions.len() {
             let node = partition_path(&real, i + 1);
             if !wait_for(&node, Duration::from_secs(10)) {
@@ -175,7 +209,10 @@ pub fn format_disk(disk: &Disk, o: &FormatOpts) -> io::Result<()> {
             if let Some(name) = Path::new(&node).file_name() {
                 let ue = Path::new("/sys/class/block").join(name).join("uevent");
                 if let Err(e) = fs::write(&ue, "change") {
-                    eprintln!("disk-setup: warning: could not trigger {}: {e}", ue.display());
+                    eprintln!(
+                        "disk-setup: warning: could not trigger {}: {e}",
+                        ue.display()
+                    );
                 }
             }
         }
@@ -203,20 +240,47 @@ pub fn mount_plan(
             .map(|p| p.display().to_string());
         for (i, p) in disk.partitions.iter().enumerate() {
             let Some(c) = &p.content else { continue };
-            for m in c.mounts() {
-                entries.push(init_core::MountEntry {
-                    // デバイスが分かれば実ノード、無ければ PARTUUID（init-core が by-partuuid に解決）
-                    device: real
-                        .as_ref()
-                        .map(|r| partition_path(r, i + 1))
-                        .unwrap_or_else(|| format!("PARTUUID={}", p.guid)),
-                    mount_point: m.mount_point,
-                    fs_type: c.fs_type().to_string(),
-                    options: m.options,
-                    already_mounted: false,
-                    reset_on_boot: false,
-                    keep_old_roots: 3,
-                });
+            let part_node = real
+                .as_ref()
+                .map(|r| partition_path(r, i + 1))
+                .unwrap_or_else(|| format!("PARTUUID={}", p.guid));
+
+            // ★ LUKS の場合: 必要に応じてオープンし、mapper デバイスをマウント対象にする
+            if c.kind == FsKind::Luks {
+                let luks_name = c.luks_name.as_deref().unwrap_or("cryptroot");
+                let mapper_path = format!("/dev/mapper/{luks_name}");
+
+                // まだオープンされていなければ cryptsetup open を実行
+                if !Path::new(&mapper_path).exists() {
+                    println!("disk-setup: opening LUKS device {part_node} -> {luks_name}");
+                    luks_open_cmd(&part_node, luks_name).run()?;
+                }
+
+                if let Some(inner) = &c.content {
+                    for m in inner.mounts() {
+                        entries.push(init_core::MountEntry {
+                            device: mapper_path.clone(),
+                            mount_point: m.mount_point,
+                            fs_type: inner.fs_type().to_string(),
+                            options: m.options,
+                            already_mounted: false,
+                            reset_on_boot: false,
+                            keep_old_roots: 3,
+                        });
+                    }
+                }
+            } else {
+                for m in c.mounts() {
+                    entries.push(init_core::MountEntry {
+                        device: part_node.clone(),
+                        mount_point: m.mount_point,
+                        fs_type: c.fs_type().to_string(),
+                        options: m.options,
+                        already_mounted: false,
+                        reset_on_boot: false,
+                        keep_old_roots: 3,
+                    });
+                }
             }
         }
     }

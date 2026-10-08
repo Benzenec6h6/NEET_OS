@@ -35,6 +35,8 @@ done
 echo "NEET OS Stage 1: Triggering coldplug..."
 mdevd-coldplug
 
+@luksUnlockCommands@
+
 echo "NEET OS Stage 1: Mounting root filesystems..."
 /bin/early-init /mount-plan.json /mnt || die "early-init failed to mount filesystems"
 
