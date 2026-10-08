@@ -1,18 +1,50 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -eu
 
-# 一時作業ディレクトリを作成（終了時に自動削除）
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
+if [ "@isPersistent@" = "1" ]; then
+  # ==========================================
+  # 永続化モード (persistent = true)
+  # ==========================================
+  STATE_DIR="$(pwd)/.vm-state"
+  mkdir -p "$STATE_DIR"
 
-# NVRAM 変数領域をコピーして書き込み可能にする
-cp "@ovmfVars@" "$TMPDIR/OVMF_VARS.fd"
-chmod 600 "$TMPDIR/OVMF_VARS.fd"
+  VARS_FILE="$STATE_DIR/OVMF_VARS.fd"
+  OVERLAY_DISK="$STATE_DIR/disk.qcow2"
+
+  # NVRAM が無ければ初回のみコピー
+  if [ ! -f "$VARS_FILE" ]; then
+    cp "@ovmfVars@" "$VARS_FILE"
+    chmod 600 "$VARS_FILE"
+  fi
+
+  # 差分オーバーレイディスクが無ければ初回のみ作成
+  # （Nix Store 内のディスクイメージを backing file として参照）
+  if [ ! -f "$OVERLAY_DISK" ]; then
+    echo "run-vm: creating persistent qcow2 overlay at $OVERLAY_DISK..."
+    "@qemuImgBinary@" create -f qcow2 -b "@diskImage@" -F raw "$OVERLAY_DISK"
+  else
+    echo "run-vm: reusing persistent overlay at $OVERLAY_DISK"
+  fi
+
+  DRIVE_ARG="file=$OVERLAY_DISK,if=virtio,format=qcow2"
+else
+  # ==========================================
+  # 使い捨てモード (persistent = false)
+  # ==========================================
+  TMPDIR="$(mktemp -d)"
+  trap 'rm -rf "$TMPDIR"' EXIT
+
+  VARS_FILE="$TMPDIR/OVMF_VARS.fd"
+  cp "@ovmfVars@" "$VARS_FILE"
+  chmod 600 "$VARS_FILE"
+
+  DRIVE_ARG="file=@diskImage@,if=virtio,format=raw,snapshot=on"
+fi
 
 QEMU_ARGS=(
-  # ★UEFI ファームウェアを指定して起動
+  # UEFI ファームウェア
   -drive "if=pflash,format=raw,unit=0,readonly=on,file=@ovmfCode@"
-  -drive "if=pflash,format=raw,unit=1,file=$TMPDIR/OVMF_VARS.fd"
+  -drive "if=pflash,format=raw,unit=1,file=$VARS_FILE"
 
   -m "@memorySize@"
   -smp "@cores@"
@@ -23,7 +55,9 @@ QEMU_ARGS=(
   -serial mon:stdio
   -netdev user,id=net0
   -device virtio-net-pci,netdev=net0
-  -drive "file=@diskImage@,if=virtio,format=raw@snapshotFlag@"
+
+  # ★ 作成したドライブ引数を使用
+  -drive "$DRIVE_ARG"
 )
 
 # グラフィック設定

@@ -10,6 +10,7 @@
     src = ./run-vm.sh;
     replacements = {
       qemuBinary = "${pkgs.qemu_kvm}/bin/qemu-system-x86_64";
+      qemuImgBinary = "${pkgs.qemu_kvm}/bin/qemu-img";
       ovmfCode = "${pkgs.OVMF.firmware}";
       ovmfVars = "${pkgs.OVMF.variables}";
       diskImage = "${config.system.build.diskImage}";
@@ -23,10 +24,11 @@
         if cfg.sharedStore
         then "1"
         else "0";
-      snapshotFlag =
+      isPersistent =
+        # snapshotFlag を廃止し、判定フラグに変更
         if cfg.persistent
-        then ""
-        else ",snapshot=on";
+        then "1"
+        else "0";
       enableSharedConfig =
         if cfg.sharedConfig
         then "1"
@@ -62,7 +64,7 @@ in {
     persistent = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "false: snapshot=on (使い捨て), true: 変更をディスクに永続化";
+      description = "false: snapshot=on (使い捨て), true: 差分オーバーレイをローカルに保存して永続化";
     };
     sharedStore = lib.mkEnableOption "9p経由でホストのnix storeを共有";
     sharedConfig = lib.mkOption {
