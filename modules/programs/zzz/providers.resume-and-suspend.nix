@@ -28,10 +28,39 @@
     '';
   in
     lib.nameValuePair name {source = script;};
+
+  hookOpts = {name, ...}: {
+    options = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "フックを有効にするかどうか";
+      };
+      event = lib.mkOption {
+        type = lib.types.enum ["suspend" "hibernate" "resume"];
+        description = "トリガーとなるイベント";
+      };
+      action = lib.mkOption {
+        type = lib.types.lines;
+        description = "実行するシェルスクリプト";
+      };
+      priority = lib.mkOption {
+        type = lib.types.int;
+        default = 500;
+        description = "実行順序の優先度 (数値が小さいほど先に実行)";
+      };
+    };
+  };
 in {
   options.providers.resumeAndSuspend = {
     backend = lib.mkOption {
-      type = lib.types.enum ["zzz"];
+      type = lib.types.enum ["none" "zzz"];
+    };
+
+    hooks = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.submodule hookOpts);
+      default = {};
+      description = "サスペンド/復帰時に実行するフック";
     };
   };
 
