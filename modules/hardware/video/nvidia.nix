@@ -260,7 +260,7 @@ in {
         ];
     };
 
-    services.mdevd.hotplugRules = let
+    services.mdevd.rules = let
       # mdevd only sees one uevent for the "nvidia" frontend device, but the actual character devices
       # it has to be mknod'd by hand (nvidiactl + one nvidia<N> per card), same as the udev rule below does
       nvidiaMdevScript = pkgs.writeScript "mdevd-nvidia.sh" ''
