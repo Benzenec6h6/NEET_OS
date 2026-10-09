@@ -55,6 +55,8 @@ in {
   options.providers.resumeAndSuspend = {
     backend = lib.mkOption {
       type = lib.types.enum ["none" "zzz"];
+      default = "none";
+      description = "使用するサスペンド/レジュームバックエンド";
     };
 
     hooks = lib.mkOption {
