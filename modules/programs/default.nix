@@ -7,5 +7,6 @@
     ./coreutils.nix
     ./sh.nix
     ./bash.nix
+    ./zzz
   ];
 }
