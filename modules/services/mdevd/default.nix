@@ -48,7 +48,7 @@ in {
 
         input/.*    0:${gidOf "input"} 660
         dri/.*      0:${gidOf "video"} 660
-        snd/.*      0:${gidOf "video"} 660
+        snd/.*      0:${gidOf "audio"} 660
         video[0-9]+ 0:${gidOf "video"} 660
 
         tun         0:0 660 =net/
