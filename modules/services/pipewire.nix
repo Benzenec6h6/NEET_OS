@@ -6,6 +6,8 @@
 }: let
   cfg = config.services.pipewire;
   inherit (lib) mkOption mkEnableOption mkIf types;
+
+  hasUdev = config.services.deviceManager == "gardendevd";
 in {
   options.services.pipewire = {
     enable = mkEnableOption "PipeWire multimedia service";
@@ -33,11 +35,40 @@ in {
       default = pkgs.pipewire;
       description = "使用する PipeWire パッケージ";
     };
+
+    fallbackStaticNodes = mkOption {
+      type = types.bool;
+      default = !hasUdev; # udev が使えない環境（mdevd等）なら自動で true
+      description = ''
+        udev が存在しない環境で、ALSA デバイス (hw:0,0) を直接静的ノードとして登録するかどうか。
+      '';
+    };
   };
 
   config = mkIf cfg.enable {
     # リアルタイムスケジューリングのため RTKit も自動でオンに
     services.rtkit.enable = lib.mkDefault true;
+
+    services.udev.extraRules = ''
+      SUBSYSTEM=="sound", KERNEL=="controlC*", ENV{SOUND_INITIALIZED}="1"
+    '';
+
+    environment.etc."pipewire/pipewire.conf.d/10-fallback-static-alsa.conf" = mkIf cfg.fallbackStaticNodes {
+      text = ''
+        context.objects = [
+          { factory = adapter
+            args = {
+              factory.name     = api.alsa.pcm.sink
+              node.name        = "alsa-sink"
+              node.description = "Default ALSA Sink"
+              media.class      = "Audio/Sink"
+              api.alsa.path    = "hw:0,0"
+              audio.position   = [ FL FR ]
+            }
+          }
+        ]
+      '';
+    };
 
     environment.systemPackages = [
       cfg.package
