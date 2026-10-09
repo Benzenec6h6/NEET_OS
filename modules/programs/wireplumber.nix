@@ -6,6 +6,29 @@
 }: let
   cfg = config.programs.wireplumber;
   format = pkgs.formats.json {};
+
+  runtimeUsers = lib.filterAttrs (_name: u: u.createRuntimeDir) config.neet.users;
+
+  wireplumberServices =
+    lib.mapAttrs' (
+      name: u: let
+        uidStr = toString u.uid;
+        runtimeDir = "/run/user/${uidStr}";
+        busAddress = "unix:path=${runtimeDir}/bus";
+      in
+        lib.nameValuePair "wireplumber-${name}" {
+          type = "longrun";
+          dependencies = ["pipewire-${name}" "dbus-user-${name}"];
+          run = ''
+            #!/bin/execlineb -P
+            export XDG_RUNTIME_DIR ${runtimeDir}
+            export DBUS_SESSION_BUS_ADDRESS ${busAddress}
+            ${pkgs.s6}/bin/s6-setuidgid ${name}
+            ${cfg.package}/bin/wireplumber
+          '';
+        }
+    )
+    runtimeUsers;
 in {
   options.programs.wireplumber = {
     enable = lib.mkEnableOption "WirePlumber session manager";
@@ -32,5 +55,7 @@ in {
     environment.etc."wireplumber/wireplumber.conf.d/99-neet.conf" = lib.mkIf (cfg.settings != {}) {
       source = format.generate "99-neet.conf" cfg.settings;
     };
+
+    system.s6-rc.services = wireplumberServices;
   };
 }

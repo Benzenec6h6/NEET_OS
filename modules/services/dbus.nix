@@ -4,6 +4,29 @@
   lib,
   ...
 }: let
+  runtimeUsers = lib.filterAttrs (_name: u: u.createRuntimeDir) config.neet.users;
+
+  userBusServices =
+    lib.mapAttrs' (
+      name: u: let
+        uidStr = toString u.uid;
+        runtimeDir = "/run/user/${uidStr}";
+        busAddress = "unix:path=${runtimeDir}/bus";
+      in
+        lib.nameValuePair "dbus-user-${name}" {
+          type = "longrun";
+          dependencies = ["dbus"];
+          run = ''
+            #!/bin/execlineb -P
+            export XDG_RUNTIME_DIR ${runtimeDir}
+            export DBUS_SESSION_BUS_ADDRESS ${busAddress}
+            ${pkgs.s6}/bin/s6-setuidgid ${name}
+            ${cfg.package}/bin/dbus-daemon --session --address=${busAddress} --nofork --nopidfile --syslog-only
+          '';
+        }
+    )
+    runtimeUsers;
+
   cfg = config.services.dbus;
   homeDir = "/run/dbus";
 
@@ -31,6 +54,12 @@ in {
         D-Bus設定ファイルを取り込むパッケージのリスト。
       '';
     };
+
+    userBus.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "createRuntimeDir が有効なユーザー向けの D-Bus User Bus を自動起動するか";
+    };
   };
 
   config = mkIf cfg.enable {
@@ -54,17 +83,20 @@ in {
       ++ config.environment.systemPackages;
 
     # 4. s6-scan 経由での D-Bus システムデーモン起動定義
-    system.s6-rc.services.dbus = {
-      type = "longrun";
-      # 元々の run スクリプトをそのまま移植
-      run = ''
-        #!/bin/execlineb -P
-        foreground { mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys }
-        foreground { chown messagebus:messagebus /run/dbus /var/lib/dbus }
-        foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
+    system.s6-rc.services =
+      {
+        dbus = {
+          type = "longrun";
+          run = ''
+            #!/bin/execlineb -P
+            foreground { mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys }
+            foreground { chown messagebus:messagebus /run/dbus /var/lib/dbus }
+            foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
 
-        ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only
-      '';
-    };
+            ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only
+          '';
+        };
+      }
+      // lib.optionalAttrs cfg.userBus.enable userBusServices;
   };
 }

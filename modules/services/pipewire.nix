@@ -8,6 +8,43 @@
   inherit (lib) mkOption mkEnableOption mkIf types;
 
   hasUdev = config.services.deviceManager == "gardendevd";
+  runtimeUsers = lib.filterAttrs (_name: u: u.createRuntimeDir) config.neet.users;
+
+  pipewireServices =
+    lib.concatMapAttrs (
+      name: u: let
+        uidStr = toString u.uid;
+        runtimeDir = "/run/user/${uidStr}";
+        busAddress = "unix:path=${runtimeDir}/bus";
+      in {
+        # 1. PipeWire メインサーバー
+        "pipewire-${name}" = {
+          type = "longrun";
+          dependencies = ["dbus-user-${name}"];
+          run = ''
+            #!/bin/execlineb -P
+            export XDG_RUNTIME_DIR ${runtimeDir}
+            export DBUS_SESSION_BUS_ADDRESS ${busAddress}
+            ${pkgs.s6}/bin/s6-setuidgid ${name}
+            ${cfg.package}/bin/pipewire
+          '';
+        };
+
+        # 2. PulseAudio エミュレーション (pulse.enable 時のみ)
+        "pipewire-pulse-${name}" = lib.mkIf cfg.pulse.enable {
+          type = "longrun";
+          dependencies = ["pipewire-${name}"];
+          run = ''
+            #!/bin/execlineb -P
+            export XDG_RUNTIME_DIR ${runtimeDir}
+            export DBUS_SESSION_BUS_ADDRESS ${busAddress}
+            ${pkgs.s6}/bin/s6-setuidgid ${name}
+            ${cfg.package}/bin/pipewire -c pipewire-pulse.conf
+          '';
+        };
+      }
+    )
+    runtimeUsers;
 in {
   options.services.pipewire = {
     enable = mkEnableOption "PipeWire multimedia service";
@@ -94,5 +131,7 @@ in {
     # 2. ALSA プラグインの探索パスを ALSA アプリに知らせる
     environment.etc."alsa/conf.d/50-pipewire.conf".source = "${cfg.package}/share/alsa/alsa.conf.d/50-pipewire.conf";
     environment.etc."alsa/conf.d/99-pipewire-default.conf".source = "${cfg.package}/share/alsa/alsa.conf.d/99-pipewire-default.conf";
+
+    system.s6-rc.services = pipewireServices;
   };
 }
