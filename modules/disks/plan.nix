@@ -70,6 +70,7 @@
       then mkVolumeId seed
       else mkUuid seed;
     inherit (c) mountPoint;
+    neededForBoot = c.neededForBoot or null;
     mountOptions = c.options;
     mkfsArgs = c.extraMkfsArgs;
     subvolumes = map (name: {
