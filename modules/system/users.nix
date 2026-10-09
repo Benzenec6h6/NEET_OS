@@ -122,6 +122,7 @@ in {
       video = lib.mkDefault 44;
       input = lib.mkDefault 104;
       seat = lib.mkDefault 150;
+      audio = lib.mkDefault 29;
     };
     environment.etc."passwd".text =
       concatStringsSep "\n" (mapAttrsToList mkPasswdLine cfg) + "\n";
