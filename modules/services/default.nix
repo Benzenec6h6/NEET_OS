@@ -15,5 +15,6 @@
     ./getty.nix
     ./sessiond
     ./sessiond-uaccess
+    ./nvidia-powerd
   ];
 }
