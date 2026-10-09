@@ -16,5 +16,7 @@
     ./sessiond
     ./sessiond-uaccess
     ./nvidia-powerd
+    ./pipewire.nix
+    ./rtkit.nix
   ];
 }
