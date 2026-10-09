@@ -74,6 +74,35 @@ in {
     };
   };
 
+  options.boot.initrd.supportedFilesystems.luks = {
+    enable = mkOption {
+      type = types.bool;
+      default = false;
+      description = "initrd 内で LUKS を有効にするかどうか";
+    };
+
+    packages = mkOption {
+      type = with types; listOf package;
+      default = [];
+      description = "initrd 内に含める LUKS 関連パッケージ (cryptsetup 等)";
+    };
+  };
+
+  # （念のため Stage 2 側も btrfs と揃えておく）
+  options.boot.supportedFilesystems.luks = {
+    enable = mkOption {
+      type = types.bool;
+      default = false;
+      description = "システムで LUKS を有効にするかどうか";
+    };
+
+    packages = mkOption {
+      type = with types; listOf package;
+      default = [];
+      description = "システムに含める LUKS 関連パッケージ";
+    };
+  };
+
   config = mkIf (cfg.devices != {}) {
     # 1. build-initrd.sh 経由で cryptsetup 静的バイナリを組み込む
     boot.initrd.supportedFilesystems.luks = {
