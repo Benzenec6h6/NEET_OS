@@ -26,7 +26,7 @@
         # 1. PipeWire メインサーバー
         "pipewire-${name}" = {
           type = "longrun";
-          dependencies = ["dbus-user-${name}"];
+          dependencies = ["devd-coldplug" "dbus-user-${name}"];
           run = ''
             #!/bin/sh
             export XDG_RUNTIME_DIR="${runtimeDir}"
