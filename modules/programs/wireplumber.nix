@@ -7,7 +7,13 @@
   cfg = config.programs.wireplumber;
   format = pkgs.formats.json {};
 
-  runtimeUsers = lib.filterAttrs (_name: u: u.createRuntimeDir) config.neet.users;
+  runtimeUsers =
+    lib.filterAttrs (
+      _name: u:
+        u.createRuntimeDir
+        && u.uid >= 1000
+    )
+    config.neet.users;
 
   wireplumberServices =
     lib.mapAttrs' (

@@ -8,7 +8,13 @@
   inherit (lib) mkOption mkEnableOption mkIf types;
 
   hasUdev = config.services.deviceManager == "gardendevd";
-  runtimeUsers = lib.filterAttrs (_name: u: u.createRuntimeDir) config.neet.users;
+  runtimeUsers =
+    lib.filterAttrs (
+      _name: u:
+        u.createRuntimeDir
+        && u.uid >= 1000
+    )
+    config.neet.users;
 
   pipewireServices =
     lib.concatMapAttrs (

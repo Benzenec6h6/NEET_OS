@@ -4,7 +4,13 @@
   lib,
   ...
 }: let
-  runtimeUsers = lib.filterAttrs (_name: u: u.createRuntimeDir) config.neet.users;
+  runtimeUsers =
+    lib.filterAttrs (
+      _name: u:
+        u.createRuntimeDir
+        && u.uid >= 1000
+    )
+    config.neet.users;
 
   userBusServices =
     lib.mapAttrs' (
@@ -16,6 +22,7 @@
         lib.nameValuePair "dbus-user-${name}" {
           type = "longrun";
           dependencies = ["dbus"];
+          # ディレクトリ作成は Rust に任せ、s6 は環境変数設定と権限降格だけを行う
           run = ''
             #!/bin/execlineb -P
             export XDG_RUNTIME_DIR ${runtimeDir}
