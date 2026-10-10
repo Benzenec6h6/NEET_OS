@@ -22,13 +22,15 @@
         lib.nameValuePair "dbus-user-${name}" {
           type = "longrun";
           dependencies = ["dbus"];
+          notification-fd = 3;
           # ディレクトリ作成は Rust に任せ、s6 は環境変数設定と権限降格だけを行う
           run = ''
             #!/bin/execlineb -P
             export XDG_RUNTIME_DIR ${runtimeDir}
             export DBUS_SESSION_BUS_ADDRESS ${busAddress}
-            ${pkgs.s6}/bin/s6-setuidgid ${name}
-            ${cfg.package}/bin/dbus-daemon --session --address=${busAddress} --nofork --nopidfile --syslog-only
+            exec ${pkgs.s6}/bin/s6-notify-fd-from-socket -3 3 \
+            ${pkgs.s6}/bin/s6-setuidgid ${name} \
+            ${cfg.package}/bin/dbus-daemon --session --address="${busAddress}" --nofork --nopidfile --syslog-only
           '';
         }
     )
@@ -94,13 +96,16 @@ in {
       {
         dbus = {
           type = "longrun";
+          notification-fd = 3;
           run = ''
-            #!/bin/execlineb -P
-            foreground { mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys }
-            foreground { chown messagebus:messagebus /run/dbus /var/lib/dbus }
-            foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
+            #!/bin/sh
+            mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys
+            chown messagebus:messagebus /run/dbus /var/lib/dbus
+            ${cfg.package}/bin/dbus-uuidgen --ensure
 
-            ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only
+            # ★ sd_notify を s6 の fd 3 に変換して通知
+            exec ${pkgs.s6}/bin/s6-notify-fd-from-socket -3 3 \
+              ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only
           '';
         };
       }

@@ -25,12 +25,15 @@
         lib.nameValuePair "wireplumber-${name}" {
           type = "longrun";
           dependencies = ["pipewire-${name}" "dbus-user-${name}"];
+          notification-fd = 3;
           run = ''
-            #!/bin/execlineb -P
-            export XDG_RUNTIME_DIR ${runtimeDir}
-            export DBUS_SESSION_BUS_ADDRESS ${busAddress}
-            ${pkgs.s6}/bin/s6-setuidgid ${name}
-            ${cfg.package}/bin/wireplumber
+            #!/bin/sh
+            export XDG_RUNTIME_DIR="${runtimeDir}"
+            export DBUS_SESSION_BUS_ADDRESS="${busAddress}"
+
+            exec ${pkgs.s6}/bin/s6-notify-fd-from-socket -3 3 \
+              ${pkgs.s6}/bin/s6-setuidgid ${name} \
+              ${cfg.package}/bin/wireplumber
           '';
         }
     )
