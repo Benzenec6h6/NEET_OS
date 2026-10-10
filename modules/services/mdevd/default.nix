@@ -77,10 +77,11 @@ in {
       system.s6-rc.services = {
         devd = {
           type = "longrun";
+          notification-fd = 3;
           run = ''
             #!/bin/execlineb -P
             export PATH /bin:${pkgs.pkgsStatic.mdevd}/bin:${pkgs.pkgsStatic.kmod}/bin
-            mdevd -O 4 -f /etc/mdev.conf
+            mdevd -D 3 -O 4 -f /etc/mdev.conf
           '';
         };
 
@@ -89,7 +90,7 @@ in {
           dependencies = ["devd"];
           up = ''
             #!/bin/execlineb -P
-            ${pkgs.pkgsStatic.mdevd}/bin/mdevd-coldplug
+            ${pkgs.pkgsStatic.mdevd}/bin/mdevd-coldplug -O 4
           '';
         };
       };
