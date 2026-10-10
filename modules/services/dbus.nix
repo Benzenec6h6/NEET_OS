@@ -28,9 +28,9 @@
             #!/bin/execlineb -P
             export XDG_RUNTIME_DIR ${runtimeDir}
             export DBUS_SESSION_BUS_ADDRESS ${busAddress}
-            exec ${pkgs.s6}/bin/s6-notify-fd-from-socket -3 3 \
-            ${pkgs.s6}/bin/s6-setuidgid ${name} \
-            ${cfg.package}/bin/dbus-daemon --session --address="${busAddress}" --nofork --nopidfile --syslog-only
+            ${pkgs.s6}/bin/s6-setuidgid ${name}
+            # ★ ユーザーバスも同様に --print-pid=3
+            ${cfg.package}/bin/dbus-daemon --session --address=${busAddress} --nofork --nopidfile --syslog-only --print-pid=3
           '';
         }
     )
@@ -98,14 +98,13 @@ in {
           type = "longrun";
           notification-fd = 3;
           run = ''
-            #!/bin/sh
-            mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys
-            chown messagebus:messagebus /run/dbus /var/lib/dbus
-            ${cfg.package}/bin/dbus-uuidgen --ensure
+            #!/bin/execlineb -P
+            foreground { mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys }
+            foreground { chown messagebus:messagebus /run/dbus /var/lib/dbus }
+            foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
 
-            # ★ sd_notify を s6 の fd 3 に変換して通知
-            exec ${pkgs.s6}/bin/s6-notify-fd-from-socket -3 3 \
-              ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only
+            # ★ --print-pid=3 で直接 fd 3 に準備完了を通知させる
+            ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only --print-pid=3
           '';
         };
       }
