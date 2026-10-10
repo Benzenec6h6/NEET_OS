@@ -27,14 +27,12 @@
         "pipewire-${name}" = {
           type = "longrun";
           dependencies = ["dbus-user-${name}"];
-          notification-fd = 3;
           run = ''
             #!/bin/sh
             export XDG_RUNTIME_DIR="${runtimeDir}"
             export DBUS_SESSION_BUS_ADDRESS="${busAddress}"
 
-            exec ${pkgs.s6}/bin/s6-notify-fd-from-socket -3 3 \
-              ${pkgs.s6}/bin/s6-setuidgid ${name} \
+            exec ${pkgs.s6}/bin/s6-setuidgid ${name} \
               ${cfg.package}/bin/pipewire
           '';
         };
