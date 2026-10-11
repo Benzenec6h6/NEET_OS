@@ -5,6 +5,7 @@ members = [
     "disk-setup",
     "init-core",
     "early-init",
+    "neet-core",
     "system-init",
     "limine-install",
     "efistub-sync",

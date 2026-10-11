@@ -47,7 +47,7 @@ if ! mountpoint -q /mnt; then
 fi
 
 echo "NEET OS Stage 1: Preparing Stage 2 env..."
-mkdir -p /mnt/bin /mnt/etc /mnt/run /mnt/root /mnt/proc /mnt/sys /mnt/dev /mnt/tmp /mnt/var/log \
+mkdir -p /mnt/etc /mnt/run /mnt/root /mnt/proc /mnt/sys /mnt/dev /mnt/tmp /mnt/var/log \
     || die "failed to prepare /mnt (read-only root?)"
 
 ln -sf "@systemPath@/bin/sh" /mnt/bin/sh || die "failed to link /mnt/bin/sh"

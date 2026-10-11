@@ -12,8 +12,11 @@ set -euo pipefail
 : "${bootspecWrite:?bootspecWrite must be set}"
 : "${hostSystem:?hostSystem must be set}"
 : "${kernelVersion:?kernelVersion must be set}"
+: "${neetJson:?neetJson must be set}"
 
 mkdir -p "$out"
+
+cp "$neetJson" "$out/neet.json"
 
 # 1. 基本システムリンク
 ln -s "$stage2Init" "$out/init"

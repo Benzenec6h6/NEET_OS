@@ -7,11 +7,44 @@
   stage2Init = config.system.build.stage2Init;
   kernelParamsStr = lib.concatStringsSep " " config.boot.kernelParams;
 
+  neetJson = pkgs.writeText "neet.json" (builtins.toJSON {
+    schema = 1;
+    etc = "${config.system.etc.package}";
+    systemPath = "${config.system.path}";
+    kernel = "${config.system.build.kernel}";
+    modules = "${config.system.modulesTree}";
+    firmware = "${config.hardware.firmware}";
+    stage2 = "${stage2Init}";
+    s6rcCompiled =
+      if config.system.build ? s6-rc-db
+      then "${config.system.build.s6-rc-db}"
+      else null;
+    graphicsDrivers =
+      if config.hardware.graphics.enable or false
+      then "${config.system.build.graphicsDrivers}"
+      else null;
+    graphicsDrivers32 =
+      if config.hardware.graphics.enable32Bit or false
+      then "${config.system.build.graphicsDrivers32}"
+      else null;
+    bootFingerprint = lib.concatStringsSep "\n" ([
+        "${config.system.build.kernel}"
+        "${config.system.build.initrd}"
+        "${config.system.modulesTree}"
+        "${config.hardware.firmware}"
+        "${stage2Init}"
+        kernelParamsStr
+      ]
+      ++ lib.optional (config.hardware.graphics.enable or false) "${config.system.build.graphicsDrivers}"
+      ++ lib.optional (config.boot.uki.enable or false) "${config.system.build.uki}");
+  });
+
   toplevel =
     pkgs.runCommand "neet-os-toplevel" {
       nativeBuildInputs = [pkgs.bash];
 
       # スクリプトに渡す環境変数
+      neetJson = neetJson;
       stage2Init = stage2Init;
       systemPath = config.system.path;
       etc = config.system.etc.package;

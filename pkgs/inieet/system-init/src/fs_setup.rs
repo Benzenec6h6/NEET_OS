@@ -1,3 +1,4 @@
+use neet_core::atomic;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
@@ -138,21 +139,20 @@ pub fn setup_base_directories() -> io::Result<()> {
     }
 
     // 3. 互換シンボリックリンクの作成
-    //    (壊れたリンクが残っていても安全に作り直す)
-    ensure_symlink(Path::new("/run"), Path::new("/var/run"))?;
-    ensure_symlink(Path::new("/run/lock"), Path::new("/var/lock"))?;
+    atomic::atomic_symlink(Path::new("/run"), Path::new("/var/run"))?;
+    atomic::atomic_symlink(Path::new("/run/lock"), Path::new("/var/lock"))?;
 
     // (オプション) /sbin を使おうとする古いツール向け
-    ensure_symlink(Path::new("/bin"), Path::new("/sbin"))?;
+    atomic::atomic_symlink(Path::new("/bin"), Path::new("/sbin"))?;
 
     // グラフィックスドライバのリンク
     let gfx = Path::new("/run/current-system/graphics-drivers");
     if gfx.exists() {
-        ensure_symlink(gfx, Path::new("/run/opengl-driver"))?;
+        atomic::atomic_symlink(gfx, Path::new("/run/opengl-driver"))?;
     }
     let gfx32 = Path::new("/run/current-system/graphics-drivers-32bit");
     if gfx32.exists() {
-        ensure_symlink(gfx32, Path::new("/run/opengl-driver-32"))?;
+        atomic::atomic_symlink(gfx32, Path::new("/run/opengl-driver-32"))?;
     }
 
     Ok(())
