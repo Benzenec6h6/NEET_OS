@@ -236,23 +236,29 @@ in {
     users.groups.sshd = {};
 
     # PAM 設定 (session_rundir は neet-os では静的解決されているため排除)
-    security.pam.services.sshd = lib.mkIf cfg.settings.UsePAM {
-      text = ''
+    neet.security.pam.services.sshd = lib.mkIf cfg.settings.UsePAM {
+      text = let
+        pam_unix = "${pkgs.pam}/lib/security/pam_unix.so";
+        pam_deny = "${pkgs.pam}/lib/security/pam_deny.so";
+        pam_env = "${pkgs.pam}/lib/security/pam_env.so";
+      in ''
         # Account management
-        account required pam_unix.so
+        account   required    ${pam_unix}
 
         # Authentication management
-        auth sufficient pam_unix.so likeauth try_first_pass
-        auth required pam_deny.so
+        auth      sufficient  ${pam_unix} nullok try_first_pass
+        auth      required    ${pam_deny}
 
         # Password management
-        password sufficient pam_unix.so nullok yescrypt
+        password  sufficient  ${pam_unix} sha512 shadow nullok
 
         # Session management
-        session required pam_env.so conffile=/etc/security/pam_env.conf readenv=0
-        session required pam_unix.so
-        session required pam_loginuid.so
-        session required pam_limits.so
+        session   required    ${pam_env} conffile=/etc/security/pam_env.conf readenv=0
+        session   required    ${pam_unix}
+        ${
+          lib.optionalString config.services.sessiond.enable
+          "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"
+        }
       '';
     };
 
