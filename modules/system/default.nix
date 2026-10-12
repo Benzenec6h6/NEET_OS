@@ -7,44 +7,42 @@
   stage2Init = config.system.build.stage2Init;
   kernelParamsStr = lib.concatStringsSep " " config.boot.kernelParams;
 
-  neetJson = pkgs.writeText "neet.json" (builtins.toJSON {
+  gfx = config.hardware.graphics.enable or false;
+  gfx32 = config.hardware.graphics.enable32Bit or false;
+  hasS6 = config.system.build ? s6-rc-db;
+
+  coreJson = pkgs.writeText "neet.json" (builtins.toJSON {
     schema = 1;
-    etc = "${config.system.etc.package}";
-    systemPath = "${config.system.path}";
-    kernel = "${config.system.build.kernel}";
-    modules = "${config.system.modulesTree}";
-    firmware = "${config.hardware.firmware}";
-    stage2 = "${stage2Init}";
-    s6rcCompiled =
-      if config.system.build ? s6-rc-db
-      then "${config.system.build.s6-rc-db}"
-      else null;
-    graphicsDrivers =
-      if config.hardware.graphics.enable or false
-      then "${config.system.build.graphicsDrivers}"
-      else null;
-    graphicsDrivers32 =
-      if config.hardware.graphics.enable32Bit or false
-      then "${config.system.build.graphicsDrivers32}"
-      else null;
+    kernelParams = config.boot.kernelParams;
+    # 再起動でしか反映できないものだけ。initrd / stage2 / UKI は入れない
     bootFingerprint = lib.concatStringsSep "\n" ([
         "${config.system.build.kernel}"
-        "${config.system.build.initrd}"
         "${config.system.modulesTree}"
         "${config.hardware.firmware}"
-        "${stage2Init}"
         kernelParamsStr
       ]
-      ++ lib.optional (config.hardware.graphics.enable or false) "${config.system.build.graphicsDrivers}"
-      ++ lib.optional (config.boot.uki.enable or false) "${config.system.build.uki}");
+      ++ lib.optional gfx "${config.system.build.graphicsDrivers}");
   });
+
+  # stage2 / initrd / UKI に依存してはいけない(循環するため)
+  core = pkgs.runCommand "neet-os-core" {} ''
+    mkdir -p $out
+    ln -s ${config.system.etc.package} $out/etc
+    ln -s ${config.system.path} $out/system-path
+    ln -s ${config.system.modulesTree} $out/modules
+    ln -s ${config.hardware.firmware} $out/firmware
+    ${lib.optionalString hasS6 "ln -s ${config.system.build.s6-rc-db} $out/s6-rc"}
+    ${lib.optionalString gfx "ln -s ${config.system.build.graphicsDrivers} $out/graphics-drivers"}
+    ${lib.optionalString gfx32 "ln -s ${config.system.build.graphicsDrivers32} $out/graphics-drivers-32bit"}
+    cp ${coreJson} $out/neet.json
+  '';
 
   toplevel =
     pkgs.runCommand "neet-os-toplevel" {
       nativeBuildInputs = [pkgs.bash];
 
       # スクリプトに渡す環境変数
-      neetJson = neetJson;
+      core = core;
       stage2Init = stage2Init;
       systemPath = config.system.path;
       etc = config.system.etc.package;
@@ -64,7 +62,7 @@
       uki = lib.optionalString (config.boot.uki.enable or false) "${config.system.build.uki}";
 
       passthru = {
-        inherit stage2Init;
+        inherit stage2Init core;
         systemPath = config.system.path;
         etc = config.system.etc.package;
       };
@@ -91,5 +89,6 @@ in {
 
   config = {
     system.build.toplevel = config.system.withAssertions toplevel;
+    system.build.core = core;
   };
 }
