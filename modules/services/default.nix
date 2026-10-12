@@ -18,5 +18,6 @@
     ./nvidia-powerd
     ./pipewire.nix
     ./rtkit.nix
+    ./openssh.nix
   ];
 }
