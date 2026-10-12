@@ -48,6 +48,7 @@ in {
       # 基本の UNIX ツール群
       util-linux
       findutils
+      diffutils
       iputils
       gnugrep
       gawk
