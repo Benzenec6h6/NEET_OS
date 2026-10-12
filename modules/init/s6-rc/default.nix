@@ -30,6 +30,11 @@ with lib; let
         type = types.nullOr types.int;
         default = null;
       };
+      format = mkOption {
+        type = types.enum ["execline" "sh"];
+        default = "execline";
+        description = "oneshot スクリプトの記述言語 (execline または sh)";
+      };
     };
   };
 

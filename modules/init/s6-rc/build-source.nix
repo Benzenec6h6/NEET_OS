@@ -20,8 +20,15 @@ with lib; let
           "notification-fd" = pkgs.writeText "${name}-notification-fd" (toString svc.notification-fd);
         })
       // optionalAttrs (svc.type == "oneshot") {
-        "up" = pkgs.writeText "${name}-up" svc.up;
-        "down" = pkgs.writeText "${name}-down" svc.down;
+        "up" =
+          if svc.format == "sh"
+          then pkgs.writeText "${name}-up" "${pkgs.writeShellScript "${name}-up.sh" svc.up}"
+          else pkgs.writeText "${name}-up" svc.up;
+
+        "down" =
+          if svc.format == "sh" && svc.down != ""
+          then pkgs.writeText "${name}-down" "${pkgs.writeShellScript "${name}-down.sh" svc.down}"
+          else pkgs.writeText "${name}-down" svc.down;
       };
   in
     pkgs.linkFarm "${name}-srv-dir" (mapAttrsToList (filename: path: {

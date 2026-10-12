@@ -44,9 +44,8 @@ in {
     # 3. s6-rc: カーネルにホスト名を反映する oneshot サービス
     system.s6-rc.services.hostname = {
       type = "oneshot";
-      # /proc/sys/kernel/hostname に直接書き込んでカーネルのホスト名を更新
+      format = "sh";
       up = ''
-        #!${pkgs.bash}/bin/sh
         printf '%s' "${cfg.hostName}" > /proc/sys/kernel/hostname
       '';
       down = "";

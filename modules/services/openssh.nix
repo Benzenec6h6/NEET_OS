@@ -274,8 +274,8 @@ in {
       # 1. ホスト鍵の生成 (oneshot)
       "sshd-prepare" = {
         type = "oneshot";
+        format = "sh";
         up = ''
-          #!${pkgs.bash}/bin/sh
           if ! [ -s "/var/lib/sshd/ssh_host_ed25519_key" ]; then
             ${cfg.package}/bin/ssh-keygen -t ed25519 -f "/var/lib/sshd/ssh_host_ed25519_key" -N ""
           fi
