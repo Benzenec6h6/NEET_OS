@@ -37,26 +37,14 @@ fi
 if [ "$ACTION" = "switch" ]; then
   echo "==> [neet-rebuild] Checking if live switch is safe..."
 
+  CORE="$TOPLEVEL/core"
   NEEDS_REBOOT=""
 
-  # (1) カーネルの比較
-  if [ -e /run/booted-kernel ] && [ -e "$TOPLEVEL/kernel" ]; then
-    CURRENT_KERNEL=$(readlink -f /run/booted-kernel)
-    NEW_KERNEL=$(readlink -f "$TOPLEVEL/kernel")
-    if [ "$CURRENT_KERNEL" != "$NEW_KERNEL" ]; then
-      NEEDS_REBOOT="Kernel has been updated"
+    if [ ! -e /run/booted-system/neet.json ]; then
+      NEEDS_REBOOT="Running system predates core manifest (reboot once to adopt it)"
+    elif ! cmp -s /run/booted-system/neet.json "$CORE/neet.json"; then
+      NEEDS_REBOOT="Kernel, modules, firmware, kernel params or graphics drivers changed"
     fi
-  fi
-
-  # (2) グラフィックスドライバの比較
-  if [ -e /run/opengl-driver ] && [ -e "$TOPLEVEL/graphics-drivers" ]; then
-    CURRENT_GFX=$(readlink -f /run/opengl-driver)
-    NEW_GFX=$(readlink -f "$TOPLEVEL/graphics-drivers")
-    if [ "$CURRENT_GFX" != "$NEW_GFX" ]; then
-      NEEDS_REBOOT="Graphics driver (Mesa) has been updated"
-    fi
-  fi
-
   # 危険な更新がある場合は switch をスキップして安全終了
   if [ -n "$NEEDS_REBOOT" ] && [ "${FORCE:-0}" != "1" ]; then
     echo "--------------------------------------------------"
@@ -71,12 +59,12 @@ if [ "$ACTION" = "switch" ]; then
   echo "==> [neet-rebuild] Safe to switch live. Switching running configuration..."
 
   # (a) /etc, ラッパー, /bin, /run/current-system を更新
-  system-init switch "$TOPLEVEL/etc" "$TOPLEVEL/system-path"
+  system-init switch "$CORE"
 
   # (b) s6-rc サービスを動的リロード
-  if [ -d /run/s6-rc ] && [ -d /etc/s6-rc/compiled ]; then
+  if [ -d /run/s6-rc ] && [ -e "$CORE/s6-rc" ]; then
     echo "==> [neet-rebuild] Updating s6-rc service database..."
-    s6-rc-update -l /run/s6-rc /etc/s6-rc/compiled
+    s6-rc-update -l /run/s6-rc "$CORE/s6-rc"
   fi
 
   echo "==> [neet-rebuild] Successfully switched to new configuration!"

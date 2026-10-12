@@ -2,7 +2,6 @@ use neet_core::atomic;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
-use std::os::unix::fs::symlink;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -155,16 +154,5 @@ pub fn setup_base_directories() -> io::Result<()> {
         atomic::atomic_symlink(gfx32, Path::new("/run/opengl-driver-32"))?;
     }
 
-    Ok(())
-}
-
-/// 既存のファイル/壊れたリンクを安全に削除してシンボリックリンクを保証するヘルパー
-pub(crate) fn ensure_symlink(src: &Path, dest: &Path) -> io::Result<()> {
-    if dest.is_symlink() || dest.exists() {
-        let _ = fs::remove_file(dest);
-    }
-    if !dest.exists() {
-        symlink(src, dest)?;
-    }
     Ok(())
 }
