@@ -228,12 +228,19 @@ in {
     # パッケージ登録
     environment.systemPackages = [cfg.package];
 
-    # 特権分離ユーザー
-    users.users.sshd = {
-      group = "sshd";
+    # 1. sshd グループの定義
+    neet.gids.sshd = lib.mkDefault 998;
+
+    # 2. sshd ユーザーの定義
+    neet.users.sshd = {
+      uid = lib.mkDefault 998;
+      gid = config.neet.gids.sshd;
+      shell = "/bin/sh";
+      home = "/var/empty";
+      createHome = false;
+      createRuntimeDir = false;
       description = "SSH privilege separation user";
     };
-    users.groups.sshd = {};
 
     # PAM 設定 (session_rundir は neet-os では静的解決されているため排除)
     neet.security.pam.services.sshd = lib.mkIf cfg.settings.UsePAM {
