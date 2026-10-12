@@ -275,7 +275,7 @@ in {
       "sshd-prepare" = {
         type = "oneshot";
         up = ''
-          # ディレクトリは system-init (Rust) が保証しているため、純粋に鍵生成のみを行う
+          #!${pkgs.bash}/bin/sh
           if ! [ -s "/var/lib/sshd/ssh_host_ed25519_key" ]; then
             ${cfg.package}/bin/ssh-keygen -t ed25519 -f "/var/lib/sshd/ssh_host_ed25519_key" -N ""
           fi

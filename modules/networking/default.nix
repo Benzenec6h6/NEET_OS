@@ -46,6 +46,7 @@ in {
       type = "oneshot";
       # /proc/sys/kernel/hostname に直接書き込んでカーネルのホスト名を更新
       up = ''
+        #!${pkgs.bash}/bin/sh
         printf '%s' "${cfg.hostName}" > /proc/sys/kernel/hostname
       '';
       down = "";
