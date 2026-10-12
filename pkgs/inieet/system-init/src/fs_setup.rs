@@ -120,10 +120,22 @@ fn setup_single_directory(
 
 /// 基本的なシステムディレクトリと互換シンボリックリンクを整える
 pub fn setup_base_directories() -> io::Result<()> {
-    // 1. /var 配下の永続ディレクトリの準備
-    let var_dirs = ["/var/db", "/var/lib", "/var/log"];
-    for dir in &var_dirs {
-        fs::create_dir_all(dir)?;
+    // 1. /var 配下の永続ディレクトリの準備（パーミッション付き）
+    let var_dirs: &[(&str, u32)] = &[
+        ("/var/db", 0o755),
+        ("/var/lib", 0o755),
+        ("/var/log", 0o755),
+        ("/var/empty", 0o755),
+        ("/var/lib/sshd", 0o700),
+    ];
+
+    for (dir, mode) in var_dirs {
+        let path = Path::new(dir);
+        if !path.exists() {
+            fs::create_dir_all(path)?;
+        }
+        // 既存であっても念のためパーミッションを強制適用
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(*mode));
     }
 
     // 2. /run 配下の一時ディレクトリの準備
