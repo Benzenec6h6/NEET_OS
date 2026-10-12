@@ -288,6 +288,7 @@ in {
         type = "longrun";
         dependencies = ["sshd-prepare"];
         run = ''
+          #!/bin/sh
           exec ${cfg.package}/bin/sshd -D -e -f /etc/ssh/sshd_config
         '';
       };
