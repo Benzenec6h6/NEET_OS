@@ -255,6 +255,7 @@ name = "system-init"
 version = "0.1.0"
 dependencies = [
  "init-core",
+ "neet-core",
  "nix",
  "serde",
  "serde_json",

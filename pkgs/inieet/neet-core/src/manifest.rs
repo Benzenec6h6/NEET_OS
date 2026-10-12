@@ -1,8 +1,7 @@
-use serde::{Deserialize, Serialize};
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use serde::Deserialize;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 
 pub const SCHEMA: u32 = 1;
 
@@ -14,53 +13,102 @@ pub struct Manifest {
     pub boot_fingerprint: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct Core {
     pub path: PathBuf,
     pub manifest: Manifest,
 }
 
+// 以前のコードとの互換用エイリアス
+pub type Toplevel = Core;
+
 impl Core {
-    pub fn load(path: &Path) -> io::Result<Self> { /* canonicalize, neet.json を読み schema 検査 */
+    pub fn load(path: &Path) -> io::Result<Self> {
+        let canonical = fs::canonicalize(path)?;
+
+        // 指定されたパス直下、または toplevel/core 直下のどちらに neet.json があっても対応
+        let core_path = if canonical.join("neet.json").exists() {
+            canonical
+        } else if canonical.join("core/neet.json").exists() {
+            canonical.join("core")
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "neet.json not found in {} or {}/core",
+                    canonical.display(),
+                    canonical.display()
+                ),
+            ));
+        };
+
+        let text = fs::read_to_string(core_path.join("neet.json"))?;
+        let manifest: Manifest = serde_json::from_str(&text)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        if manifest.schema != SCHEMA {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "unsupported manifest schema {} (expected {SCHEMA})",
+                    manifest.schema
+                ),
+            ));
+        }
+
+        let core = Core {
+            path: core_path,
+            manifest,
+        };
+        core.validate()?;
+        Ok(core)
     }
+
     pub fn etc(&self) -> PathBuf {
         self.path.join("etc")
     }
+
     pub fn system_path(&self) -> PathBuf {
         self.path.join("system-path")
     }
+
     pub fn modules(&self) -> PathBuf {
         self.path.join("modules")
     }
+
     pub fn firmware(&self) -> PathBuf {
         self.path.join("firmware")
     }
+
     pub fn s6_rc(&self) -> Option<PathBuf> {
         self.opt("s6-rc")
     }
+
     pub fn graphics_drivers(&self) -> Option<PathBuf> {
         self.opt("graphics-drivers")
     }
+
+    pub fn graphics_drivers_32(&self) -> Option<PathBuf> {
+        self.opt("graphics-drivers-32bit")
+    }
+
     fn opt(&self, n: &str) -> Option<PathBuf> {
         let p = self.path.join(n);
         p.symlink_metadata().is_ok().then_some(p)
     }
 
-    /// 必須パスがすべて実在すること。prepare 段階で呼べば、commit 前に失敗を出せる。
+    /// 必須リンク (etc, system-path, modules, firmware) の実在検査
     pub fn validate(&self) -> io::Result<()> {
-        let m = &self.manifest;
         for (name, p) in [
-            ("etc", &m.etc),
-            ("systemPath", &m.system_path),
-            ("kernel", &m.kernel),
-            ("modules", &m.modules),
-            ("firmware", &m.firmware),
-            ("stage2", &m.stage2),
-            ("s6rcCompiled", &m.s6rc_compiled),
+            ("etc", self.etc()),
+            ("system-path", self.system_path()),
+            ("modules", self.modules()),
+            ("firmware", self.firmware()),
         ] {
             if !p.exists() {
                 return Err(io::Error::new(
                     io::ErrorKind::NotFound,
-                    format!("manifest.{name} not found: {}", p.display()),
+                    format!("core link '{name}' not found at: {}", p.display()),
                 ));
             }
         }
@@ -69,9 +117,10 @@ impl Core {
 }
 
 /// 稼働中の世代 (/run/current-system) と、ブート時の世代 (/run/booted-system)
-pub fn current() -> io::Result<Toplevel> {
-    Toplevel::load(Path::new("/run/current-system"))
+pub fn current() -> io::Result<Core> {
+    Core::load(Path::new("/run/current-system"))
 }
-pub fn booted() -> io::Result<Toplevel> {
-    Toplevel::load(Path::new("/run/booted-system"))
+
+pub fn booted() -> io::Result<Core> {
+    Core::load(Path::new("/run/booted-system"))
 }
