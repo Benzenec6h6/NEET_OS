@@ -160,7 +160,10 @@ pub fn setup_base_directories() -> io::Result<()> {
         let path = Path::new(file);
         if !path.exists() {
             // ファイルが存在しない場合のみ空ファイルを新規作成
-            let _ = OpenOptions::new().write(true).create_new(true).open(path);
+            let _ = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path);
         }
         if path.exists() {
             let _ = fs::set_permissions(path, fs::Permissions::from_mode(*mode));
