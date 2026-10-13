@@ -8,6 +8,7 @@ with lib; let
   cfg = config.networking;
 in {
   imports = [
+    ./nftables.nix
     ./resolvconf.nix
   ];
 

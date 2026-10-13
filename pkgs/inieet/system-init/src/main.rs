@@ -4,6 +4,7 @@
 
 mod bin_setup;
 mod etc_syncer;
+mod firewall_setup;
 mod firmware_setup;
 mod fs_setup;
 mod modules_setup;
@@ -55,6 +56,12 @@ fn main() {
             let result = Core::load(Path::new(core_arg)).and_then(|c| run_switch(&c));
             if let Err(e) = result {
                 eprintln!("system-init: switch failed: {e}");
+                std::process::exit(1);
+            }
+        }
+        Some("firewall") => {
+            if let Err(e) = firewall_setup::sync_firewall() {
+                eprintln!("system-init: firewall sync failed: {e}");
                 std::process::exit(1);
             }
         }
