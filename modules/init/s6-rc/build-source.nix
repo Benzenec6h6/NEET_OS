@@ -4,16 +4,10 @@
   services,
 }:
 with lib; let
-  # 個別のサービスディレクトリを作成する関数
-  makeServiceDir = name: svc: let
-    # ロガーディレクトリ (log/) の定義
-    logDir = pkgs.linkFarm "${name}-log-dir" [
-      {
-        name = "run";
-        path = pkgs.writeScript "${name}-log-run" svc.logRun;
-      }
-    ];
+  hasLog = svc: svc.type == "longrun" && svc.logRun != null;
 
+  # 本体サービス
+  makeServiceDir = name: svc: let
     files =
       {
         "type" = pkgs.writeText "${name}-type" svc.type;
@@ -22,14 +16,13 @@ with lib; let
         "dependencies" = pkgs.writeText "${name}-dependencies" (concatStringsSep "\n" svc.dependencies);
       }
       // optionalAttrs (svc.type == "longrun") ({
-          # writeScript を使うことで実行可能フラグ (chmod +x) を保証
           "run" = pkgs.writeScript "${name}-run" svc.run;
         }
         // optionalAttrs (svc.notification-fd != null) {
           "notification-fd" = pkgs.writeText "${name}-notification-fd" (toString svc.notification-fd);
         }
-        // optionalAttrs (svc.logRun != null) {
-          "log" = logDir;
+        // optionalAttrs (hasLog svc) {
+          "producer-for" = pkgs.writeText "${name}-producer-for" "${name}-log";
         })
       // optionalAttrs (svc.type == "oneshot") {
         "up" =
@@ -49,9 +42,32 @@ with lib; let
       })
       files);
 
-  # 定義された全サービス＋"top"バンドル
+  # ロガーサービス (<name>-log)
+  makeLoggerDir = name: svc:
+    pkgs.linkFarm "${name}-log-srv-dir" [
+      {
+        name = "type";
+        path = pkgs.writeText "${name}-log-type" "longrun";
+      }
+      {
+        name = "run";
+        path = pkgs.writeScript "${name}-log-run" svc.logRun;
+      }
+      {
+        name = "consumer-for";
+        path = pkgs.writeText "${name}-log-consumer-for" name;
+      }
+      {
+        name = "pipeline-name";
+        path = pkgs.writeText "${name}-log-pipeline-name" "${name}-pipeline";
+      }
+    ];
+
+  loggedServices = filterAttrs (_: hasLog) services;
+
   serviceDirs =
     (mapAttrs makeServiceDir services)
+    // (mapAttrs' (name: svc: nameValuePair "${name}-log" (makeLoggerDir name svc)) loggedServices)
     // {
       "top" = pkgs.linkFarm "top-bundle-dir" [
         {
@@ -60,10 +76,14 @@ with lib; let
         }
         {
           name = "contents";
-          path = pkgs.writeText "top-contents" (concatStringsSep "\n" (attrNames services));
+          path = pkgs.writeText "top-contents" (
+            concatStringsSep "\n" (
+              (attrNames services)
+              ++ (map (n: "${n}-log") (attrNames loggedServices))
+            )
+          );
         }
       ];
     };
 in
-  # 全サービスのディレクトリンクをまとめた1つのソースディレクトリ
   pkgs.linkFarm "s6-rc-source" (mapAttrsToList (name: path: {inherit name path;}) serviceDirs)
