@@ -35,6 +35,11 @@ with lib; let
         default = "execline";
         description = "oneshot スクリプトの記述言語 (execline または sh)";
       };
+      logRun = mkOption {
+        type = types.nullOr types.lines;
+        default = null;
+        description = "s6-log等によるロガー用スクリプト (log/run)。longrunサービスのみ有効。";
+      };
     };
   };
 

@@ -289,7 +289,17 @@ in {
         dependencies = ["sshd-prepare"];
         run = ''
           #!/bin/sh
+          # 標準エラー出力 (stderr) を標準出力 (stdout) に束ねて s6 ロガーに流す
+          exec 2>&1
           exec ${cfg.package}/bin/sshd -D -e -f /etc/ssh/sshd_config
+        '';
+
+        # s6-log により /var/log/sshd/current にログを自動保存・ローテーション
+        logRun = ''
+          #!/bin/sh
+          mkdir -p -m 0750 /var/log/sshd
+          # 最大20世代保持、1ファイルあたり約1MBで自動ローテーション
+          exec ${pkgs.s6}/bin/s6-log -b n20 s1000000 /var/log/sshd
         '';
       };
     };

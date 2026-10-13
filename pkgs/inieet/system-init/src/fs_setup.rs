@@ -149,6 +149,24 @@ pub fn setup_base_directories() -> io::Result<()> {
         }
     }
 
+    // --- 伝統的なアカウンティング / ログ用空ファイルの担保 ---
+    let var_log_files: &[(&str, u32)] = &[
+        ("/var/log/lastlog", 0o664),
+        ("/var/log/wtmp", 0o664),
+        ("/var/log/btmp", 0o600),
+    ];
+
+    for (file, mode) in var_log_files {
+        let path = Path::new(file);
+        if !path.exists() {
+            // ファイルが存在しない場合のみ空ファイルを新規作成
+            let _ = OpenOptions::new().write(true).create_new(true).open(path);
+        }
+        if path.exists() {
+            let _ = fs::set_permissions(path, fs::Permissions::from_mode(*mode));
+        }
+    }
+
     // 3. 互換シンボリックリンクの作成
     atomic::atomic_symlink(Path::new("/run"), Path::new("/var/run"))?;
     atomic::atomic_symlink(Path::new("/run/lock"), Path::new("/var/lock"))?;

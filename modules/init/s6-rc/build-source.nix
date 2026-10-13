@@ -6,6 +6,14 @@
 with lib; let
   # 個別のサービスディレクトリを作成する関数
   makeServiceDir = name: svc: let
+    # ロガーディレクトリ (log/) の定義
+    logDir = pkgs.linkFarm "${name}-log-dir" [
+      {
+        name = "run";
+        path = pkgs.writeScript "${name}-log-run" svc.logRun;
+      }
+    ];
+
     files =
       {
         "type" = pkgs.writeText "${name}-type" svc.type;
@@ -14,10 +22,14 @@ with lib; let
         "dependencies" = pkgs.writeText "${name}-dependencies" (concatStringsSep "\n" svc.dependencies);
       }
       // optionalAttrs (svc.type == "longrun") ({
-          "run" = pkgs.writeText "${name}-run" svc.run;
+          # writeScript を使うことで実行可能フラグ (chmod +x) を保証
+          "run" = pkgs.writeScript "${name}-run" svc.run;
         }
         // optionalAttrs (svc.notification-fd != null) {
           "notification-fd" = pkgs.writeText "${name}-notification-fd" (toString svc.notification-fd);
+        }
+        // optionalAttrs (svc.logRun != null) {
+          "log" = logDir;
         })
       // optionalAttrs (svc.type == "oneshot") {
         "up" =

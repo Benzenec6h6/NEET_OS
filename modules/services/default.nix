@@ -19,5 +19,6 @@
     ./pipewire.nix
     ./rtkit.nix
     ./openssh.nix
+    ./sshguard.nix
   ];
 }
