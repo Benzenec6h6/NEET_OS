@@ -40,29 +40,32 @@ with lib; let
 
   enabledTables = filterAttrs (_: t: t.enable) cfg.tables;
 
-  # Rust に渡すためのマニフェストデータ
-  # 各テーブルのルールファイルパスを確定させてJSON化する
-  manifest = {
-    tables =
-      mapAttrsToList (_: t: let
-        ruleFile =
-          if t.contentFile != null
-          then t.contentFile
-          else
-            pkgs.writeText "${t.family}-${t.name}.nft" ''
-              table ${t.family} ${t.name} {
-                ${t.content}
-              }
-            '';
-      in {
-        name = t.name;
-        family = t.family;
-        path = "${ruleFile}";
-      })
-      enabledTables;
-  };
+  state = "/var/lib/nftables/deletions.nft";
 
-  manifestJson = (pkgs.formats.json {}).generate "nftables-manifest.json" manifest;
+  # 有効なテーブルを削除するための nft スクリプト
+  deletions = pkgs.writeText "nftables-deletions.nft" (
+    concatStrings (mapAttrsToList (_: t: ''
+        table ${t.family} ${t.name}
+        delete table ${t.family} ${t.name}
+      '')
+      enabledTables)
+  );
+
+  # 実際に適用するルールセット
+  ruleset = pkgs.writeText "nftables-ruleset.nft" ''
+    include "${state}"
+    include "${deletions}"
+    ${concatStrings (mapAttrsToList (_: t: ''
+        table ${t.family} ${t.name} {
+          ${
+          if t.contentFile != null
+          then ''include "${t.contentFile}"''
+          else t.content
+        }
+        }
+      '')
+      enabledTables)}
+  '';
 in {
   options.networking.nftables = {
     enable = mkOption {
@@ -93,22 +96,22 @@ in {
   };
 
   config = mkIf cfg.enable {
-    # 1. パッケージ導入
+    # パッケージ導入
     environment.systemPackages = [cfg.package];
 
-    # 2. Rust 用のマニフェストを配置
-    environment.etc."nftables/manifest.json".source = manifestJson;
-
-    # 3. s6-rc: 反映を行う oneshot サービス
+    # --- 提案されたサービス定義に置き換え ---
     system.s6-rc.services.nftables = {
       type = "oneshot";
       format = "sh";
       up = ''
-        /bin/system-init firewall
+        mkdir -p /var/lib/nftables
+        [ -e ${state} ] || : > ${state}
+        ${cfg.package}/bin/nft -f ${ruleset}
+        cp ${deletions} ${state}
       '';
       down = ''
-        # サービス停止時はルールをクリア（必要に応じて）
-        ${cfg.package}/bin/nft flush ruleset
+        ${cfg.package}/bin/nft -f ${state}
+        : > ${state}
       '';
     };
   };
