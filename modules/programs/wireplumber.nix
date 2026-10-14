@@ -21,13 +21,20 @@
         uidStr = toString u.uid;
         runtimeDir = "/run/user/${uidStr}";
         busAddress = "unix:path=${runtimeDir}/bus";
+        homeDir =
+          if u.home != null
+          then u.home
+          else "/home/${name}";
       in
         lib.nameValuePair "wireplumber-${name}" {
           type = "longrun";
           dependencies = ["pipewire-${name}" "dbus-user-${name}"];
           run = ''
             #!/bin/sh
+            export HOME="${homeDir}"
+            export USER="${name}"
             export XDG_RUNTIME_DIR="${runtimeDir}"
+            export XDG_STATE_HOME="${homeDir}/.local/state"
             export DBUS_SESSION_BUS_ADDRESS="${busAddress}"
 
             exec ${pkgs.s6}/bin/s6-setuidgid ${name} \
