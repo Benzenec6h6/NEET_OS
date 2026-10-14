@@ -57,11 +57,11 @@ in {
 
           FILES = mkOption {
             type = with types; listOf str;
-            # sshd サービスが有効な場合はデフォルトでそのログを監視
-            default = optional config.services.openssh.enable "/var/log/sshd/current";
+            # syslog サービスが有効なら /var/log/auth/current を監視
+            default = optional config.services.syslog.enable "/var/log/auth/current";
             apply = concatStringsSep " ";
             description = "Log files to monitor.";
-            example = ["/var/log/sshd/current"];
+            example = ["/var/log/auth/current"];
           };
         };
       };
@@ -79,6 +79,7 @@ in {
       type = "longrun";
       dependencies =
         optional config.services.openssh.enable "sshd"
+        ++ optional config.services.syslog.enable "syslog"
         ++ optional (cfg.settings.BACKEND == "nft-sets") "nftables";
 
       run = ''
