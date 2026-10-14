@@ -49,7 +49,7 @@ in {
       log = {
         enable = true;
         dirs = ["/var/log/auth" "/var/log/messages"];
-        # 各 logdir の前の選択行は、その logdir にだけ効く
+        # n / s / T と選択行は、直後の logdir 1つにだけ効く。logdir ごとに書くこと
         #   auth / authpriv → /var/log/auth
         #   それ以外すべて → /var/log/messages
         args = [
@@ -59,6 +59,9 @@ in {
           "-"
           "+^(auth|authpriv)\\."
           "/var/log/auth"
+          "n10"
+          "s1000000"
+          "T"
           "-"
           "+."
           "-^(auth|authpriv)\\."
