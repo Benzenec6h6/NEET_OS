@@ -126,6 +126,7 @@ in {
       type = "longrun";
       dependencies =
         optional config.services.deviceManagerEnable "devd-coldplug"
+        ++ optional config.services.syslog.enable "syslog"
         ++ optional (config.system.s6-rc.services ? sysctl) "sysctl"
         ++ optional (config.system.s6-rc.services ? resolvconf) "resolvconf";
 
