@@ -49,6 +49,8 @@
           dependencies = ["pipewire-${name}"];
           run = ''
             #!/bin/execlineb -P
+            export HOME ${homeDir}
+            export USER ${name}
             export XDG_RUNTIME_DIR ${runtimeDir}
             export DBUS_SESSION_BUS_ADDRESS ${busAddress}
             ${pkgs.s6}/bin/s6-setuidgid ${name}
