@@ -139,7 +139,8 @@ in {
         export PATH="${makeBinPath (optional config.programs.resolvconf.enable config.programs.resolvconf.package)}:$PATH"
 
         # 3. 余計な設定ファイルは一旦読ませず、フォアグラウンド(-B)で実行
-        exec ${getExe cfg.package} -B
+        #exec ${getExe cfg.package} -B
+        exec ${getExe cfg.package} ${escapeShellArgs cfg.extraArgs}
       '';
     };
   };
