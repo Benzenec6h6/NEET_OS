@@ -55,13 +55,11 @@ in {
         args = [
           "n10"
           "s1000000"
-          "T"
           "-"
           "+^(auth|authpriv)\\."
           "/var/log/auth"
           "n10"
           "s1000000"
-          "T"
           "-"
           "+."
           "-^(auth|authpriv)\\."
