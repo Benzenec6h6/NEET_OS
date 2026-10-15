@@ -23,8 +23,11 @@ in {
     ./efivarfs.nix
     ./vfat.nix
     ./options.nix
+    ./overlay.nix
     ./btrfs.nix
     ./ext4.nix
+    ./fuse.nix
+    ./fuse.mergerfs.nix
     ./9p.nix
     ./impermanence.nix
     ./luks.nix
