@@ -114,6 +114,7 @@ in {
         "tun*"
         "virbr*"
         "vnet*"
+        "wlan*"
       ];
 
       debug = cfg.debug;
