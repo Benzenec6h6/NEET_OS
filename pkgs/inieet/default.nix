@@ -12,6 +12,13 @@ in {
     cargoLock.lockFile = cargoLockFile;
     buildAndTestSubdir = "early-init";
   };
+  initCore = pkgs.pkgsStatic.rustPlatform.buildRustPackage {
+    pname = "init-core";
+    version = "0.1.0";
+    inherit src;
+    cargoLock.lockFile = cargoLockFile;
+    buildAndTestSubdir = "init-core";
+  };
   systemInit = pkgs.rustPlatform.buildRustPackage {
     pname = "system-init";
     version = "0.1.0";
