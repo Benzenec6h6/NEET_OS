@@ -53,7 +53,7 @@ QEMU_ARGS=(
   -device intel-hda
   -device hda-duplex
   -serial mon:stdio
-  -netdev user,id=net0
+  -netdev @netdevArgs@
   -device virtio-net-pci,netdev=net0
 
   # ★ 作成したドライブ引数を使用

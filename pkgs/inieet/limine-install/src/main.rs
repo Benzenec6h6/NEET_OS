@@ -5,10 +5,11 @@
 //! Payload synchronization is delegated to esp-sync.
 
 use bootspec::Document;
+use neet_core::generation;
 use std::env;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -32,7 +33,7 @@ fn main() -> io::Result<()> {
     install_file_if_changed(&src_efi, &dest_efi)?;
 
     // 2. プロファイルから全世代を取得
-    let generations = get_generations()?;
+    let (generations, _skipped) = generation::list(std::path::Path::new(generation::PROFILES))?;
     if generations.is_empty() {
         eprintln!("limine-install: no generations found in /nix/var/nix/profiles");
         return Ok(());
@@ -50,7 +51,7 @@ fn main() -> io::Result<()> {
     for (idx, gen) in generations.iter().enumerate() {
         let is_latest = idx == 0;
         let gen_num = gen.number;
-        let boot_json_path = gen.path.join("boot.json");
+        let boot_json_path = gen.toplevel.join("boot.json");
 
         if !boot_json_path.exists() {
             continue;
@@ -100,41 +101,6 @@ fn main() -> io::Result<()> {
 
     println!("limine-install: /boot/limine.conf updated successfully");
     Ok(())
-}
-
-struct Generation {
-    number: u32,
-    path: PathBuf,
-}
-
-fn get_generations() -> io::Result<Vec<Generation>> {
-    let profiles_dir = Path::new("/nix/var/nix/profiles");
-    let mut gens = Vec::new();
-
-    if !profiles_dir.exists() {
-        return Ok(gens);
-    }
-
-    for entry in fs::read_dir(profiles_dir)? {
-        let entry = entry?;
-        let filename = entry.file_name();
-        let name = filename.to_string_lossy();
-
-        if name.starts_with("system-") && name.ends_with("-link") {
-            let num_part = &name["system-".len()..name.len() - "-link".len()];
-            if let Ok(num) = num_part.parse::<u32>() {
-                if let Ok(real_path) = fs::canonicalize(entry.path()) {
-                    gens.push(Generation {
-                        number: num,
-                        path: real_path,
-                    });
-                }
-            }
-        }
-    }
-
-    gens.sort_by(|a, b| b.number.cmp(&a.number));
-    Ok(gens)
 }
 
 fn install_file_if_changed(src: &Path, dest: &Path) -> io::Result<()> {

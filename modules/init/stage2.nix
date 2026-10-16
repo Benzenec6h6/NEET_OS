@@ -8,11 +8,8 @@
     src = ./stage2.execline;
     replacements = {
       execline = "${config.environment.execline}";
-      systemPath = "${config.system.path}";
+      core = "${config.system.build.core}";
       systemInitBin = "${config.system.etc.bin}/bin/system-init";
-      etcPackage = "${config.system.etc.package}";
-      kernelPath = "${config.system.modulesTree}";
-      firmwarePackage = "${config.hardware.firmware}";
     };
     isExecutable = true;
   };

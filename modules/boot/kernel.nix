@@ -86,6 +86,8 @@
         "xhci_pci"
 
         # キーボード・入力デバイス
+        "uas"
+        "usb_storage"
         "usbhid"
         "hid_generic"
         "hid_lenovo"

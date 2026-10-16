@@ -1,11 +1,11 @@
 #!@execline@/bin/execlineb -P
-export PATH @systemPath@/bin:@systemPath@/sbin
+export PATH @core@/system-path/bin:@core@/system-path/sbin
 fdmove -c 2 1
 foreground { echo "[stage2] Starting stage2 init sequence..." }
 
 # ここで /etc と /run を含む各種マウントを組み立てる (system-init 経由)
 foreground { echo "[stage2] Running activation script (system-init)..." }
-if { @systemInitBin@ @etcPackage@ @systemPath@ @kernelPath@ @firmwarePackage@ }
+if { @systemInitBin@ @core@ }
 foreground { echo "[stage2] Activation done." }
 
 # /run のマウントが完了した後で、s6-rc 用のディレクトリを作る
@@ -29,7 +29,7 @@ background
   fdclose 3
 
   foreground { echo "[stage2-bg] Running s6-rc-init..." }
-  if { s6-rc-init -c /etc/s6-rc/compiled /run/service }
+  if { s6-rc-init -c @core@/s6-rc /run/service }
   foreground { echo "[stage2-bg] Changing state to top..." }
   s6-rc -u change top
 }

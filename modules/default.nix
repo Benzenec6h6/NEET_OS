@@ -7,6 +7,7 @@
     ./boot
     ./disks
     ./filesystems
+    ./fonts
     ./hardware
     ./init
     ./networking

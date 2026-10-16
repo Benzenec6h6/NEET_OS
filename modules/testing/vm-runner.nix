@@ -6,6 +6,14 @@
 }: let
   cfg = config.testing.vm;
 
+  netdevArgs = let
+    fwdArgs =
+      lib.concatMapStrings (
+        f: ",hostfwd=${f.proto}::${toString f.hostPort}-:${toString f.guestPort}"
+      )
+      cfg.forwardPorts;
+  in "user,id=net0${fwdArgs}";
+
   vmRunnerScript = pkgs.replaceVarsWith {
     src = ./run-vm.sh;
     replacements = {
@@ -16,6 +24,7 @@
       diskImage = "${config.system.build.diskImage}";
       memorySize = toString cfg.memorySize;
       cores = toString cfg.cores;
+      netdevArgs = netdevArgs;
       enableGraphics =
         if cfg.graphics
         then "1"
@@ -41,6 +50,36 @@
 in {
   options.testing.vm = {
     enable = lib.mkEnableOption "Build this configuration as a QEMU test VM";
+
+    forwardPorts = lib.mkOption {
+      type = lib.types.listOf (lib.types.submodule {
+        options = {
+          hostPort = lib.mkOption {
+            type = lib.types.port;
+            description = "ホスト側で待ち受けるポート";
+          };
+          guestPort = lib.mkOption {
+            type = lib.types.port;
+            default = 22;
+            description = "ゲスト (VM) 側の転送先ポート";
+          };
+          proto = lib.mkOption {
+            type = lib.types.enum ["tcp" "udp"];
+            default = "tcp";
+            description = "プロトコル";
+          };
+        };
+      });
+      default = [];
+      example = [
+        {
+          hostPort = 2222;
+          guestPort = 22;
+        }
+      ];
+      description = "ホストから VM へ転送するポートフォワードのリスト";
+    };
+
     memorySize = lib.mkOption {
       type = lib.types.int;
       default = 2048;

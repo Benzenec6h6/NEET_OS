@@ -14,6 +14,25 @@
         boot.fileSystems."/".device = "/dev/dummy";
         boot.loader.limine.enable = true;
         testing.vm.enable = true;
+
+        # testing.vm が disks.devices を要求するので最小のものを置く
+        disks.devices.main.partitions = [
+          {
+            name = "esp";
+            size = "512M";
+            content = {
+              type = "vfat";
+              mountPoint = "/boot";
+            };
+          }
+          {
+            name = "root";
+            content = {
+              type = "btrfs";
+              mountPoint = "/";
+            };
+          }
+        ];
       }
     ];
   };

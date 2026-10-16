@@ -97,6 +97,7 @@ in {
         dbus = {
           type = "longrun";
           notification-fd = 3;
+          dependencies = lib.optional config.services.syslog.enable "syslog";
           run = ''
             #!/bin/execlineb -P
             foreground { mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys }

@@ -1,7 +1,7 @@
+use neet_core::atomic;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
-use std::os::unix::fs::symlink;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -120,10 +120,22 @@ fn setup_single_directory(
 
 /// 基本的なシステムディレクトリと互換シンボリックリンクを整える
 pub fn setup_base_directories() -> io::Result<()> {
-    // 1. /var 配下の永続ディレクトリの準備
-    let var_dirs = ["/var/db", "/var/lib", "/var/log"];
-    for dir in &var_dirs {
-        fs::create_dir_all(dir)?;
+    // 1. /var 配下の永続ディレクトリの準備（パーミッション付き）
+    let var_dirs: &[(&str, u32)] = &[
+        ("/var/db", 0o755),
+        ("/var/lib", 0o755),
+        ("/var/log", 0o755),
+        ("/var/empty", 0o755),
+        ("/var/lib/sshd", 0o700),
+    ];
+
+    for (dir, mode) in var_dirs {
+        let path = Path::new(dir);
+        if !path.exists() {
+            fs::create_dir_all(path)?;
+        }
+        // 既存であっても念のためパーミッションを強制適用
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(*mode));
     }
 
     // 2. /run 配下の一時ディレクトリの準備
@@ -137,34 +149,43 @@ pub fn setup_base_directories() -> io::Result<()> {
         }
     }
 
+    // --- 伝統的なアカウンティング / ログ用空ファイルの担保 ---
+    let var_log_files: &[(&str, u32)] = &[
+        ("/var/log/lastlog", 0o664),
+        ("/var/log/wtmp", 0o664),
+        ("/var/log/btmp", 0o600),
+    ];
+
+    for (file, mode) in var_log_files {
+        let path = Path::new(file);
+        if !path.exists() {
+            // ファイルが存在しない場合のみ空ファイルを新規作成
+            let _ = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path);
+        }
+        if path.exists() {
+            let _ = fs::set_permissions(path, fs::Permissions::from_mode(*mode));
+        }
+    }
+
     // 3. 互換シンボリックリンクの作成
-    //    (壊れたリンクが残っていても安全に作り直す)
-    ensure_symlink(Path::new("/run"), Path::new("/var/run"))?;
-    ensure_symlink(Path::new("/run/lock"), Path::new("/var/lock"))?;
+    atomic::atomic_symlink(Path::new("/run"), Path::new("/var/run"))?;
+    atomic::atomic_symlink(Path::new("/run/lock"), Path::new("/var/lock"))?;
 
     // (オプション) /sbin を使おうとする古いツール向け
-    ensure_symlink(Path::new("/bin"), Path::new("/sbin"))?;
+    atomic::atomic_symlink(Path::new("/bin"), Path::new("/sbin"))?;
 
     // グラフィックスドライバのリンク
     let gfx = Path::new("/run/current-system/graphics-drivers");
     if gfx.exists() {
-        ensure_symlink(gfx, Path::new("/run/opengl-driver"))?;
+        atomic::atomic_symlink(gfx, Path::new("/run/opengl-driver"))?;
     }
     let gfx32 = Path::new("/run/current-system/graphics-drivers-32bit");
     if gfx32.exists() {
-        ensure_symlink(gfx32, Path::new("/run/opengl-driver-32"))?;
+        atomic::atomic_symlink(gfx32, Path::new("/run/opengl-driver-32"))?;
     }
 
-    Ok(())
-}
-
-/// 既存のファイル/壊れたリンクを安全に削除してシンボリックリンクを保証するヘルパー
-pub(crate) fn ensure_symlink(src: &Path, dest: &Path) -> io::Result<()> {
-    if dest.is_symlink() || dest.exists() {
-        let _ = fs::remove_file(dest);
-    }
-    if !dest.exists() {
-        symlink(src, dest)?;
-    }
     Ok(())
 }
