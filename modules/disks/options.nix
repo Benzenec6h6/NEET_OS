@@ -87,7 +87,8 @@
       content = mkOption {
         type = types.nullOr (types.submodule contentOpts);
         default = null;
-        description = "LUKS 内部のコンテンツ (btrfs, ext4 など)";
+        visible = "shallow";
+        description = "LUKS 内部のコンテンツ (btrfs, ext4 など)。型は親の content と同じ（ドキュメントでは再帰を省略）";
       };
       extraLuksArgs = mkOption {
         type = types.listOf types.str;
