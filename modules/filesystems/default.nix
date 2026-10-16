@@ -31,6 +31,8 @@ in {
     ./9p.nix
     ./impermanence.nix
     ./luks.nix
+    ./iso9660.nix
+    ./squashfs.nix
   ];
 
   config = {
