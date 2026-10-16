@@ -5,16 +5,18 @@
   ...
 }: let
   virtualFsTypes = ["auto" "none" "proc" "sysfs" "devtmpfs" "tmpfs" "devpts" "efivarfs"];
+  persistentFs = lib.filterAttrs (_: fs: !fs.initrdOnly) config.boot.fileSystems;
   computedStage1 = lib.filterAttrs (n: fs: fs.neededForBoot) config.boot.fileSystems;
   computedStage2 = lib.mapAttrs (n: fs: fs // {alreadyMounted = fs.neededForBoot or false;}) (
-    config.boot.virtualFileSystems // config.boot.fileSystems
+    config.boot.virtualFileSystems // persistentFs
   );
   allFileSystems = lib.attrValues computedStage2;
 
   # Stage 1 用の mount-plan.json を生成する derivation
   stage1MountPlan = pkgs.writeText "stage1-mount-plan.json" (builtins.toJSON (
-    lib.mapAttrs (name: fs: {
-      inherit (fs) device mountPoint fsType options resetOnBoot dump pass;
+    lib.mapAttrs (_: fs: {
+      inherit (fs) device mountPoint fsType options resetOnBoot keepOldRoots requires dump pass;
+      outsideRoot = fs.initrdOnly;
     })
     computedStage1
   ));

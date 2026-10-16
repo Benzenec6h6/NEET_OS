@@ -39,6 +39,16 @@
         type = lib.types.int;
         default = 0;
       };
+      initrdOnly = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = "true の場合、initrd 内だけで使う足場。root 配下ではなく絶対パスにマウントされ、stage2 の plan / fstab には現れない（neededForBoot = true が必要）";
+      };
+      requires = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "先にマウントしておくべき boot.fileSystems の mountPoint（足場同士の順序用）";
+      };
     };
   };
 in {
