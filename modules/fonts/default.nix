@@ -98,8 +98,8 @@ in {
         noto-fonts
         noto-fonts-cjk-sans
         noto-fonts-color-emoji
-        liberation_fonts # Arial / Times 互換（Wine/Steam対策で追加）
-        vlgothic
+        liberation_ttf # Arial / Times 互換（Wine/Steam対策で追加）
+        ipaexfont
       ];
       description = "List of font packages to install.";
     };
