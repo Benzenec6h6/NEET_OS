@@ -9,6 +9,7 @@
     ./filesystems
     ./fonts
     ./hardware
+    ./images
     ./init
     ./networking
     ./programs
