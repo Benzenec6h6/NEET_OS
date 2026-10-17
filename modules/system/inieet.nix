@@ -19,6 +19,7 @@ in {
     environment.systemPackages = [
       inieet.systemInit
       inieet.espSync
+      inieet.diskSetup
     ];
   };
 }
