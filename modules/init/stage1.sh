@@ -71,7 +71,7 @@ if [ -f /proc/cmdline ]; then
 fi
 
 echo "NEET OS Stage 1: Linking stage2 init..."
-ln -sf "@stage2Init@" /mnt/init || die "failed to link /mnt/init"
+ln -sf "$TARGET_INIT" /mnt/init || die "failed to link /mnt/init"
 echo "NEET OS Stage 1: switch_root!"
 kill $MDEVD_PID
 
