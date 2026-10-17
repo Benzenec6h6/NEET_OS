@@ -266,6 +266,8 @@ pub fn mount_plan(
                             already_mounted: false,
                             reset_on_boot: false,
                             keep_old_roots: 3,
+                            requires: Vec::new(),
+                            outside_root: false,
                         });
                     }
                 }
@@ -279,6 +281,8 @@ pub fn mount_plan(
                         already_mounted: false,
                         reset_on_boot: false,
                         keep_old_roots: 3,
+                        requires: Vec::new(),
+                        outside_root: false,
                     });
                 }
             }
