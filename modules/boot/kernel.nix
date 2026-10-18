@@ -48,7 +48,7 @@
 
     # デフォルトのカーネルパラメータ（シリアルコンソール等）
     boot.kernelParams = lib.mkDefault [
-      "console=ttyS0"
+      "console=tty1"
       "panic=10"
     ];
 
