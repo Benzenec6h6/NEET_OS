@@ -77,9 +77,6 @@ in {
       btrfs-progs
       squashfs-tools
 
-      config.system.build.diskTool
-
-      pkgs.nix
       git
       curl
 
