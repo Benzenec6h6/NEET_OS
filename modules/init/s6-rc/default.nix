@@ -35,6 +35,11 @@ with lib; let
         default = "execline";
         description = "oneshot スクリプトの記述言語 (execline または sh)";
       };
+      autoStart = mkOption {
+        type = types.bool;
+        default = true;
+        description = "ブート時に自動起動する (top bundle に含める) かどうか";
+      };
 
       log = {
         enable = mkEnableOption "s6-log によるロガー (<name>-log) の自動生成";

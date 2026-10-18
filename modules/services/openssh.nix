@@ -68,6 +68,12 @@ in {
       '';
     };
 
+    startOnBoot = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to automatically start the SSH daemon on boot.";
+    };
+
     package = lib.mkOption {
       type = lib.types.package;
       default = pkgs.openssh;
@@ -275,6 +281,7 @@ in {
       "sshd-prepare" = {
         type = "oneshot";
         format = "sh";
+        autoStart = cfg.startOnBoot; # sshd と合わせる
         up = ''
           if ! [ -s "/var/lib/sshd/ssh_host_ed25519_key" ]; then
             ${cfg.package}/bin/ssh-keygen -t ed25519 -f "/var/lib/sshd/ssh_host_ed25519_key" -N ""
@@ -286,6 +293,7 @@ in {
       # 2. sshd デーモン本体 (longrun)
       "sshd" = {
         type = "longrun";
+        autoStart = cfg.startOnBoot; # ★ ここで自動起動を制御
         dependencies = ["sshd-prepare" "syslog"];
         run = ''
           #!/bin/sh

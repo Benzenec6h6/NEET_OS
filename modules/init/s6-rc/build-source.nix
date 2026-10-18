@@ -84,6 +84,9 @@ with lib; let
       }
     ];
 
+  autoStartServices = filterAttrs (_: svc: svc.autoStart) services;
+  autoStartLoggedServices = filterAttrs (_: hasLog) autoStartServices;
+
   loggedServices = filterAttrs (_: hasLog) services;
 
   serviceDirs =
@@ -99,8 +102,9 @@ with lib; let
           name = "contents";
           path = pkgs.writeText "top-contents" (
             concatStringsSep "\n" (
-              (attrNames services)
-              ++ (map (n: "${n}-log") (attrNames loggedServices))
+              # ★ autoStartServices だけを top に入れる
+              (attrNames autoStartServices)
+              ++ (map (n: "${n}-log") (attrNames autoStartLoggedServices))
             )
           );
         }
