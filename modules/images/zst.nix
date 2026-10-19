@@ -9,6 +9,20 @@
   kernel = config.boot.kernelPackages.kernel;
   isInstaller = config.installer.enable or false;
 
+  # カーネルパラメータを文字列として結合
+  kernelParamsStr = lib.concatStringsSep " " config.boot.kernelParams;
+
+  # ★ ここで直接 writeText を呼ぶ（循環しない安全な定義）
+  limineConf = pkgs.writeText "limine.conf" ''
+    timeout: 5
+
+    /NEET OS Live Installer
+        protocol: linux
+        kernel_path: boot():/kernels/gen-1-vmlinuz
+        module_path: boot():/kernels/gen-1-initrd
+        cmdline: init=${toplevel}/init ${kernelParamsStr}
+  '';
+
   closure = pkgs.closureInfo {
     rootPaths = [
       toplevel
@@ -50,60 +64,52 @@
       inherit toplevel bootloader;
       espSizeM = 512;
     } ''
-          set -euo pipefail
+      set -euo pipefail
 
-          echo "images.zst (live): building SquashFS rootfs..."
-          # 1. rootfs を zstd で高圧縮した SquashFS を生成
-          mksquashfs "${rootfs}" rootfs.squashfs -comp zstd -Xcompression-level 19 -noappend
+      echo "images.zst (live): building SquashFS rootfs..."
+      # 1. rootfs を zstd で高圧縮した SquashFS を生成
+      mksquashfs "${rootfs}" rootfs.squashfs -comp zstd -Xcompression-level 19 -noappend
 
-          sqfsBytes=$(stat -c%s rootfs.squashfs)
-          sqfsSizeM=$(( (sqfsBytes + 1048576 - 1) / 1048576 ))
-          # ESP(512MB) + SquashFS + マージン(32MB) でイメージ全体のサイズを動的に決定
-          totalSizeM=$(( espSizeM + sqfsSizeM + 32 ))
+      sqfsBytes=$(stat -c%s rootfs.squashfs)
+      sqfsSizeM=$(( (sqfsBytes + 1048576 - 1) / 1048576 ))
+      # ESP(512MB) + SquashFS + マージン(32MB) でイメージ全体のサイズを動的に決定
+      totalSizeM=$(( espSizeM + sqfsSizeM + 32 ))
 
-          echo "images.zst (live): creating raw disk image (total: ''${totalSizeM}M, squashfs: ''${sqfsSizeM}M)..."
-          truncate -s "''${totalSizeM}M" raw.img
+      echo "images.zst (live): creating raw disk image (total: ''${totalSizeM}M, squashfs: ''${sqfsSizeM}M)..."
+      truncate -s "''${totalSizeM}M" raw.img
 
-          # 2. GPT パーティション作成 (PARTLABEL を NEET_BOOT と NEET_LIVE に設定)
-          sgdisk --clear raw.img
-          sgdisk --new=1:2048:+''${espSizeM}M --typecode=1:ef00 --change-name=1:"NEET_BOOT" raw.img
-          sgdisk --new=2:0:0                  --typecode=2:8300 --change-name=2:"NEET_LIVE" raw.img
+      # 2. GPT パーティション作成 (PARTLABEL を NEET_BOOT と NEET_LIVE に設定)
+      sgdisk --clear raw.img
+      sgdisk --new=1:2048:+''${espSizeM}M --typecode=1:ef00 --change-name=1:"NEET_BOOT" raw.img
+      sgdisk --new=2:0:0                  --typecode=2:8300 --change-name=2:"NEET_LIVE" raw.img
 
-          # 3. ESP (FAT32) の構築
-          echo "images.zst (live): populating ESP..."
-          espImg="esp.img"
-          truncate -s "''${espSizeM}M" "$espImg"
-          mkfs.vfat -F 32 -n "NEET_BOOT" "$espImg"
+      # 3. ESP (FAT32) の構築
+      echo "images.zst (live): populating ESP..."
+      espImg="esp.img"
+      truncate -s "''${espSizeM}M" "$espImg"
+      mkfs.vfat -F 32 -n "NEET_BOOT" "$espImg"
 
-          mmd -i "$espImg" ::EFI ::EFI/BOOT ::kernels
-          if [ "$bootloader" = "limine" ]; then
-            mcopy -i "$espImg" "${pkgs.limine}/share/limine/BOOTX64.EFI" ::EFI/BOOT/BOOTX64.EFI
-            mcopy -i "$espImg" "${toplevel}/kernel" ::kernels/gen-1-vmlinuz
-            mcopy -i "$espImg" "${toplevel}/initrd" ::kernels/gen-1-initrd
+      mmd -i "$espImg" ::EFI ::EFI/BOOT ::kernels
+      if [ "$bootloader" = "limine" ]; then
+        mcopy -i "$espImg" "${pkgs.limine}/share/limine/BOOTX64.EFI" ::EFI/BOOT/BOOTX64.EFI
+        mcopy -i "$espImg" "${toplevel}/kernel" ::kernels/gen-1-vmlinuz
+        mcopy -i "$espImg" "${toplevel}/initrd" ::kernels/gen-1-initrd
 
-            cat <<EOT > limine.conf
-      timeout: 5
+        # ★ ヒアドキュメントを削除し、writeText で作ったファイルを直接コピー
+        mcopy -i "$espImg" "${limineConf}" ::limine.conf
+      fi
 
-      /NEET OS Live Installer
-          protocol: linux
-          kernel_path: boot():/kernels/gen-1-vmlinuz
-          module_path: boot():/kernels/gen-1-initrd
-          cmdline: init=${toplevel}/init $(cat "${toplevel}/kernel-params")
-      EOT
-            mcopy -i "$espImg" limine.conf ::limine.conf
-          fi
+      # 4. 生イメージへの焼き込み
+      # ESP をセクタ 2048 (1MiB オフセット) に書き込む
+      dd if="$espImg" of=raw.img bs=1M seek=1 conv=notrunc
 
-          # 4. 生イメージへの焼き込み
-          # ESP をセクタ 2048 (1MiB オフセット) に書き込む
-          dd if="$espImg" of=raw.img bs=1M seek=1 conv=notrunc
+      # SquashFS をパーティション 2 の開始セクタに直接 dd で書き込む
+      startSector=$(sgdisk -p raw.img | awk '$1 == "2" {print $2}')
+      dd if=rootfs.squashfs of=raw.img bs=512 seek="$startSector" conv=notrunc
 
-          # SquashFS をパーティション 2 の開始セクタに直接 dd で書き込む
-          startSector=$(sgdisk -p raw.img | awk '$1 == "2" {print $2}')
-          dd if=rootfs.squashfs of=raw.img bs=512 seek="$startSector" conv=notrunc
-
-          # 5. zstd で圧縮
-          echo "images.zst (live): compressing to $out..."
-          zstd -T0 -19 raw.img -o "$out"
+      # 5. zstd で圧縮
+      echo "images.zst (live): compressing to $out..."
+      zstd -T0 -19 raw.img -o "$out"
     '';
 
   # -------------------------------------------------------------
