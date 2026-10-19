@@ -30,6 +30,12 @@
       description = "カーネルツリーに含める外部カーネルモジュールパッケージ (nvidia等)";
     };
 
+    boot.serialSpeed = lib.mkOption {
+      type = lib.types.int;
+      default = 115200;
+      description = "シリアルコンソールのボーレート (bps)";
+    };
+
     system.modulesTree = lib.mkOption {
       type = lib.types.path;
       internal = true;
@@ -46,14 +52,19 @@
     environment.etc."modules.conf".text =
       (lib.concatStringsSep "\n" config.boot.kernelModules) + "\n";
 
-    # デフォルトのカーネルパラメータ（シリアルコンソール等）
-    boot.kernelParams = lib.mkDefault [
-      "console=ttyS0"
-      "panic=10"
-    ];
+    boot.kernelParams = let
+      # ttyS や ttyUSB などのシリアルなら ",115200" を自動で後ろにくっつける関数
+      formatConsole = tty:
+        if (lib.hasPrefix "ttyS" tty || lib.hasPrefix "ttyUSB" tty)
+        then "console=${tty},${toString config.boot.serialSpeed}"
+        else "console=${tty}";
+    in
+      # 末尾優先のため reverseList して渡す
+      (map formatConsole (lib.reverseList config.boot.consoles))
+      ++ ["panic=10"];
 
     # 標準でロードしておくべきモジュール
-    boot.kernelModules = lib.mkDefault ["loop" "atkbd"];
+    boot.kernelModules = ["loop" "atkbd"];
 
     boot.initrd.availableKernelModules =
       [

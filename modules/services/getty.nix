@@ -4,22 +4,57 @@
   pkgs,
   ...
 }: let
-  # boot.consoles (["ttyS0", "tty1"] など) を元に s6-rc サービスを自動生成
+  cfg = config.services.getty;
+  primaryConsole = builtins.head config.boot.consoles;
+
+  mkGettyCmd = tty: let
+    isSerial = lib.hasPrefix "ttyS" tty || lib.hasPrefix "ttyUSB" tty;
+
+    # ★ ここがポイント:
+    # autologinUser が設定されていて、かつ「先頭のコンソール(プライマリ)」である場合のみ autologin を有効化
+    isAutologin = (cfg.autologinUser != null) && (tty == primaryConsole);
+
+    flags =
+      lib.optional isAutologin "--autologin ${cfg.autologinUser}"
+      ++ (
+        if isSerial
+        then ["--keep-baud"]
+        else ["--noclear"]
+      );
+
+    args =
+      [tty]
+      ++ (
+        if isSerial
+        then [
+          (toString config.boot.serialSpeed)
+          "vt220"
+        ]
+        else ["linux"]
+      );
+  in "${pkgs.util-linux}/bin/agetty ${lib.concatStringsSep " " (flags ++ args)}";
+
   mkGettyService = tty: {
     name = "getty-${tty}";
     value = {
       type = "longrun";
       run = ''
         #!/bin/execlineb -P
-        # util-linux の agetty を使用する場合: TTY名 -> ボーレート の順
-        # 画面制御（VT）や自動ログイン等のオプションも必要に応じて付与
-        ${pkgs.util-linux}/bin/agetty ${tty} 115200
+        ${mkGettyCmd tty}
       '';
     };
   };
 in {
+  options.services.getty = {
+    autologinUser = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "root";
+      description = "自動ログインさせるユーザー名（プライマリコンソールのみに適用）";
+    };
+  };
+
   config = {
-    # boot.consoles の数だけサービスを動的に生やす
     system.s6-rc.services = builtins.listToAttrs (map mkGettyService config.boot.consoles);
   };
 }
