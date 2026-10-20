@@ -36,9 +36,19 @@
     nixosModules.default = ./modules;
 
     # 外部から簡単に設定をビルドできるようにするヘルパー関数
-    lib.evalSystem = userModules:
+    lib.evalSystem = args: let
+      # 引数がリストならそのまま、属性セットなら .modules を取り出す
+      userModules =
+        if builtins.isList args
+        then args
+        else (args.modules or []);
+      extraSpecialArgs =
+        if builtins.isAttrs args
+        then (args.specialArgs or {})
+        else {};
+    in
       lib.evalModules {
-        specialArgs = {inherit pkgs lib;};
+        specialArgs = {inherit pkgs lib;} // extraSpecialArgs;
         modules = [./modules] ++ userModules;
       };
 
