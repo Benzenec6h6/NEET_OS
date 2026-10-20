@@ -8,7 +8,11 @@ with lib; let
   cfg = config.services.syslog;
 in {
   options.services.syslog = {
-    enable = mkEnableOption "s6-socklog による syslog 受信 + s6-log による保存";
+    enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "s6-socklog による syslog 受信 + s6-log による保存";
+    };
     user = mkOption {
       type = types.str;
       default = "syslog";

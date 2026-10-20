@@ -15,7 +15,11 @@ with lib; {
   ];
 
   options.neet.security = {
-    enable = mkEnableOption "Enable security infrastructure (PAM, shadow, polkit)";
+    enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Enable security infrastructure (PAM, shadow, polkit)";
+    };
   };
 
   config = mkIf config.neet.security.enable {

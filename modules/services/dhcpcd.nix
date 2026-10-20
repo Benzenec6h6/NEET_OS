@@ -24,7 +24,7 @@ in {
   options.services.dhcpcd = {
     enable = mkOption {
       type = types.bool;
-      default = false;
+      default = true;
       description = "dhcpcd をシステムサービスとして有効化するかどうか";
     };
 

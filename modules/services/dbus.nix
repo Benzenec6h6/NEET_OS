@@ -44,10 +44,14 @@
     serviceDirectories = cfg.packages;
   };
 
-  inherit (lib) mkOption mkEnableOption mkIf types;
+  inherit (lib) mkOption mkIf types;
 in {
   options.services.dbus = {
-    enable = mkEnableOption "D-Bus system message bus daemon";
+    enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "D-Bus system message bus daemon";
+    };
 
     package = mkOption {
       type = types.package;

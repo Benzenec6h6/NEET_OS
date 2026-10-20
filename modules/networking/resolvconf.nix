@@ -31,7 +31,7 @@ in {
   options.programs.resolvconf = {
     enable = mkOption {
       type = types.bool;
-      default = false;
+      default = true;
       description = "openresolv による /etc/resolv.conf の自動調停を有効化するかどうか";
     };
 
