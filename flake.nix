@@ -32,6 +32,7 @@
       neetModules = ./modules;
     };
   in {
+    legacyPackages.x86_64-linux = pkgs;
     # 外部(NEET_dots)に提供するモジュール群
     nixosModules.default = ./modules;
 
