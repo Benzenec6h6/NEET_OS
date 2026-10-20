@@ -101,6 +101,9 @@ fn run_switch(core: &Core) -> io::Result<()> {
     let users = etc_syncer::user_group::parse_passwd().unwrap_or_default();
     fs_setup::setup_user_directories(&users)?;
 
+    // 【追加】7. カーネルのファームウェア参照先を新しい世代に更新
+    firmware_setup::setup_firmware(&core.firmware())?;
+
     println!("system-init: [switch] core system updated successfully.");
     Ok(())
 }
