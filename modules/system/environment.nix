@@ -6,7 +6,7 @@
 }: let
   neetRebuild = pkgs.writeShellScriptBin "neet-rebuild" (builtins.readFile ./rebuild.sh);
   neetGC = pkgs.writeShellScriptBin "neet-gc" (builtins.readFile ./gc.sh);
-  neetInstall = pkgs.writeShellScriptBin "neet-install" (builtins.readFile ./neet-install.sh);
+  neetInstall = pkgs.writeShellScriptBin "neet-install" (builtins.readFile ./install.sh);
 in {
   options = {
     environment.systemPackages = lib.mkOption {
