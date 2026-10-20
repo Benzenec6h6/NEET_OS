@@ -107,9 +107,16 @@
       startSector=$(sgdisk -p raw.img | awk '$1 == "2" {print $2}')
       dd if=rootfs.squashfs of=raw.img bs=512 seek="$startSector" conv=notrunc
 
-      # 5. zstd で圧縮
+      # 5. zstd で圧縮してディレクトリに出力
       echo "images.zst (live): compressing to $out..."
-      zstd -T0 -19 raw.img -o "$out"
+      mkdir -p "$out"
+      imgName="neet-live-image.img.zst"
+      zstd -T0 -19 raw.img -o "$out/$imgName"
+
+      # 6. sha256sum.txt の生成
+      echo "images.zst (live): generating sha256 checksum..."
+      # 相対パスで記録しておくと、配布先で `sha256sum -c sha256sum.txt` がそのまま通る
+      (cd "$out" && sha256sum "$imgName" > sha256sum.txt)
     '';
 
   # -------------------------------------------------------------
