@@ -16,7 +16,7 @@
     sandbox = true
 
     # root を信頼
-    trusted-users = root
+    trusted-users = root @wheel
 
     # 公式バイナリキャッシュ
     substituters = https://cache.nixos.org/
@@ -26,7 +26,11 @@
   '';
 in {
   options.services.nix-daemon = {
-    enable = lib.mkEnableOption "Nix daemon service for NEET OS";
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to enable the Nix daemon service for NEET OS.";
+    };
 
     package = lib.mkOption {
       type = lib.types.package;
