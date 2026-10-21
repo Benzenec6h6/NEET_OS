@@ -14,6 +14,12 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev
 
+# /dev/fd, /dev/stdin 等の作成 (Bash のプロセス置換 <(...) のために必須)
+ln -snf /proc/self/fd   /dev/fd
+ln -snf /proc/self/fd/0 /dev/stdin
+ln -snf /proc/self/fd/1 /dev/stdout
+ln -snf /proc/self/fd/2 /dev/stderr
+
 # ルートマウントを private に変更する (switch_root や mount --move の EINVAL 防止)
 mount --make-rprivate /
 
@@ -51,6 +57,10 @@ mkdir -p /mnt/bin /mnt/etc /mnt/run /mnt/root /mnt/proc /mnt/sys /mnt/dev /mnt/t
     || die "failed to prepare /mnt (read-only root?)"
 
 ln -sf "@systemPath@/bin/sh" /mnt/bin/sh || die "failed to link /mnt/bin/sh"
+
+# /usr/bin/env の作成 (一般的な #!/usr/bin/env bash スクリプトのために必須)
+mkdir -p /mnt/usr/bin
+ln -sf "@systemPath@/bin/env" /mnt/usr/bin/env 2>/dev/null || true
 
 # プロパゲーションが private になったので、正常に move できる
 mount --move /proc /mnt/proc || die "failed to move /proc"
