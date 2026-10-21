@@ -52,6 +52,11 @@ in {
   config = mkIf cfg.enable {
     # 組み込みサービスの登録（sudo は privileges 側に任せるためここから削除）
     neet.security.pam.services = {
+      passwd.text = ''
+        password  sufficient  ${pam_unix} sha512 shadow nullok
+        password  required    ${pam_deny}
+      '';
+
       # 一般ログイン / Console
       login.text = ''
         auth      required    ${pam_unix} nullok
