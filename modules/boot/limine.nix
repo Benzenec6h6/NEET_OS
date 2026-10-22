@@ -12,6 +12,13 @@
   installBootloader = pkgs.writeShellScript "install-limine" ''
     set -euo pipefail
 
+    export PATH="${lib.makeBinPath [
+      pkgs.efibootmgr
+      pkgs.coreutils
+      pkgs.util-linux
+      pkgs.sbsigntool
+    ]}:$PATH"
+
     BOOT_DIR="${cfg.bootDir}"
     LIMINE_PKG="${liminePkg}"
     export LIMINE_TIMEOUT="${toString cfg.timeout}"

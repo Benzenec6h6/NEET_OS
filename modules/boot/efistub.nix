@@ -12,6 +12,13 @@
   installBootloader = pkgs.writeShellScript "install-efistub" ''
     set -euo pipefail
 
+    export PATH="${lib.makeBinPath [
+      pkgs.efibootmgr
+      pkgs.coreutils
+      pkgs.util-linux
+      pkgs.sbsigntool
+    ]}:$PATH"
+
     ${lib.optionalString config.boot.secureBoot.enable ''
       export SECUREBOOT_KEY="${toString config.boot.secureBoot.keyPath}"
       export SECUREBOOT_CERT="${toString config.boot.secureBoot.certPath}"
