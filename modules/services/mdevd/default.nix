@@ -35,7 +35,7 @@ in {
 
         -$MODALIAS=.* 0:0 660 @modprobe --quiet "$MODALIAS"
 
-        -SUBSYSTEM=net;$ACTION=add;.* 0:0 660 @ip link set $INTERFACE up
+        -SUBSYSTEM=net;.* 0:0 660 @ip link set $INTERFACE up
 
         null        0:0 666
         zero        0:0 666
