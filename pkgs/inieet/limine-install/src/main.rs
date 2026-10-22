@@ -1,52 +1,190 @@
 //! limine-install
 //!
 //! UEFI bootloader installer for NEET OS (Limine).
-//! Installs BOOTX64.EFI and generates /boot/limine.conf.
-//! Payload synchronization is delegated to esp-sync.
+//! - Installs and optionally signs BOOTX64.EFI with hash caching
+//! - Generates /boot/limine.conf atomically
+//! - Idempotently registers Limine into UEFI NVRAM via neet_core::uefi
 
 use bootspec::Document;
-use neet_core::generation;
+use neet_core::{atomic, generation, uefi};
 use std::env;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
-fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        eprintln!("usage: limine-install <boot-dir> <limine-pkg-path>");
-        eprintln!("example: limine-install /boot /nix/store/...-limine");
-        std::process::exit(1);
+const LIMINE_NVRAM_LABEL: &str = "Limine Bootloader";
+
+struct Opts {
+    boot_dir: PathBuf,
+    limine_pkg: PathBuf,
+    key: Option<PathBuf>,
+    cert: Option<PathBuf>,
+}
+
+fn err(msg: String) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, msg)
+}
+
+fn parse_args() -> Result<Opts, String> {
+    let mut args = env::args().skip(1);
+    let mut boot_dir = None;
+    let mut limine_pkg = None;
+    let mut key = None;
+    let mut cert = None;
+
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--key" => {
+                key = Some(PathBuf::from(args.next().ok_or("missing value for --key")?));
+            }
+            "--cert" => {
+                cert = Some(PathBuf::from(
+                    args.next().ok_or("missing value for --cert")?,
+                ));
+            }
+            s if !s.starts_with('-') => {
+                if boot_dir.is_none() {
+                    boot_dir = Some(PathBuf::from(s));
+                } else if limine_pkg.is_none() {
+                    limine_pkg = Some(PathBuf::from(s));
+                } else {
+                    return Err(format!("unexpected positional argument '{s}'"));
+                }
+            }
+            _ => return Err(format!("unexpected argument '{arg}'")),
+        }
     }
 
-    let boot_dir = Path::new(&args[1]);
-    let limine_pkg = Path::new(&args[2]);
+    if key.is_none() {
+        if let Ok(k) = env::var("SECUREBOOT_KEY") {
+            key = Some(PathBuf::from(k));
+        }
+    }
+    if cert.is_none() {
+        if let Ok(c) = env::var("SECUREBOOT_CERT") {
+            cert = Some(PathBuf::from(c));
+        }
+    }
 
-    println!("limine-install: target boot dir = {}", boot_dir.display());
+    let boot_dir = boot_dir
+        .ok_or("usage: limine-install [--key <key>] [--cert <cert>] <boot-dir> <limine-pkg>")?;
+    let limine_pkg = limine_pkg
+        .ok_or("usage: limine-install [--key <key>] [--cert <cert>] <boot-dir> <limine-pkg>")?;
 
-    // 1. Limine UEFI バイナリ (BOOTX64.EFI) を配置
-    let efi_boot_dir = boot_dir.join("EFI/BOOT");
+    Ok(Opts {
+        boot_dir,
+        limine_pkg,
+        key,
+        cert,
+    })
+}
+
+fn main() -> io::Result<()> {
+    let opts = parse_args().map_err(err)?;
+
+    if !opts.boot_dir.exists() {
+        return Err(err(format!(
+            "boot directory does not exist: {}",
+            opts.boot_dir.display()
+        )));
+    }
+
+    println!(
+        "limine-install: target boot dir = {}",
+        opts.boot_dir.display()
+    );
+
+    // 1. Limine UEFI バイナリ (BOOTX64.EFI) を配置＆署名
+    let efi_boot_dir = opts.boot_dir.join("EFI/BOOT");
     fs::create_dir_all(&efi_boot_dir)?;
 
-    let src_efi = limine_pkg.join("share/limine/BOOTX64.EFI");
+    let src_efi = opts.limine_pkg.join("share/limine/BOOTX64.EFI");
     let dest_efi = efi_boot_dir.join("BOOTX64.EFI");
-    install_file_if_changed(&src_efi, &dest_efi)?;
+    install_and_sign_efi(
+        &src_efi,
+        &dest_efi,
+        opts.key.as_deref(),
+        opts.cert.as_deref(),
+    )?;
 
-    // 2. プロファイルから全世代を取得
-    let (generations, _skipped) = generation::list(std::path::Path::new(generation::PROFILES))?;
+    // 2. プロファイルから世代を取得し limine.conf を生成 (neet-core)
+    let (generations, _skipped) = generation::list(Path::new(generation::PROFILES))?;
     if generations.is_empty() {
         eprintln!("limine-install: no generations found in /nix/var/nix/profiles");
         return Ok(());
     }
 
-    // 3. limine.conf の構築
+    generate_limine_conf(&opts.boot_dir, &generations)?;
+
+    // 3. UEFI NVRAM へ Limine を登録 (未登録時のみ / neet-core::uefi 利用)
+    register_nvram_if_needed(&opts.boot_dir)?;
+
+    println!("limine-install: Limine setup completed successfully");
+    Ok(())
+}
+
+/// EFI バイナリのインストールと署名（ハッシュキャッシュ対応）
+fn install_and_sign_efi(
+    src: &Path,
+    dest: &Path,
+    key: Option<&Path>,
+    cert: Option<&Path>,
+) -> io::Result<()> {
+    if !src.exists() {
+        return Err(err(format!(
+            "source EFI binary not found: {}",
+            src.display()
+        )));
+    }
+
+    let hash_file = dest.with_file_name("BOOTX64.EFI.hash");
+    let src_hash = hex_encode(&atomic::sha256_file(src)?);
+
+    if dest.exists() && hash_file.exists() {
+        if let Ok(cached) = fs::read_to_string(&hash_file) {
+            if cached.trim() == src_hash {
+                return Ok(()); // 既に最新
+            }
+        }
+    }
+
+    if let (Some(k), Some(c)) = (key, cert) {
+        println!("limine-install: signing and installing {}", dest.display());
+        let status = Command::new("sbsign")
+            .args([
+                "--key",
+                k.to_str().unwrap(),
+                "--cert",
+                c.to_str().unwrap(),
+                "--output",
+                dest.to_str().unwrap(),
+            ])
+            .arg(src)
+            .status()
+            .map_err(|e| err(format!("failed to execute sbsign: {e}")))?;
+
+        if !status.success() {
+            return Err(err("sbsign failed for BOOTX64.EFI".into()));
+        }
+    } else {
+        println!("limine-install: installing un-signed {}", dest.display());
+        fs::copy(src, dest)?;
+    }
+
+    let _ = fs::write(hash_file, src_hash);
+    Ok(())
+}
+
+/// limine.conf のアトミック生成
+fn generate_limine_conf(boot_dir: &Path, generations: &[generation::Generation]) -> io::Result<()> {
     let timeout: u32 = env::var("LIMINE_TIMEOUT")
         .ok()
         .and_then(|t| t.parse().ok())
         .unwrap_or(5);
 
-    let mut limine_conf = String::new();
-    limine_conf.push_str(&format!("timeout: {}\n\n", timeout));
+    let mut conf = String::new();
+    conf.push_str(&format!("timeout: {}\n\n", timeout));
 
     for (idx, gen) in generations.iter().enumerate() {
         let is_latest = idx == 0;
@@ -58,8 +196,12 @@ fn main() -> io::Result<()> {
         }
 
         let json_str = fs::read_to_string(&boot_json_path)?;
-        let doc: Document = serde_json::from_str(&json_str)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let doc: Document = serde_json::from_str(&json_str).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("failed to parse boot.json: {e}"),
+            )
+        })?;
         let spec = doc.bootspec;
 
         let title = if is_latest {
@@ -69,53 +211,72 @@ fn main() -> io::Result<()> {
         };
 
         if spec.uki.is_some() {
-            // --- パターン A: UKI (efi_chainload) ---
             let uki_path = format!("boot():/EFI/Linux/neet-gen-{gen_num}.efi");
-
-            limine_conf.push_str(&format!("{title}\n"));
-            limine_conf.push_str("    protocol: efi_chainload\n");
-            limine_conf.push_str(&format!("    image_path: {uki_path}\n\n"));
+            conf.push_str(&format!("{title}\n"));
+            conf.push_str("    protocol: efi_chainload\n");
+            conf.push_str(&format!("    image_path: {uki_path}\n\n"));
         } else {
-            // --- パターン B: Raw カーネル (protocol: linux) ---
             let kernel_path = format!("boot():/kernels/neet-gen-{gen_num}-vmlinuz");
             let cmdline = format!("init={} {}", spec.init, spec.kernel_params.join(" "));
 
-            limine_conf.push_str(&format!("{title}\n"));
-            limine_conf.push_str("    protocol: linux\n");
-            limine_conf.push_str(&format!("    kernel_path: {kernel_path}\n"));
+            conf.push_str(&format!("{title}\n"));
+            conf.push_str("    protocol: linux\n");
+            conf.push_str(&format!("    kernel_path: {kernel_path}\n"));
 
             if spec.initrd.is_some() {
                 let initrd_path = format!("boot():/kernels/neet-gen-{gen_num}-initrd");
-                limine_conf.push_str(&format!("    module_path: {initrd_path}\n"));
+                conf.push_str(&format!("    module_path: {initrd_path}\n"));
             }
 
-            limine_conf.push_str(&format!("    cmdline: {cmdline}\n\n"));
+            conf.push_str(&format!("    cmdline: {cmdline}\n\n"));
         }
     }
 
-    // 4. limine.conf をアトミックに書き込み
     let conf_path = boot_dir.join("limine.conf");
     let conf_tmp = boot_dir.join("limine.conf.tmp");
-    fs::write(&conf_tmp, limine_conf)?;
+    fs::write(&conf_tmp, conf)?;
     fs::rename(conf_tmp, conf_path)?;
 
     println!("limine-install: /boot/limine.conf updated successfully");
     Ok(())
 }
 
-fn install_file_if_changed(src: &Path, dest: &Path) -> io::Result<()> {
-    if !dest.exists() {
-        println!("limine-install: installing {}", dest.display());
-        fs::copy(src, dest)?;
+/// neet_core::uefi を使って安全に NVRAM を登録
+fn register_nvram_if_needed(boot_dir: &Path) -> io::Result<()> {
+    if !uefi::is_efivarfs_mounted() {
+        println!("limine-install: efivars not mounted, skipping NVRAM registration");
         return Ok(());
     }
 
-    let src_meta = fs::metadata(src)?;
-    let dest_meta = fs::metadata(dest)?;
-
-    if src_meta.len() != dest_meta.len() {
-        println!("limine-install: updating {}", dest.display());
-        fs::copy(src, dest)?;
+    // 既にエントリがあればスキップ
+    if uefi::has_boot_entry(LIMINE_NVRAM_LABEL) {
+        println!("limine-install: NVRAM entry '{LIMINE_NVRAM_LABEL}' already exists, skipping");
+        return Ok(());
     }
+
+    // ESP を自動検出して登録
+    let esp = uefi::detect_esp(boot_dir)?;
+    println!(
+        "limine-install: creating NVRAM entry on {} (part {})...",
+        esp.disk, esp.partition
+    );
+
+    uefi::create_boot_entry(
+        &esp.disk,
+        &esp.partition,
+        LIMINE_NVRAM_LABEL,
+        r"\EFI\BOOT\BOOTX64.EFI",
+        None,
+    )?;
+
     Ok(())
+}
+
+fn hex_encode(bytes: &[u8; 32]) -> String {
+    let mut s = String::with_capacity(64);
+    for b in bytes {
+        use std::fmt::Write;
+        let _ = write!(s, "{:02x}", b);
+    }
+    s
 }

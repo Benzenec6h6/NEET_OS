@@ -16,20 +16,15 @@
     LIMINE_PKG="${liminePkg}"
     export LIMINE_TIMEOUT="${toString cfg.timeout}"
 
-    if [ ! -d "$BOOT_DIR" ]; then
-      echo "limine-install: error: boot directory '$BOOT_DIR' does not exist!" >&2
-      exit 1
-    fi
-
-    if ! ${pkgs.util-linux}/bin/mountpoint -q "$BOOT_DIR"; then
-      echo "limine-install: error: target '$BOOT_DIR' is not a mountpoint!" >&2
-      exit 1
-    fi
+    ${lib.optionalString config.boot.secureBoot.enable ''
+      export SECUREBOOT_KEY="${toString config.boot.secureBoot.keyPath}"
+      export SECUREBOOT_CERT="${toString config.boot.secureBoot.certPath}"
+    ''}
 
     echo "==> [install-limine] 1/2: Synchronizing payloads to ESP..."
     ${espSync}/bin/esp-sync "$BOOT_DIR"
 
-    echo "==> [install-limine] 2/2: Updating Limine binaries and config..."
+    echo "==> [install-limine] 2/2: Updating Limine binaries, config and NVRAM..."
     exec ${limineInstall}/bin/limine-install "$BOOT_DIR" "$LIMINE_PKG"
   '';
 in {

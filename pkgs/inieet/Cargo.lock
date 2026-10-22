@@ -87,6 +87,7 @@ name = "efistub-sync"
 version = "0.1.0"
 dependencies = [
  "bootspec",
+ "neet-core",
  "serde_json",
 ]
 

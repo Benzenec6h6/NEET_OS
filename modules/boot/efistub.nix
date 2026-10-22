@@ -12,6 +12,11 @@
   installBootloader = pkgs.writeShellScript "install-efistub" ''
     set -euo pipefail
 
+    ${lib.optionalString config.boot.secureBoot.enable ''
+      export SECUREBOOT_KEY="${toString config.boot.secureBoot.keyPath}"
+      export SECUREBOOT_CERT="${toString config.boot.secureBoot.certPath}"
+    ''}
+
     echo "==> [install-efistub] 1/2: Synchronizing payloads to ESP..."
     ${espSync}/bin/esp-sync "${cfg.bootDir}"
 

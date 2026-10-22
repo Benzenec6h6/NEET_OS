@@ -11,6 +11,7 @@ in {
     ./initrd.nix
     ./sysctl.nix
     ./limine.nix
+    ./secureboot.nix
     ./efistub.nix
     ./uki.nix
   ];
