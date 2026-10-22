@@ -31,11 +31,11 @@ in {
       # 各ハードウェア（uinput, i2c等）で追加された rules とマージされる基本ルール
       services.mdevd.rules = lib.mkDefault ''
         # ブロックデバイスイベント捕捉ルール (initrd/Stage2共通)
-        -SUBSYSTEM=block;.* 0:0 660 */bin/mdevd-disk.sh
+        -$SUBSYSTEM=block;.* 0:0 660 */bin/mdevd-disk.sh
 
         -$MODALIAS=.* 0:0 660 @modprobe --quiet "$MODALIAS"
 
-        SUBSYSTEM=net;ACTION=add;.* 0:0 660 @ip link set $INTERFACE up
+        -$SUBSYSTEM=net;$ACTION=add;.* 0:0 660 @ip link set $INTERFACE up
 
         null        0:0 666
         zero        0:0 666
