@@ -29,7 +29,7 @@ in {
       system.build.mdevdDisk = mdevd-disk;
 
       # 各ハードウェア（uinput, i2c等）で追加された rules とマージされる基本ルール
-      services.mdevd.rules = lib.mkDefault ''
+      services.mdevd.rules = ''
         # ブロックデバイスイベント捕捉ルール (initrd/Stage2共通)
         -$SUBSYSTEM=block;.* 0:0 660 */bin/mdevd-disk.sh
 
