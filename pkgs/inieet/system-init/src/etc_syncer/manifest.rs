@@ -21,9 +21,8 @@ pub fn write_clean_manifest(path: &Path, entries: &BTreeSet<String>) -> io::Resu
         buf.push_str(e);
         buf.push('\n');
     }
-    let tmp = with_suffix(path, ".tmp");
-    fs::write(&tmp, buf)?;
-    fs::rename(&tmp, path)
+    // neet-core の atomic_write を使用 (パーミッション 0o644 でアトミックに同期・書き換え)
+    neet_core::atomic::atomic_write(path, buf.as_bytes(), 0o644)
 }
 
 pub fn with_suffix(path: &Path, suffix: &str) -> PathBuf {

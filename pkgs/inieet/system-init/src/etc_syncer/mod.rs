@@ -8,6 +8,9 @@ use std::io;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
+// neet-core から共通のアトミックシンボリックリンク関数を呼び出す
+use neet_core::atomic::atomic_symlink;
+
 const ETC: &str = "/etc";
 const STATIC_LINK: &str = "/etc/static";
 const CLEAN_MANIFEST: &str = "/etc/.clean";
@@ -194,13 +197,6 @@ fn relink(link: &Path, target: &Path) {
             link.display()
         );
     }
-}
-
-fn atomic_symlink(target: &Path, link: &Path) -> io::Result<()> {
-    let tmp = manifest::with_suffix(link, ".system-init-tmp");
-    let _ = fs::remove_file(&tmp);
-    symlink(target, &tmp)?;
-    fs::rename(&tmp, link)
 }
 
 // ---- 不要なシンボリックリンクの掃除 ----
