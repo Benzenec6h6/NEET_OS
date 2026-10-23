@@ -73,12 +73,27 @@
     echo "${testSystem.config.system.build.toplevel}" > $out
   '';
 
+  # mdev.conf 構文チェック
+  mdevdConfCheck = let
+    # 各モジュールから合成された services.mdevd.rules をファイル化
+    mdevConfFile = pkgs.writeText "mdev.conf" testSystem.config.services.mdevd.rules;
+  in
+    pkgs.runCommand "check-mdevd-conf" {
+      nativeBuildInputs = [pkgs.pkgsStatic.mdevd];
+    } ''
+      echo "Validating mdev.conf syntax with mdevd -N..."
+      # 構文エラーがあれば非 0 で終了し、Nix のビルドログに line/column が出力される
+      mdevd -N -f ${mdevConfFile}
+      touch $out
+    '';
+
   optionsDoc = pkgs.nixosOptionsDoc {options = testSystem.options;};
 in {
   checks = {
     "option-conflicts" = optionConflictsCheck;
     "assertions" = assertionsCheck;
     "eval" = evalCheck;
+    "mdevd-conf" = mdevdConfCheck;
   };
   docs = {
     optionsDoc = optionsDoc.optionsJSON;
