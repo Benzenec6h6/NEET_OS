@@ -16,7 +16,6 @@ fn err(msg: String) -> io::Error {
     io::Error::new(io::ErrorKind::Other, msg)
 }
 
-/// efivarfs がマウントされているか確認
 pub fn is_efivarfs_mounted() -> bool {
     let efivars = Path::new("/sys/firmware/efi/efivars");
     if !efivars.exists() {
@@ -30,7 +29,6 @@ pub fn is_efivarfs_mounted() -> bool {
         .unwrap_or(false)
 }
 
-/// boot_dir (ESP) のマウント元から (親ディスク, パーティション番号) を取得
 pub fn detect_esp(boot_dir: &Path) -> io::Result<EspInfo> {
     let canonical_boot = fs::canonicalize(boot_dir)?;
     let mounts = fs::read_to_string("/proc/mounts")?;
@@ -78,40 +76,54 @@ pub fn detect_esp(boot_dir: &Path) -> io::Result<EspInfo> {
 
 /// 現在の NVRAM エントリ一覧を取得 (Label -> BootNumber 文字列)
 pub fn list_boot_entries() -> io::Result<HashMap<String, String>> {
-    let mut map = HashMap::new();
     let output = Command::new("efibootmgr").output()?;
+    if !output.status.success() {
+        return Err(err(format!(
+            "efibootmgr failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut map = HashMap::new();
 
     for line in stdout.lines() {
-        if line.starts_with("Boot") && line.contains('\t') {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 2 {
-                let boot_num = parts[0].trim_start_matches("Boot").trim_end_matches('*');
-                let tab_pos = line.find('\t').unwrap_or(0);
-                let label = line[..tab_pos]
-                    .split_whitespace()
-                    .skip(1)
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                map.insert(label, boot_num.to_string());
+        // 例: "Boot0001* NEET OS (Generation 1)\tHD(1,GPT,...)"
+        // または "Boot0001* NEET OS (Generation 1)"
+        if let Some(rest) = line.strip_prefix("Boot") {
+            let Some(boot_num) = rest
+                .split_whitespace()
+                .next()
+                .map(|s| s.trim_end_matches('*'))
+            else {
+                continue;
+            };
+
+            // "Boot0001* " の後を取得
+            let line_rest = rest
+                .trim_start_matches(|c: char| c.is_ascii_hexdigit() || c == '*')
+                .trim_start();
+            let label = if let Some(tab_pos) = line_rest.find('\t') {
+                &line_rest[..tab_pos]
+            } else {
+                line_rest
+            }
+            .trim();
+
+            if !label.is_empty() {
+                map.insert(label.to_string(), boot_num.to_string());
             }
         }
     }
     Ok(map)
 }
 
-/// 指定した文字列がラベルに含まれる NVRAM エントリが存在するか確認
 pub fn has_boot_entry(label_substring: &str) -> bool {
-    Command::new("efibootmgr")
-        .output()
-        .map(|out| {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            stdout.lines().any(|l| l.contains(label_substring))
-        })
+    list_boot_entries()
+        .map(|entries| entries.keys().any(|l| l.contains(label_substring)))
         .unwrap_or(false)
 }
 
-/// efibootmgr で新しいブートエントリを作成
 pub fn create_boot_entry(
     disk: &str,
     part: &str,
@@ -143,7 +155,6 @@ pub fn create_boot_entry(
     Ok(())
 }
 
-/// efibootmgr でブートエントリを削除
 pub fn delete_boot_entry(boot_num: &str) -> io::Result<()> {
     let status = Command::new("efibootmgr")
         .args(["-b", boot_num, "-B"])

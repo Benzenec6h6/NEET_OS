@@ -190,8 +190,15 @@ fn main() -> io::Result<()> {
     }
 
     // 4. 古い世代のファイルを安全に削除 (GC)
-    cleanup_dir(&efi_linux_dir, &keep_uki_files, "neet-gen-")?;
-    cleanup_dir(&kernels_dir, &keep_kernel_files, "neet-gen-")?;
+    let active_gens: HashSet<u32> = generations.iter().map(|g| g.number).collect();
+
+    for removed in neet_core::cleanup::cleanup_stale_generation_files(&efi_linux_dir, &active_gens)?
+    {
+        println!("esp-sync: removed obsolete file {}", removed.display());
+    }
+    for removed in neet_core::cleanup::cleanup_stale_generation_files(&kernels_dir, &active_gens)? {
+        println!("esp-sync: removed obsolete file {}", removed.display());
+    }
 
     println!("esp-sync: payload sync completed successfully");
     Ok(())
@@ -274,22 +281,4 @@ fn hex_encode(bytes: &[u8; 32]) -> String {
         let _ = write!(s, "{:02x}", b);
     }
     s
-}
-
-/// 指定したプレフィックスを持ち、keep_files に含まれないファイルを削除
-fn cleanup_dir(dir: &Path, keep_files: &HashSet<String>, prefix: &str) -> io::Result<()> {
-    if !dir.exists() {
-        return Ok(());
-    }
-
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-
-        if name.starts_with(prefix) && !keep_files.contains(&name) {
-            println!("esp-sync: removing obsolete file {}", name);
-            let _ = fs::remove_file(entry.path());
-        }
-    }
-    Ok(())
 }

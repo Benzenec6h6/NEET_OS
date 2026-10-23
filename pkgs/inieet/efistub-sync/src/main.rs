@@ -109,27 +109,12 @@ fn main() -> io::Result<()> {
     }
 
     // 4. プロファイルに存在しない古い NVRAM エントリを削除 (NVRAM の GC)
-    for (label, boot_num) in existing_entries {
-        if let Some(gen_num) = parse_gen_from_label(&label) {
-            if !keep_gen_numbers.contains(&gen_num) {
-                println!("efistub-sync: removing obsolete NVRAM entry Boot{boot_num} ({label})");
-                if let Err(e) = uefi::delete_boot_entry(&boot_num) {
-                    eprintln!("efistub-sync: warning: failed to delete Boot{boot_num}: {e}");
-                }
-            }
-        }
+    let active_gens: HashSet<u32> = generations.iter().map(|g| g.number).collect();
+    let removed = neet_core::cleanup::cleanup_stale_nvram_entries(&active_gens)?;
+    for (label, boot_num) in removed {
+        println!("efistub-sync: removed obsolete NVRAM entry Boot{boot_num} ({label})");
     }
 
     println!("efistub-sync: NVRAM synchronization completed successfully");
     Ok(())
-}
-
-fn parse_gen_from_label(label: &str) -> Option<u32> {
-    if let Some(start) = label.find("(Generation ") {
-        let rest = &label[start + "(Generation ".len()..];
-        if let Some(end) = rest.find(')') {
-            return rest[..end].parse().ok();
-        }
-    }
-    None
 }
