@@ -23,12 +23,14 @@
       fi
     '';
 
-  assertionsCheck =
+  assertionsCheck = let
+    failedList = lib.filter (a: !a.assertion) (testSystem.config.assertions or []);
+    failedJson = builtins.toJSON (map (a: a.message) failedList);
+  in
     pkgs.runCommand "check-assertions" {
-      failedList = lib.filter (a: !a.assertion) (testSystem.config.assertions or []);
+      inherit failedJson;
     } ''
       mkdir -p $out
-      failedJson='${builtins.toJSON (map (a: a.message) failedList)}'
       if [ "$failedJson" != "[]" ]; then
         echo "FAIL" > $out/status
         echo "assertion に失敗しています:" > $out/log.txt
