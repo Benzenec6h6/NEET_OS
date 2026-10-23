@@ -5,19 +5,12 @@
   src = lib.cleanSource ./.;
   cargoLockFile = ./Cargo.lock;
 in {
-  earlyInit = pkgs.pkgsStatic.rustPlatform.buildRustPackage {
-    pname = "early-init";
+  neetMount = pkgs.pkgsStatic.rustPlatform.buildRustPackage {
+    pname = "neet-mount";
     version = "0.1.0";
     inherit src;
     cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "early-init";
-  };
-  initCore = pkgs.pkgsStatic.rustPlatform.buildRustPackage {
-    pname = "init-core";
-    version = "0.1.0";
-    inherit src;
-    cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "init-core";
+    buildAndTestSubdir = "neet-mount";
   };
   systemInit = pkgs.rustPlatform.buildRustPackage {
     pname = "system-init";

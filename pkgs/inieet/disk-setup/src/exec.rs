@@ -223,13 +223,13 @@ pub fn format_disk(disk: &Disk, o: &FormatOpts) -> io::Result<()> {
 }
 
 /// plan の全ファイルシステムを `root` 配下へマウントする（インストール用）。
-/// マウントの実処理は init-core に委譲する。resetOnBoot は意図的に無効（インストール中に消さない）
+/// マウントの実処理は neet-mount に委譲する。resetOnBoot は意図的に無効（インストール中に消さない）
 pub fn mount_plan(
     plan: &Plan,
     root: &Path,
     device_override: Option<(&str, &str)>,
 ) -> io::Result<()> {
-    let mut entries: Vec<init_core::MountEntry> = Vec::new();
+    let mut entries: Vec<neet_mount::MountEntry> = Vec::new();
     for disk in &plan.disks {
         let dev = match device_override {
             Some((name, dev)) if name == disk.name => Some(dev.to_string()),
@@ -258,7 +258,7 @@ pub fn mount_plan(
 
                 if let Some(inner) = &c.content {
                     for m in inner.mounts() {
-                        entries.push(init_core::MountEntry {
+                        entries.push(neet_mount::MountEntry {
                             device: mapper_path.clone(),
                             mount_point: m.mount_point,
                             fs_type: inner.fs_type().to_string(),
@@ -273,7 +273,7 @@ pub fn mount_plan(
                 }
             } else {
                 for m in c.mounts() {
-                    entries.push(init_core::MountEntry {
+                    entries.push(neet_mount::MountEntry {
                         device: part_node.clone(),
                         mount_point: m.mount_point,
                         fs_type: c.fs_type().to_string(),
@@ -295,7 +295,7 @@ pub fn mount_plan(
             e.mount_point.clone(),
         )
     });
-    init_core::apply_plan(&entries, root, true)
+    neet_mount::apply_plan(&entries, root, true)
 }
 
 #[cfg(test)]

@@ -20,7 +20,7 @@ struct UserControl {
 }
 
 /// mount-plan.json をロードしてファイルシステムをマウントする
-/// マウントの解釈と実行ロジックはすべて init-core に委譲
+/// マウントの解釈と実行ロジックはすべて neet-mount に委譲
 pub fn setup_filesystems(plan_path: &Path) -> io::Result<()> {
     if !plan_path.exists() {
         eprintln!(
@@ -30,8 +30,8 @@ pub fn setup_filesystems(plan_path: &Path) -> io::Result<()> {
         return Ok(());
     }
 
-    let entries = init_core::load_plan(plan_path)?;
-    init_core::apply_plan(&entries, Path::new("/"), false)?;
+    let entries = neet_mount::load_plan(plan_path)?;
+    neet_mount::apply_plan(&entries, Path::new("/"), false)?;
 
     // --- cgroup v2 のコントローラー有効化 ---
     setup_cgroups()?;

@@ -44,12 +44,12 @@ mdevd-coldplug
 @luksUnlockCommands@
 
 echo "NEET OS Stage 1: Mounting root filesystems..."
-/bin/early-init /mount-plan.json /mnt || die "early-init failed to mount filesystems"
+/bin/stage1-mount /mount-plan.json /mnt || die "stage1-mount failed to mount filesystems"
 
 # /mnt が本当にマウントされているかチェック
 if ! mountpoint -q /mnt; then
     cat /proc/mounts
-    die "/mnt is not a mountpoint after early-init"
+    die "/mnt is not a mountpoint after stage1-mount"
 fi
 
 echo "NEET OS Stage 1: Preparing Stage 2 env..."

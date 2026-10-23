@@ -20,7 +20,7 @@ in {
     # 3. disks モジュールによる固定ディスクマウントを無効化
     disks.devices = lib.mkForce {};
 
-    # 4. Live 環境用のファイルシステム構成 (init-core がこれをそのまま解釈)
+    # 4. Live 環境用のファイルシステム構成 (neet-mount がこれをそのまま解釈)
     boot.fileSystems = {
       # 足場 A: RAM 上に tmpfs を用意 (Overlay の書き込みレイヤ用)
       "/run/live/overlay" = {

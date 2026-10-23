@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-init-core = { path = "../init-core" }
+neet-mount = { path = "../neet-mount" }
 neet-core = { path = "../neet-core" }
 nix = { version = "0.31.3", features = ["fs", "user", "mount", "reboot"] }
 serde = { version = "1.0.229", features = ["derive"] }

@@ -7,7 +7,7 @@
 in {
   config = {
     # system.build に各 Rust バイナリをぶら下げる
-    system.build.earlyInit = inieet.earlyInit;
+    system.build.stage1Mount = inieet.neetMount;
     system.build.systemInit = inieet.systemInit;
     system.build.limineInstall = inieet.limineInstall;
     system.build.efistubSync = inieet.efistubSync;
