@@ -12,12 +12,12 @@ in {
     cargoLock.lockFile = cargoLockFile;
     buildAndTestSubdir = "neet-mount";
   };
-  systemInit = pkgs.rustPlatform.buildRustPackage {
-    pname = "system-init";
+  neetActivate = pkgs.rustPlatform.buildRustPackage {
+    pname = "neet-activate";
     version = "0.1.0";
     inherit src;
     cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "system-init";
+    buildAndTestSubdir = "neet-activate";
   };
   limineInstall = pkgs.rustPlatform.buildRustPackage {
     pname = "limine-install";

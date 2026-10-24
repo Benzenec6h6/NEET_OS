@@ -59,7 +59,7 @@ if [ "$ACTION" = "switch" ]; then
   echo "==> [neet-rebuild] Safe to switch live. Switching running configuration..."
 
   # (a) /etc, ラッパー, /bin, /run/current-system を更新
-  system-init switch "$CORE"
+  neet-activate switch "$CORE"
 
   # (b) s6-rc サービスを動的リロード
   if [ -d /run/s6-rc ] && [ -e "$CORE/s6-rc" ]; then

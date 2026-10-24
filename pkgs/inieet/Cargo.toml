@@ -5,7 +5,7 @@ members = [
     "disk-setup",
     "neet-mount",
     "neet-core",
-    "system-init",
+    "neet-activate",
     "limine-install",
     "efistub-sync",
     "esp-sync",

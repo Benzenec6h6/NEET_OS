@@ -20,20 +20,20 @@ pub fn copy_managed_file(src: &Path, target: &Path, mode_str: &str) -> io::Resul
 
     if uid.is_none() {
         eprintln!(
-            "system-init: warning: could not resolve uid '{}' for '{}', defaulting to 0",
+            "neet-activate: warning: could not resolve uid '{}' for '{}', defaulting to 0",
             uid_spec.trim(),
             target.display()
         );
     }
     if gid.is_none() {
         eprintln!(
-            "system-init: warning: could not resolve gid '{}' for '{}', defaulting to 0",
+            "neet-activate: warning: could not resolve gid '{}' for '{}', defaulting to 0",
             gid_spec.trim(),
             target.display()
         );
     }
 
-    let tmp = with_suffix(target, ".system-init-tmp");
+    let tmp = with_suffix(target, ".neet-activate-tmp");
     fs::copy(src, &tmp)?;
     fs::set_permissions(&tmp, fs::Permissions::from_mode(mode))?;
 

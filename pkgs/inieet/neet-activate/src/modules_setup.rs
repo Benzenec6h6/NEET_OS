@@ -6,7 +6,7 @@ use std::process::Command;
 
 /// カーネルモジュールのセットアップ
 pub fn setup_kernel_modules(kernel_path: &Path) -> io::Result<()> {
-    println!("system-init: setting up /lib/modules...");
+    println!("neet-activate: setting up /lib/modules...");
 
     let lib_dir = Path::new("/lib");
     if !lib_dir.exists() {
@@ -19,7 +19,7 @@ pub fn setup_kernel_modules(kernel_path: &Path) -> io::Result<()> {
     // ガード節: ソースが存在しなければ早期リターン
     if !src.exists() {
         eprintln!(
-            "system-init: warning: kernel modules source not found at {}",
+            "neet-activate: warning: kernel modules source not found at {}",
             src.display()
         );
         return Ok(());
@@ -33,7 +33,7 @@ pub fn setup_kernel_modules(kernel_path: &Path) -> io::Result<()> {
     }
 
     symlink(&src, dest)?;
-    println!("system-init: linked /lib/modules to {}", src.display());
+    println!("neet-activate: linked /lib/modules to {}", src.display());
 
     Ok(())
 }
@@ -51,7 +51,7 @@ pub fn load_configured_modules() -> io::Result<()> {
             continue;
         }
 
-        println!("system-init: loading kernel module: {module}");
+        println!("neet-activate: loading kernel module: {module}");
         let _ = Command::new("/bin/modprobe").arg(module).status();
     }
 

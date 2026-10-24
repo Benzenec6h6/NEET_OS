@@ -11,11 +11,11 @@ pub fn setup_firmware(firmware_path: &Path) -> io::Result<()> {
     if sysfs_path.exists() && fw_dir.exists() {
         fs::write(sysfs_path, fw_dir.to_string_lossy().as_bytes())?;
         println!(
-            "system-init: registered firmware path -> {}",
+            "neet-activate: registered firmware path -> {}",
             fw_dir.display()
         );
     } else {
-        println!("system-init: no firmware path configured (skipping)");
+        println!("neet-activate: no firmware path configured (skipping)");
     }
 
     Ok(())

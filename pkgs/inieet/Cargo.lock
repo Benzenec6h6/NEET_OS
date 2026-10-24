@@ -132,6 +132,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "neet-activate"
+version = "0.1.0"
+dependencies = [
+ "neet-core",
+ "neet-mount",
+ "nix",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "neet-core"
 version = "0.1.0"
 dependencies = [
@@ -242,17 +253,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "system-init"
-version = "0.1.0"
-dependencies = [
- "neet-core",
- "neet-mount",
- "nix",
- "serde",
- "serde_json",
 ]
 
 [[package]]

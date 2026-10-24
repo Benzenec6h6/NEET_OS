@@ -3,8 +3,8 @@ export PATH @core@/system-path/bin:@core@/system-path/sbin
 fdmove -c 2 1
 foreground { echo "[stage2] Starting stage2 init sequence..." }
 
-# ここで /etc と /run を含む各種マウントを組み立てる (system-init 経由)
-foreground { echo "[stage2] Running activation script (system-init)..." }
+# ここで /etc と /run を含む各種マウントを組み立てる (neet-activate 経由)
+foreground { echo "[stage2] Running activation script (neet-activate)..." }
 if { @systemInitBin@ @core@ }
 foreground { echo "[stage2] Activation done." }
 

@@ -43,7 +43,7 @@ with lib; let
     };
   };
 
-  # Rust(etc_syncer / system-init) 側へ渡す JSON 構造への変換処理
+  # Rust(etc_syncer / neet-activate) 側へ渡す JSON 構造への変換処理
   # wrappers.json の各エントリーをマップ
   wrappersJsonData =
     mapAttrsToList (name: w: {

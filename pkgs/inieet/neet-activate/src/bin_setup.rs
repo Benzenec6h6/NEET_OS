@@ -8,7 +8,7 @@ const BIN_DIR: &str = "/bin";
 /// /bin にシステムパッケージをリンクする
 pub fn setup_bin(system_path: &Path) -> io::Result<()> {
     println!(
-        "system-init: populating /bin from {}",
+        "neet-activate: populating /bin from {}",
         system_path.display()
     );
     fs::create_dir_all(BIN_DIR)?;
@@ -27,14 +27,14 @@ pub fn setup_bin(system_path: &Path) -> io::Result<()> {
         symlink(entry.path(), &dest)?;
     }
 
-    // /bin/system-init が存在する前提で、poweroff / reboot のリンクを作成
+    // /bin/neet-activate が存在する前提で、poweroff / reboot のリンクを作成
     let bin_dir = Path::new(BIN_DIR);
-    let system_init = bin_dir.join("system-init");
+    let neet_activate = bin_dir.join("neet-activate");
 
     for cmd in &["poweroff", "reboot"] {
         let dest = bin_dir.join(cmd);
         let _ = fs::remove_file(&dest);
-        symlink(&system_init, &dest)?;
+        symlink(&neet_activate, &dest)?;
     }
 
     Ok(())

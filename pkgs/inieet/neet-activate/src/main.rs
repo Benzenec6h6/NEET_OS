@@ -1,4 +1,4 @@
-//! system-init
+//! neet-activate
 //!
 //! System initialization binary for Nix-based environments.
 
@@ -49,12 +49,12 @@ fn main() {
         }
         Some("switch") => {
             let Some(core_arg) = args.get(2) else {
-                eprintln!("usage: system-init switch <core>");
+                eprintln!("usage: neet-activate switch <core>");
                 std::process::exit(1);
             };
             let result = Core::load(Path::new(core_arg)).and_then(|c| run_switch(&c));
             if let Err(e) = result {
-                eprintln!("system-init: switch failed: {e}");
+                eprintln!("neet-activate: switch failed: {e}");
                 std::process::exit(1);
             }
         }
@@ -62,12 +62,12 @@ fn main() {
         // それ以外（通常ブート時）
         _ => {
             let Some(core_arg) = args.get(1) else {
-                eprintln!("usage: system-init <core>\n   or: system-init switch <core>");
+                eprintln!("usage: neet-activate <core>\n   or: neet-activate switch <core>");
                 std::process::exit(1);
             };
             let result = Core::load(Path::new(core_arg)).and_then(|c| run(&c));
             if let Err(e) = result {
-                eprintln!("system-init: fatal: {e}");
+                eprintln!("neet-activate: fatal: {e}");
                 std::process::exit(1);
             }
         }
@@ -77,10 +77,10 @@ fn main() {
 /// 稼働中の動的切り替え（rebuild switch 用）
 fn run_switch(core: &Core) -> io::Result<()> {
     core.validate()?;
-    println!("system-init: [switch] updating system configuration...");
+    println!("neet-activate: [switch] updating system configuration...");
 
     // 1. 新しい世代の /etc を同期
-    println!("system-init: [switch] syncing /etc...");
+    println!("neet-activate: [switch] syncing /etc...");
     etc_syncer::setup_etc(&core.etc(), &[])?;
 
     // 2. /run/current-system を新しい core に張り替える
@@ -91,7 +91,7 @@ fn run_switch(core: &Core) -> io::Result<()> {
 
     // 4. 新しい wrappers.json に基づいてラッパーバイナリを再生成
     if let Err(e) = wrappers::setup_wrappers() {
-        eprintln!("system-init: [switch] warning: failed to setup wrappers: {e}");
+        eprintln!("neet-activate: [switch] warning: failed to setup wrappers: {e}");
     }
 
     // 5. /bin 配下のリンクを新しい世代に更新
@@ -104,7 +104,7 @@ fn run_switch(core: &Core) -> io::Result<()> {
     // 【追加】7. カーネルのファームウェア参照先を新しい世代に更新
     firmware_setup::setup_firmware(&core.firmware())?;
 
-    println!("system-init: [switch] core system updated successfully.");
+    println!("neet-activate: [switch] core system updated successfully.");
     Ok(())
 }
 
@@ -128,7 +128,7 @@ fn run(core: &Core) -> io::Result<()> {
 
     // 3. Wrapper を作成
     if let Err(e) = wrappers::setup_wrappers() {
-        eprintln!("system-init: warning: failed to setup wrappers: {e}");
+        eprintln!("neet-activate: warning: failed to setup wrappers: {e}");
     }
 
     // 4. その他の初期化

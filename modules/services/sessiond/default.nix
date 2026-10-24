@@ -39,7 +39,7 @@ in {
     services.dbus.enable = true;
     services.dbus.packages = [cfg.package];
 
-    # 電源管理コマンド (NEET_OS の system-init に向ける)
+    # 電源管理コマンド (NEET_OS の neet-activate に向ける)
     services.sessiond.settings.power = {
       reboot = lib.mkDefault ["/bin/reboot"];
       poweroff = lib.mkDefault ["/bin/poweroff"];

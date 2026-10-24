@@ -121,7 +121,7 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    # NEET_OS の etc 管理機能（etc.nix / system-init）に渡す
+    # NEET_OS の etc 管理機能（etc.nix / neet-activate）に渡す
     environment.etc."fonts/fonts.conf".source = fontsConf;
 
     # アプリ側が参照するための環境変数（environment.nix へ流す）

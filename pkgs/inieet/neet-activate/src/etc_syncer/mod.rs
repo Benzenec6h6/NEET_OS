@@ -16,7 +16,7 @@ const STATIC_LINK: &str = "/etc/static";
 const CLEAN_MANIFEST: &str = "/etc/.clean";
 
 pub fn setup_etc(store_etc: &Path, prune: &[PathBuf]) -> io::Result<()> {
-    println!("system-init: syncing /etc...");
+    println!("neet-activate: syncing /etc...");
     atomic_symlink(store_etc, Path::new(STATIC_LINK))?;
     clean_dangling_symlinks(Path::new(ETC), Path::new(STATIC_LINK), prune);
 
@@ -28,10 +28,13 @@ pub fn setup_etc(store_etc: &Path, prune: &[PathBuf]) -> io::Result<()> {
     for stale in previous.difference(&created) {
         let target = Path::new(ETC).join(stale);
         match fs::remove_file(&target) {
-            Ok(()) => eprintln!("system-init: removed obsolete file '{}'", target.display()),
+            Ok(()) => eprintln!(
+                "neet-activate: removed obsolete file '{}'",
+                target.display()
+            ),
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             Err(e) => eprintln!(
-                "system-init: warning: could not remove stale '{}': {e}",
+                "neet-activate: warning: could not remove stale '{}': {e}",
                 target.display()
             ),
         }
@@ -46,7 +49,10 @@ fn sync_dir(root: &Path, dir: &Path, static_link: &Path, created: &mut BTreeSet<
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(e) => {
-            eprintln!("system-init: warning: cannot read '{}': {e}", dir.display());
+            eprintln!(
+                "neet-activate: warning: cannot read '{}': {e}",
+                dir.display()
+            );
             return;
         }
     };
@@ -56,7 +62,7 @@ fn sync_dir(root: &Path, dir: &Path, static_link: &Path, created: &mut BTreeSet<
             Ok(e) => e,
             Err(e) => {
                 eprintln!(
-                    "system-init: warning: directory entry error in '{}': {e}",
+                    "neet-activate: warning: directory entry error in '{}': {e}",
                     dir.display()
                 );
                 continue;
@@ -90,7 +96,7 @@ fn sync_entry(
         Ok(m) => m,
         Err(e) => {
             eprintln!(
-                "system-init: warning: cannot stat '{}': {e}",
+                "neet-activate: warning: cannot stat '{}': {e}",
                 path.display()
             );
             return;
@@ -105,7 +111,7 @@ fn sync_entry(
     let target = Path::new(ETC).join(&rel);
     if let Err(e) = ensure_parent_dir(&target) {
         eprintln!(
-            "system-init: warning: cannot create '{}': {e}",
+            "neet-activate: warning: cannot create '{}': {e}",
             target.display()
         );
         return;
@@ -132,7 +138,7 @@ fn install_managed_file(
         Ok(s) => s.trim().to_string(),
         Err(e) => {
             eprintln!(
-                "system-init: warning: cannot read '{}': {e}",
+                "neet-activate: warning: cannot read '{}': {e}",
                 mode_file.display()
             );
             return;
@@ -149,7 +155,7 @@ fn install_managed_file(
             created.insert(rel.to_string());
         }
         Err(e) => eprintln!(
-            "system-init: warning: failed to install '{}': {e}",
+            "neet-activate: warning: failed to install '{}': {e}",
             target.display()
         ),
     }
@@ -180,7 +186,7 @@ fn link_direct_symlink(target: &Path, static_link: &Path, rel: &str) {
     let _ = fs::remove_file(target);
     if let Err(e) = symlink(&src_store, target) {
         eprintln!(
-            "system-init: warning: failed direct-symlink '{}': {e}",
+            "neet-activate: warning: failed direct-symlink '{}': {e}",
             target.display()
         );
     }
@@ -193,7 +199,7 @@ fn relink(link: &Path, target: &Path) {
     let _ = fs::remove_file(link);
     if let Err(e) = symlink(target, link) {
         eprintln!(
-            "system-init: warning: failed to link '{}': {e}",
+            "neet-activate: warning: failed to link '{}': {e}",
             link.display()
         );
     }
@@ -233,7 +239,7 @@ fn clean_entry(entry: &fs::DirEntry, static_link: &Path, prune: &[PathBuf]) {
     };
     if link_target.starts_with(static_link) && !link_target.exists() {
         eprintln!(
-            "system-init: removing obsolete symlink '{}'",
+            "neet-activate: removing obsolete symlink '{}'",
             path.display()
         );
         let _ = fs::remove_file(&path);

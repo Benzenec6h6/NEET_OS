@@ -24,7 +24,7 @@ struct UserControl {
 pub fn setup_filesystems(plan_path: &Path) -> io::Result<()> {
     if !plan_path.exists() {
         eprintln!(
-            "system-init: warning: mount plan not found at {}",
+            "neet-activate: warning: mount plan not found at {}",
             plan_path.display()
         );
         return Ok(());
@@ -55,7 +55,7 @@ fn setup_cgroups() -> io::Result<()> {
 
             if !enable_str.is_empty() {
                 let _ = fs::write(subtree_path, enable_str);
-                println!("system-init: cgroup v2 controllers enabled in subtree_control");
+                println!("neet-activate: cgroup v2 controllers enabled in subtree_control");
             }
         }
     }
@@ -111,7 +111,7 @@ fn setup_single_directory(
         return Ok(());
     }
 
-    println!("system-init: {}", log_msg);
+    println!("neet-activate: {}", log_msg);
     fs::create_dir_all(path)?;
     let _ = chown(path, Some(user.uid), Some(user.gid));
     let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));

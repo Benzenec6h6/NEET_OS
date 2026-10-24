@@ -20,7 +20,7 @@ pub fn setup_existing_network() -> io::Result<()> {
 
     for iface in interfaces {
         if let Err(e) = bring_up(iface) {
-            eprintln!("system-init: warning: failed to bring up {iface}: {e}");
+            eprintln!("neet-activate: warning: failed to bring up {iface}: {e}");
         }
     }
 
@@ -47,7 +47,7 @@ fn bring_up(iface: &str) -> io::Result<()> {
     }
 
     fs::write(&flags_path, format!("{:#x}\n", flags | IFF_UP))?;
-    println!("system-init: brought up network interface: {iface}");
+    println!("neet-activate: brought up network interface: {iface}");
     Ok(())
 }
 
