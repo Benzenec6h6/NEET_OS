@@ -8,16 +8,16 @@ in {
   config = {
     # system.build に各 Rust バイナリをぶら下げる
     system.build.stage1Mount = inieet.neetMount;
-    system.build.systemInit = inieet.systemInit;
+    system.build.neetActivate = inieet.neetActivate;
     system.build.limineInstall = inieet.limineInstall;
     system.build.efistubSync = inieet.efistubSync;
     system.build.espSync = inieet.espSync;
     system.build.bootspecWrite = inieet.bootspecWrite;
     system.build.diskSetup = inieet.diskSetup;
 
-    # システムの一般 PATH に systemInit などを登録
+    # システムの一般 PATH に neetActivate などを登録
     environment.systemPackages = [
-      inieet.systemInit
+      inieet.neetActivate
       inieet.espSync
       inieet.diskSetup
     ];

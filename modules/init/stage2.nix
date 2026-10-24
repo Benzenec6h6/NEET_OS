@@ -9,7 +9,7 @@
     replacements = {
       execline = "${config.environment.execline}";
       core = "${config.system.build.core}";
-      systemInitBin = "${config.system.etc.bin}/bin/neet-activate";
+      neetActivateBin = "${config.system.etc.bin}/bin/neet-activate";
     };
     isExecutable = true;
   };

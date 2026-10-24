@@ -70,7 +70,7 @@ in {
 
   config = {
     system.etc.package = etcDirectory;
-    # inieet.nix が定義した systemInit を参照
-    system.etc.bin = config.system.build.systemInit;
+    # inieet.nix が定義した neetActivate を参照
+    system.etc.bin = config.system.build.neetActivate;
   };
 }
