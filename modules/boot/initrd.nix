@@ -17,7 +17,7 @@
       kmod = "${pkgs.pkgsStatic.kmod}";
       utilLinux = "${pkgs.pkgsStatic.util-linux}";
       mdevd = "${pkgs.pkgsStatic.mdevd}";
-      earlyInit = "${config.system.build.earlyInit}";
+      stage1Mount = "${config.system.build.stage1Mount}";
       mdevdDiskScript = "${config.system.build.mdevdDisk}/bin/mdevd-disk.sh";
       extraBin = "${pkgs.buildEnv {
         name = "initrd-extra-bin";

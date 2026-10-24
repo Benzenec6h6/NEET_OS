@@ -60,7 +60,7 @@ pub(crate) fn reset_subvolume(dev_path: &Path, options: &[String], keep: u32) ->
     let result = guard_and_rotate(tmp_mnt, subvol, keep);
 
     if let Err(e) = umount(tmp_mnt) {
-        eprintln!("init-core: warning: failed to unmount {BTRFS_TMP_MNT}: {e}");
+        eprintln!("neet-mount: warning: failed to unmount {BTRFS_TMP_MNT}: {e}");
     }
     let _ = fs::remove_dir(tmp_mnt);
 
@@ -93,7 +93,7 @@ fn rotate_and_recreate(top: &Path, subvol: &str, keep: u32) -> io::Result<()> {
         let seq = next_seq(&list_generations(&store)?);
         let dest = store.join(format!("{seq:06}"));
         fs::rename(&target, &dest)?;
-        println!("init-core: moved old root to {}", dest.display());
+        println!("neet-mount: moved old root to {}", dest.display());
     }
 
     if let Some(parent) = target.parent() {
@@ -108,16 +108,16 @@ fn rotate_and_recreate(top: &Path, subvol: &str, keep: u32) -> io::Result<()> {
             Ok(gens) => {
                 for seq in prune_candidates(&gens, keep) {
                     let path = store.join(format!("{seq:06}"));
-                    println!("init-core: removing old root {}", path.display());
+                    println!("neet-mount: removing old root {}", path.display());
                     if let Err(e) = delete_subvolume_recursive(top, &path) {
                         eprintln!(
-                            "init-core: warning: failed to delete {}: {e}",
+                            "neet-mount: warning: failed to delete {}: {e}",
                             path.display()
                         );
                     }
                 }
             }
-            Err(e) => eprintln!("init-core: warning: failed to list old roots: {e}"),
+            Err(e) => eprintln!("neet-mount: warning: failed to list old roots: {e}"),
         }
     }
     Ok(())

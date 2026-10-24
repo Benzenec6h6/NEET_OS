@@ -102,7 +102,7 @@ in {
       }
 
       # ★ 追加 9: resetOnBoot = true をつけたマウントはすべて neededForBoot = true が必須
-      # (理由: Btrfs リセットは Stage 1 の early-init で実行するため)
+      # (理由: Btrfs リセットは Stage 1 の neet-mount で実行するため)
       {
         assertion = lib.all (fs: !fs.resetOnBoot || fs.neededForBoot) (lib.attrValues fileSystems);
         message = "Impermanence: resetOnBoot = true を設定したファイルシステムは、すべて neededForBoot = true である必要があります。";

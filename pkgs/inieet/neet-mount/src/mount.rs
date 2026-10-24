@@ -21,7 +21,7 @@ const DEVICE_WAIT: Duration = Duration::from_secs(15);
 pub fn apply_plan(entries: &[MountEntry], root: &Path, strict: bool) -> io::Result<()> {
     for entry in entries {
         if entry.already_mounted {
-            println!("init-core: skipping already mounted {}", entry.mount_point);
+            println!("neet-mount: skipping already mounted {}", entry.mount_point);
             continue;
         }
 
@@ -59,7 +59,7 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path, strict: bool) -> io::Resu
         // bind のソースが無いと mount が失敗するので事前に作る
         if is_bind && !source.exists() {
             println!(
-                "init-core: creating bind source directory {}",
+                "neet-mount: creating bind source directory {}",
                 source.display()
             );
             fs::create_dir_all(&source).map_err(|e| {
@@ -74,7 +74,7 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path, strict: bool) -> io::Resu
         if entry.reset_on_boot {
             if entry.fs_type == "btrfs" {
                 println!(
-                    "init-core: resetting btrfs subvolume for {} (keep {} old roots)",
+                    "neet-mount: resetting btrfs subvolume for {} (keep {} old roots)",
                     entry.mount_point, entry.keep_old_roots
                 );
                 btrfs_reset::reset_subvolume(&source, &entry.options, entry.keep_old_roots)
@@ -86,14 +86,14 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path, strict: bool) -> io::Resu
                     })?;
             } else {
                 eprintln!(
-                    "init-core: warning: resetOnBoot is only supported for btrfs (ignored for {} on {})",
+                    "neet-mount: warning: resetOnBoot is only supported for btrfs (ignored for {} on {})",
                     entry.fs_type, entry.mount_point
                 );
             }
         }
 
         println!(
-            "init-core: mounting {} ({}) on {} ({})",
+            "neet-mount: mounting {} ({}) on {} ({})",
             entry.device,
             source.display(),
             target.display(),
@@ -105,7 +105,7 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path, strict: bool) -> io::Resu
             if is_bind || strict {
                 return Err(fatal(msg));
             }
-            eprintln!("init-core: warning: {msg}");
+            eprintln!("neet-mount: warning: {msg}");
             continue;
         }
 
@@ -124,7 +124,7 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path, strict: bool) -> io::Resu
                 if is_bind || strict {
                     return Err(fatal(msg));
                 }
-                eprintln!("init-core: warning: {msg}");
+                eprintln!("neet-mount: warning: {msg}");
             }
         }
     }
@@ -135,7 +135,7 @@ pub fn apply_plan(entries: &[MountEntry], root: &Path, strict: bool) -> io::Resu
 fn wait_device(entry: &MountEntry, dev_path: &Path) {
     if entry.is_physical_device() && !wait_for_device(dev_path, DEVICE_WAIT) {
         eprintln!(
-            "init-core: warning: device path {} ({}) did not appear in time",
+            "neet-mount: warning: device path {} ({}) did not appear in time",
             dev_path.display(),
             entry.device
         );

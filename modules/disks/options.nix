@@ -26,7 +26,7 @@
       resetOnBoot = mkOption {
         type = types.bool;
         default = false;
-        description = "起動時に旧 subvolume を old_roots/ へ退避して作り直す（init-core が実行）";
+        description = "起動時に旧 subvolume を old_roots/ へ退避して作り直す（neet-mount が実行）";
       };
       keepOldRoots = mkOption {
         type = types.ints.unsigned;

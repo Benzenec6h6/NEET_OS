@@ -1,4 +1,4 @@
-//! init-core: mount-plan.json の解釈とマウント実行（stage1 / stage2 共通）
+//! neet-mount: mount-plan.json の解釈とマウント実行（stage1 / stage2 共通）
 //!
 //! 方針:
 //! - bind マウントの失敗は致命的エラーとして呼び出し側に返す
