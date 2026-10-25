@@ -9,6 +9,7 @@ mod fs_setup;
 mod modules_setup;
 mod net_setup;
 mod shutdown;
+mod user_group;
 mod wrappers;
 
 use neet_core::atomic::atomic_symlink;
@@ -79,29 +80,28 @@ fn run_switch(core: &Core) -> io::Result<()> {
     core.validate()?;
     println!("neet-activate: [switch] updating system configuration...");
 
-    // 1. 新しい世代の /etc を同期
+    // 1. 新しい世代の /etc を同期 (/etc/state-directories.json もここで実体化)
     println!("neet-activate: [switch] syncing /etc...");
     etc_syncer::setup_etc(&core.etc(), &[])?;
 
     // 2. /run/current-system を新しい core に張り替える
     atomic_symlink(&core.path, Path::new("/run/current-system"))?;
 
-    // 3. 基本ディレクトリと互換リンクの整合性を維持
+    // ★ 3. 宣言されたディレクトリ群を一括適用（新ユーザーの /home や新サービスの /var/lib/* など）
+    fs_setup::setup_state_directories()?;
+
+    // 4. 基本ディレクトリの互換リンクやアカウンティングファイルを維持
     fs_setup::setup_base_directories()?;
 
-    // 4. 新しい wrappers.json に基づいてラッパーバイナリを再生成
+    // 5. 新しい wrappers.json に基づいてラッパーバイナリを再生成
     if let Err(e) = wrappers::setup_wrappers() {
         eprintln!("neet-activate: [switch] warning: failed to setup wrappers: {e}");
     }
 
-    // 5. /bin 配下のリンクを新しい世代に更新
+    // 6. /bin 配下のリンクを新しい世代に更新
     bin_setup::setup_bin(&core.system_path())?;
 
-    // 6. 新規追加されたユーザーがいればホームディレクトリ等を準備
-    let users = etc_syncer::user_group::parse_passwd().unwrap_or_default();
-    fs_setup::setup_user_directories(&users)?;
-
-    // 【追加】7. カーネルのファームウェア参照先を新しい世代に更新
+    // 7. カーネルのファームウェア参照先を新しい世代に更新
     firmware_setup::setup_firmware(&core.firmware())?;
 
     println!("neet-activate: [switch] core system updated successfully.");
@@ -112,7 +112,7 @@ fn run_switch(core: &Core) -> io::Result<()> {
 fn run(core: &Core) -> io::Result<()> {
     core.validate()?;
 
-    // 1. /etc の同期を最優先
+    // 1. /etc の同期を最優先 (/etc/state-directories.json を配置)
     etc_syncer::setup_etc(&core.etc(), &[])?;
 
     // 2. 次にマウントを実行 (/run や /tmp を準備する)
@@ -123,23 +123,23 @@ fn run(core: &Core) -> io::Result<()> {
     atomic_symlink(&core.path, Path::new("/run/current-system"))?;
     atomic_symlink(&core.path, Path::new("/run/booted-system"))?;
 
-    // /var や /run 関連の基本ディレクトリ・互換リンクを整える
+    // ★ 3. マウントされたファイルシステム上に、宣言された全ディレクトリを一括生成・権限設定
+    fs_setup::setup_state_directories()?;
+
+    // 4. /var や /run 関連の互換シンボリックリンク等を整える
     fs_setup::setup_base_directories()?;
 
-    // 3. Wrapper を作成
+    // 5. Wrapper を作成
     if let Err(e) = wrappers::setup_wrappers() {
         eprintln!("neet-activate: warning: failed to setup wrappers: {e}");
     }
 
-    // 4. その他の初期化
+    // 6. その他の初期化
     modules_setup::setup_kernel_modules(&core.modules())?;
     let _ = modules_setup::load_configured_modules();
     firmware_setup::setup_firmware(&core.firmware())?;
     net_setup::setup_existing_network()?;
     bin_setup::setup_bin(&core.system_path())?;
-
-    let users = etc_syncer::user_group::parse_passwd().unwrap_or_default();
-    fs_setup::setup_user_directories(&users)?;
 
     Ok(())
 }

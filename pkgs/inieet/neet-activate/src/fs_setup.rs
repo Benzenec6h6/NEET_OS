@@ -1,22 +1,17 @@
+use crate::user_group::{resolve_gid, resolve_uid};
 use neet_core::atomic;
-use std::collections::HashMap;
+use serde::Deserialize;
 use std::fs;
 use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use nix::unistd::chown;
-use serde::Deserialize;
-
-use crate::etc_syncer::user_group::UserEntry;
-
 #[derive(Debug, Deserialize)]
-struct UserControl {
-    username: String,
-    #[serde(rename = "createHome")]
-    create_home: bool,
-    #[serde(rename = "createRuntimeDir")]
-    create_runtime_dir: bool,
+pub struct StateDirectory {
+    pub path: String,
+    pub mode: String,
+    pub user: String,
+    pub group: String,
 }
 
 /// mount-plan.json をロードしてファイルシステムをマウントする
@@ -62,94 +57,39 @@ fn setup_cgroups() -> io::Result<()> {
     Ok(())
 }
 
-/// ユーザーディレクトリ群（/home/<user>, /run/user/<uid>）の設定
-pub fn setup_user_directories(users: &[UserEntry]) -> io::Result<()> {
-    let control_map: HashMap<String, UserControl> = fs::read_to_string("/etc/user_control.json")
-        .ok()
-        .and_then(|data| serde_json::from_str::<Vec<UserControl>>(&data).ok())
-        .map(|list| list.into_iter().map(|c| (c.username.clone(), c)).collect())
-        .unwrap_or_default();
-
-    for user in users {
-        let (create_home, create_runtime) = control_map
-            .get(&user.username)
-            .map(|c| (c.create_home, c.create_runtime_dir))
-            .unwrap_or((true, true));
-
-        // 1. ホームディレクトリの生成と所有権変更
-        if create_home {
-            setup_single_directory(
-                Path::new(&user.home),
-                user,
-                0o755,
-                &format!("creating home dir for {} at {}", user.username, user.home),
-            )?;
-        }
-
-        // 2. 一般ユーザー(UID >= 1000)に対する XDG_RUNTIME_DIR の生成
-        if user.uid.as_raw() >= 1000 && create_runtime {
-            let runtime_path_str = format!("/run/user/{}", user.uid.as_raw());
-            setup_single_directory(
-                Path::new(&runtime_path_str),
-                user,
-                0o700,
-                &format!("creating XDG_RUNTIME_DIR at {}", runtime_path_str),
-            )?;
-        }
-    }
-    Ok(())
-}
-
-/// ディレクトリが存在しない場合のみ作成し、パーミッションを設定するヘルパー
-fn setup_single_directory(
-    path: &Path,
-    user: &UserEntry,
-    mode: u32,
-    log_msg: &str,
-) -> io::Result<()> {
-    if path.exists() {
+/// /etc/state-directories.json をロードして、ディレクトリ作成と権限設定を一括実行
+pub fn setup_state_directories() -> io::Result<()> {
+    let json_path = Path::new("/etc/state-directories.json");
+    if !json_path.exists() {
         return Ok(());
     }
 
-    println!("neet-activate: {}", log_msg);
-    fs::create_dir_all(path)?;
-    let _ = chown(path, Some(user.uid), Some(user.gid));
-    let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));
+    let content = fs::read_to_string(json_path)?;
+    let dirs: Vec<StateDirectory> = serde_json::from_str(&content)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    for dir in dirs {
+        let path = Path::new(&dir.path);
+        if !path.exists() {
+            fs::create_dir_all(path)?;
+        }
+
+        let mode = u32::from_str_radix(&dir.mode, 8).unwrap_or(0o755);
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));
+
+        let uid = resolve_uid(&dir.user);
+        let gid = resolve_gid(&dir.group);
+
+        if uid.is_some() || gid.is_some() {
+            let _ = std::os::unix::fs::chown(path, uid, gid);
+        }
+    }
     Ok(())
 }
 
-/// 基本的なシステムディレクトリと互換シンボリックリンクを整える
+/// 基本的な互換シンボリックリンクや空ログファイルを整える
 pub fn setup_base_directories() -> io::Result<()> {
-    // 1. /var 配下の永続ディレクトリの準備（パーミッション付き）
-    let var_dirs: &[(&str, u32)] = &[
-        ("/var/db", 0o755),
-        ("/var/lib", 0o755),
-        ("/var/log", 0o755),
-        ("/var/empty", 0o755),
-        ("/var/lib/sshd", 0o700),
-    ];
-
-    for (dir, mode) in var_dirs {
-        let path = Path::new(dir);
-        if !path.exists() {
-            fs::create_dir_all(path)?;
-        }
-        // 既存であっても念のためパーミッションを強制適用
-        let _ = fs::set_permissions(path, fs::Permissions::from_mode(*mode));
-    }
-
-    // 2. /run 配下の一時ディレクトリの準備
-    let run_dirs: &[(&str, u32)] = &[("/run/lock", 0o1777), ("/run/sessiond", 0o755)];
-
-    for (dir, mode) in run_dirs {
-        let path = Path::new(dir);
-        if !path.exists() {
-            fs::create_dir_all(path)?;
-            let _ = fs::set_permissions(path, fs::Permissions::from_mode(*mode));
-        }
-    }
-
-    // --- 伝統的なアカウンティング / ログ用空ファイルの担保 ---
+    // 伝統的なアカウンティング / ログ用空ファイルの担保
     let var_log_files: &[(&str, u32)] = &[
         ("/var/log/lastlog", 0o664),
         ("/var/log/wtmp", 0o664),
@@ -159,7 +99,6 @@ pub fn setup_base_directories() -> io::Result<()> {
     for (file, mode) in var_log_files {
         let path = Path::new(file);
         if !path.exists() {
-            // ファイルが存在しない場合のみ空ファイルを新規作成
             let _ = fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
@@ -170,11 +109,9 @@ pub fn setup_base_directories() -> io::Result<()> {
         }
     }
 
-    // 3. 互換シンボリックリンクの作成
+    // 互換シンボリックリンクの作成
     atomic::atomic_symlink(Path::new("/run"), Path::new("/var/run"))?;
     atomic::atomic_symlink(Path::new("/run/lock"), Path::new("/var/lock"))?;
-
-    // (オプション) /sbin を使おうとする古いツール向け
     atomic::atomic_symlink(Path::new("/bin"), Path::new("/sbin"))?;
 
     // グラフィックスドライバのリンク

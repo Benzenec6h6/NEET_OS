@@ -84,6 +84,22 @@ in {
       }) (lib.range 1 cfg.nrBuildUsers)
     );
 
+    # ソケットやテンポラリ用ディレクトリの準備
+    system.stateDirectories = [
+      {
+        path = "/nix/var/nix/daemon-socket";
+        mode = "0755";
+      }
+      {
+        path = "/nix/var/nix/gcroots";
+        mode = "0755";
+      }
+      {
+        path = "/nix/var/nix/temproots";
+        mode = "1777";
+      }
+    ];
+
     # 6. s6-rc サービス定義
     system.s6-rc.services.nix-daemon = {
       type = "longrun";
@@ -92,11 +108,6 @@ in {
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1
-
-        # ソケットやテンポラリ用ディレクトリの準備
-        foreground { mkdir -p -m 0755 /nix/var/nix/daemon-socket }
-        foreground { mkdir -p -m 0755 /nix/var/nix/gcroots }
-        foreground { mkdir -p -m 1777 /nix/var/nix/temproots }
 
         # 証明書環境変数を設定してデーモンを起動
         export SSL_CERT_FILE /etc/ssl/certs/ca-certificates.crt

@@ -7,6 +7,31 @@
   neetRebuild = pkgs.writeShellScriptBin "neet-rebuild" (builtins.readFile ./rebuild.sh);
   neetGC = pkgs.writeShellScriptBin "neet-gc" (builtins.readFile ./gc.sh);
   neetInstall = pkgs.writeShellScriptBin "neet-install" (builtins.readFile ./install.sh);
+  inherit (lib) mkOption types;
+
+  dirOpts = types.submodule {
+    options = {
+      path = mkOption {
+        type = types.str;
+        description = "作成するディレクトリの絶対パス";
+      };
+      mode = mkOption {
+        type = types.str;
+        default = "0755";
+        description = "パーミッション（8進数文字列 例: '0755'）";
+      };
+      user = mkOption {
+        type = types.str;
+        default = "root";
+        description = "所有ユーザー名";
+      };
+      group = mkOption {
+        type = types.str;
+        default = "root";
+        description = "所有グループ名";
+      };
+    };
+  };
 in {
   options = {
     environment.systemPackages = lib.mkOption {
@@ -36,6 +61,12 @@ in {
     system.path = lib.mkOption {
       internal = true;
       type = lib.types.path;
+    };
+
+    system.stateDirectories = mkOption {
+      type = types.listOf dirOpts;
+      default = [];
+      description = "neet-activate によって起動時/切り替え時に作成・権限設定されるディレクトリ群";
     };
   };
 
@@ -98,6 +129,63 @@ in {
         fi
       '';
     };
+
+    # 1. 散らばっていた FHS 基本骨格をここに定義
+    system.stateDirectories = [
+      {
+        path = "/mnt";
+        mode = "0755";
+      }
+      {
+        path = "/media";
+        mode = "0755";
+      }
+      {
+        path = "/opt";
+        mode = "0755";
+      }
+      {
+        path = "/srv";
+        mode = "0755";
+      }
+      {
+        path = "/root";
+        mode = "0700";
+      }
+      {
+        path = "/tmp";
+        mode = "1777";
+      }
+      {
+        path = "/var/log";
+        mode = "0755";
+      }
+      {
+        path = "/var/lib";
+        mode = "0755";
+      }
+      {
+        path = "/var/db";
+        mode = "0755";
+      }
+      {
+        path = "/var/empty";
+        mode = "0755";
+      }
+      {
+        path = "/run/lock";
+        mode = "1777";
+      }
+      {
+        path = "/run/sessiond";
+        mode = "0755";
+      }
+    ];
+
+    # 2. JSON として /etc 配下にエクスポート
+    # etc.nix や etc_syncer を通じて /etc/state-directories.json に配置される
+    environment.etc."state-directories.json".text =
+      builtins.toJSON config.system.stateDirectories;
 
     # 最重要：名前解決とユーザー解決の基盤
     environment.etc."nsswitch.conf".text = ''

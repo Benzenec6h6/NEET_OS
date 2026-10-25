@@ -60,6 +60,14 @@ in {
     # D-Bus のポリシーファイルを配置
     services.dbus.packages = [cfg.package];
 
+    # 接続プロファイル用ディレクトリの作成
+    system.stateDirectories = [
+      {
+        path = "/var/lib/iwd";
+        mode = "0700";
+      }
+    ];
+
     # s6-rc: longrun サービス定義
     system.s6-rc.services.iwd = {
       type = "longrun";
@@ -71,14 +79,11 @@ in {
 
       run = ''
         #!/bin/sh
-        # 1. 接続プロファイル用ディレクトリの作成 (パーミッション 0700 が必須)
-        mkdir -p /var/lib/iwd
-        chmod 0700 /var/lib/iwd
 
-        # 2. resolvconf を iwd が呼び出せるように PATH を通す
+        # 1. resolvconf を iwd が呼び出せるように PATH を通す
         export PATH="${makeBinPath (optional config.programs.resolvconf.enable config.programs.resolvconf.package)}:$PATH"
 
-        # 3. iwd をフォアグラウンドで起動 (iwd はデフォルトでフォアグラウンド実行)
+        # 2. iwd をフォアグラウンドで起動 (iwd はデフォルトでフォアグラウンド実行)
         exec ${cfg.package}/libexec/iwd${optionalString cfg.debug " -d"}
       '';
     };

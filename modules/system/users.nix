@@ -50,12 +50,12 @@ with lib; let
       initialHashedPassword = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "パスワードハッシュ (例: mkpasswd -m sha-512 で生成した文字列)";
+        description = "パスワードハッシュ";
       };
     };
   };
 
-  # 1. /etc/passwd の生成
+  # /etc/passwd と /etc/group の生成ロジック（既存のまま）
   mkPasswdLine = name: u: let
     homeDir =
       if u.home != null
@@ -63,16 +63,10 @@ with lib; let
       else "/home/${name}";
   in "${name}:x:${toString u.uid}:${toString u.gid}:${u.description}:${homeDir}:${u.shell}";
 
-  # 共有グループ (config.neet.gids) に登録済みの GID リスト
   sharedGids = attrValues config.neet.gids;
-
-  # 2. ユーザー個人の主グループを動的抽出
   userGroups = filterAttrs (_name: gid: !elem gid sharedGids) (mapAttrs (_name: u: u.gid) cfg);
-
-  # 3. システム定義の共有グループとユーザー個人のグループを安全に合体
   allGroups = config.neet.gids // userGroups;
 
-  # 4. 各グループの所属メンバーを取得
   getUsersInGroup = groupName: gid: let
     matchingUsers =
       filterAttrs (
@@ -84,21 +78,36 @@ with lib; let
   in
     attrNames matchingUsers;
 
-  # 5. /etc/group の1行をフォーマット生成
   mkGroupLine = groupName: gid: let
     members = getUsersInGroup groupName gid;
     memberStr = concatStringsSep "," members;
   in "${groupName}:x:${toString gid}:${memberStr}";
 
-  # 6. Rust 側に渡すユーザー制御用の JSON 設定ファイルを出力
-  userControlJson =
-    mapAttrsToList (name: u: {
-      username = name;
-      uid = u.uid;
-      createHome = u.createHome;
-      createRuntimeDir = u.createRuntimeDir;
-    })
-    cfg;
+  # ★ ここでユーザー用のディレクトリを system.stateDirectories の形式に変換
+  userDirectories = concatLists (mapAttrsToList (
+      name: u: let
+        homePath =
+          if u.home != null
+          then u.home
+          else "/home/${name}";
+      in
+        # 1. ホームディレクトリ (/home/<user>)
+        optional u.createHome {
+          path = homePath;
+          mode = "0755";
+          user = name;
+          group = toString u.gid;
+        }
+        # 2. ランタイムディレクトリ (/run/user/<uid>)
+        # UID >= 1000 の通常ユーザーのみ
+        ++ optional (u.createRuntimeDir && u.uid >= 1000) {
+          path = "/run/user/${toString u.uid}";
+          mode = "0700";
+          user = name;
+          group = toString u.gid;
+        }
+    )
+    cfg);
 in {
   options.neet = {
     users = mkOption {
@@ -124,12 +133,14 @@ in {
       seat = lib.mkDefault 150;
       audio = lib.mkDefault 29;
     };
+
     environment.etc."passwd".text =
       concatStringsSep "\n" (mapAttrsToList mkPasswdLine cfg) + "\n";
 
     environment.etc."group".text =
       concatStringsSep "\n" (mapAttrsToList mkGroupLine allGroups) + "\n";
 
-    environment.etc."user_control.json".text = builtins.toJSON userControlJson;
+    # ★ ユーザー用のディレクトリを全体の stateDirectories に合流させる
+    system.stateDirectories = userDirectories;
   };
 }

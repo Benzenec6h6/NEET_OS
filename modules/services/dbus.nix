@@ -95,6 +95,30 @@ in {
       [cfg.package]
       ++ config.environment.systemPackages;
 
+    system.stateDirectories = [
+      # システムバス用ソケット置き場
+      {
+        path = "/run/dbus";
+        mode = "0755";
+        user = "messagebus";
+        group = "messagebus";
+      }
+      # machine-id 等の置き場
+      {
+        path = "/var/lib/dbus";
+        mode = "0755";
+        user = "root";
+        group = "root";
+      }
+      # 伝統的なサブシステムロック領域
+      {
+        path = "/run/lock/subsys";
+        mode = "0755";
+        user = "root";
+        group = "root";
+      }
+    ];
+
     # 4. s6-scan 経由での D-Bus システムデーモン起動定義
     system.s6-rc.services =
       {
@@ -104,8 +128,6 @@ in {
           dependencies = lib.optional config.services.syslog.enable "syslog";
           run = ''
             #!/bin/execlineb -P
-            foreground { mkdir -p /run/dbus /var/lib/dbus /run/lock/subsys }
-            foreground { chown messagebus:messagebus /run/dbus /var/lib/dbus }
             foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
 
             # ★ --print-pid=3 で直接 fd 3 に準備完了を通知させる

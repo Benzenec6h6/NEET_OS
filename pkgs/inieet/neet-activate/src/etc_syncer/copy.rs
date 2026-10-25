@@ -1,5 +1,5 @@
 use super::manifest::with_suffix;
-use super::user_group::{resolve_gid, resolve_uid};
+use crate::user_group::{resolve_gid, resolve_uid};
 use std::fs;
 use std::io;
 use std::os::unix::fs::PermissionsExt;
