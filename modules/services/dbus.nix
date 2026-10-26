@@ -126,6 +126,7 @@ in {
           type = "longrun";
           notification-fd = 3;
           dependencies = lib.optional config.services.syslog.enable "syslog";
+          log.enable = true;
           run = ''
             #!/bin/execlineb -P
             foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }

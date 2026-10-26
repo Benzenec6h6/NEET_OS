@@ -105,6 +105,7 @@ in {
       type = "longrun";
       # programs.resolvconf に修正
       dependencies = lib.optional config.programs.resolvconf.enable "resolvconf";
+      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1

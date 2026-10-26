@@ -35,6 +35,13 @@ in {
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [cfg.package];
 
+    system.stateDirectories = [
+      {
+        path = "/var/lib/sessiond";
+        mode = "0700";
+      }
+    ];
+
     # D-Bus ポリシーの登録
     services.dbus.enable = true;
     services.dbus.packages = [cfg.package];
@@ -66,8 +73,7 @@ in {
           else "info"
         }"
 
-        # ★ s6-notify-fd-from-socket を挟んで起動
-        # (pkgs.s6 の中に含まれています)
+        # s6-notify-fd-from-socket を挟んで起動
         exec ${pkgs.s6}/bin/s6-notify-fd-from-socket -3 3 \
           ${lib.getExe' cfg.package "sessiond"} --config ${configFile} --log-target stderr
       '';

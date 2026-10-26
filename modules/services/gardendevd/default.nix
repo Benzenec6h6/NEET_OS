@@ -54,7 +54,7 @@ in {
       (
         if cfg.debug
         then "debug"
-        else "info"
+        else "warn"
       )
     ];
 
@@ -138,6 +138,7 @@ in {
       # 1. デーモン本体 (共通名 devd)
       devd = {
         type = "longrun";
+        log.enable = true;
         run = ''
           #!/bin/sh
           [ -e /proc/sys/kernel/hotplug ] && echo "" > /proc/sys/kernel/hotplug 2>/dev/null || true

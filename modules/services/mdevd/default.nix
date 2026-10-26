@@ -78,6 +78,7 @@ in {
         devd = {
           type = "longrun";
           notification-fd = 3;
+          log.enable = true;
           run = ''
             #!/bin/execlineb -P
             export PATH /bin:${pkgs.pkgsStatic.mdevd}/bin:${pkgs.pkgsStatic.kmod}/bin
