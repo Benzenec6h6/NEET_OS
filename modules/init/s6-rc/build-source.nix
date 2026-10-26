@@ -4,13 +4,8 @@
   services,
 }:
 with lib; let
-  # log.enable (構造化) か logRun (生スクリプト) のどちらかがあればロガーを作る
   hasLog = svc: svc.type == "longrun" && (svc.log.enable || svc.logRun != null);
 
-  # 構造化オプションから s6-log の run スクリプトを生成する。
-  # run は root で起動されるので、ディレクトリ準備(root)→権限を落として s6-log、の順に行う。
-  # s6-log は logdir 自体は作れるが、親ディレクトリの書き込み権限と所有者は面倒を見ないため、
-  # ここで先に作って chown しておく。
   makeLoggerRun = name: svc: let
     inherit (svc) log;
     q = escapeShellArg;
@@ -67,7 +62,6 @@ with lib; let
       files);
 
   # ロガーサービス (<name>-log)
-  # pipeline-name は top bundle に両方入れているため不要なので削除した
   makeLoggerDir = name: svc:
     pkgs.linkFarm "${name}-log-srv-dir" [
       {
@@ -82,12 +76,27 @@ with lib; let
         name = "consumer-for";
         path = pkgs.writeText "${name}-log-consumer-for" name;
       }
+      # ★ 1. pipeline-name を復活させる（s6-rc-compile が自動的にパイプライン用バンドルを生成する）
+      {
+        name = "pipeline-name";
+        path = pkgs.writeText "${name}-log-pipeline-name" "${name}-pipeline";
+      }
     ];
 
   autoStartServices = filterAttrs (_: svc: svc.autoStart) services;
-  autoStartLoggedServices = filterAttrs (_: hasLog) autoStartServices;
-
   loggedServices = filterAttrs (_: hasLog) services;
+
+  # ★ 2. top バンドルに入れるべき内容を正しく選別する:
+  # - ロガーを持つサービスは「${name}-pipeline」を入れる（個別の name や name-log は入れてはいけない）
+  # - ロガーを持たないサービスは「${name}」をそのまま入れる
+  topContents =
+    mapAttrsToList (
+      name: svc:
+        if hasLog svc
+        then "${name}-pipeline"
+        else name
+    )
+    autoStartServices;
 
   serviceDirs =
     (mapAttrs makeServiceDir services)
@@ -100,13 +109,7 @@ with lib; let
         }
         {
           name = "contents";
-          path = pkgs.writeText "top-contents" (
-            concatStringsSep "\n" (
-              # ★ autoStartServices だけを top に入れる
-              (attrNames autoStartServices)
-              ++ (map (n: "${n}-log") (attrNames autoStartLoggedServices))
-            )
-          );
+          path = pkgs.writeText "top-contents" (concatStringsSep "\n" topContents + "\n");
         }
       ];
     };
