@@ -7,10 +7,7 @@
 with lib; let
   cfg = config.neet.users;
 
-  # /etc/shadow の1行を生成
-  # フォーマット: username:password:lastchange:min:max:warn:inact:expire:flag
   mkShadowLine = name: u: let
-    # パスワードが未設定の場合はアカウントをロック ('!') 状態にする
     passHash =
       if u.initialHashedPassword != null
       then u.initialHashedPassword
@@ -18,7 +15,13 @@ with lib; let
   in "${name}:${passHash}:19700:0:99999:7:::";
 in {
   config = {
-    # /etc/shadow の生成 (etc_syncer 等で 0600 / root:root のパーミッション制御が必要)
+    # 1. パッケージ
+    environment.systemPackages = [pkgs.shadow];
+
+    # 2. shadow GID 定義（security/default.nix から移動）
+    neet.gids.shadow = lib.mkDefault 15;
+
+    # 3. /etc/shadow の生成
     environment.etc."shadow" = {
       text = concatStringsSep "\n" (mapAttrsToList mkShadowLine cfg) + "\n";
       mode = "0600";

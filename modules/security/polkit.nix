@@ -3,13 +3,23 @@
   config,
   lib,
   ...
-}: {
-  config = lib.mkIf config.neet.security.enable {
-    # D-Bus ポリシーとパッケージ
+}: let
+  cfg = config.neet.security.polkit;
+in {
+  options.neet.security.polkit = {
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true; # デフォルトで有効
+      description = "Whether to enable Polkit daemon.";
+    };
+  };
+
+  # ★ 自身の cfg.enable を見るように変更
+  config = lib.mkIf cfg.enable {
     services.dbus.packages = [pkgs.polkit.out];
     environment.systemPackages = [pkgs.polkit];
 
-    # 1. Nixpkgs がハードコードしている "polkituser" を定義
+    # 先ほど整理したユーザー・グループ・ディレクトリ等
     neet.gids.polkituser = lib.mkDefault 999;
     neet.users.polkituser = {
       uid = lib.mkDefault 999;
@@ -18,9 +28,9 @@
       shell = "/bin/sh";
       home = "/var/empty";
       createHome = false;
+      createRuntimeDir = false;
     };
 
-    # 2. polkituser 所有でステートディレクトリを確保
     system.stateDirectories = [
       {
         path = "/var/lib/polkit-1";
@@ -30,14 +40,12 @@
       }
     ];
 
-    # 3. デフォルトルールの配置
     environment.etc."polkit-1/rules.d/50-default.rules".text = ''
       polkit.addAdminRule(function(action, subject) {
           return ["unix-group:wheel"];
       });
     '';
 
-    # 4. s6-rc サービス定義
     system.s6-rc.services.polkitd = {
       type = "longrun";
       dependencies =

@@ -50,6 +50,14 @@ in {
   };
 
   config = mkIf cfg.enable {
+    environment.systemPackages = [pkgs.pam];
+
+    neet.security.wrappers.unix_chkpwd = {
+      source = "${pkgs.pam}/sbin/unix_chkpwd";
+      setuid = true;
+      owner = "root";
+      group = "root";
+    };
     # 組み込みサービスの登録（sudo は privileges 側に任せるためここから削除）
     neet.security.pam.services = {
       passwd.text = ''
