@@ -43,24 +43,6 @@ with lib; {
     # システム共通GIDの定義 (users.nix の neet.gids に追加)
     neet.gids = {
       shadow = lib.mkDefault 15;
-      polkituser = lib.mkDefault 999;
-    };
-
-    # システムユーザーの定義 (users.nix の neet.users に追加)
-    neet.users.polkituser = {
-      uid = 999;
-      gid = config.neet.gids.polkituser;
-      description = "Polkit daemon user";
-      createHome = false;
-    };
-
-    # PAM / Polkit の基本ファイル配置 (etc_syncer 経由)
-    environment.etc = {
-      "polkit-1/rules.d/50-default.rules".text = ''
-        polkit.addAdminRule(function(action, subject) {
-            return ["unix-group:wheel"];
-        });
-      '';
     };
   };
 }

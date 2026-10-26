@@ -122,6 +122,15 @@ in {
 
     environment.systemPackages = [cfg.package];
 
+    system.stateDirectories = [
+      {
+        path = "/var/lib/dhcpcd";
+        mode = "0750";
+        user = "root";
+        group = "root";
+      }
+    ];
+
     # s6-rc: longrun サービス
     system.s6-rc.services.dhcpcd = {
       type = "longrun";

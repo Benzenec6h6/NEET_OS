@@ -35,7 +35,13 @@ pub fn setup_wrappers() -> io::Result<()> {
     }
 
     if !wrappers_dir.exists() {
-        fs::create_dir_all(wrappers_dir)?;
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "[wrappers] Directory {:?} does not exist. Ensure fs_setup runs before wrappers.",
+                wrappers_dir
+            ),
+        ));
     }
 
     let file = fs::File::open(json_path)?;

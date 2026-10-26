@@ -130,7 +130,6 @@ in {
       wheel = lib.mkDefault 10;
       video = lib.mkDefault 44;
       input = lib.mkDefault 104;
-      seat = lib.mkDefault 150;
       audio = lib.mkDefault 29;
     };
 

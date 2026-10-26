@@ -19,6 +19,30 @@ in {
   config = lib.mkIf isBackend {
     neet.security.privileges.command = "/run/wrappers/bin/sudo";
 
+    system.stateDirectories = [
+      # 永続ステート用 (lecture フラグなど)
+      {
+        path = "/var/db/sudo";
+        mode = "0700";
+        user = "root";
+        group = "root";
+      }
+      # タイムスタンプの親ディレクトリ (/run は tmpfs のため起動毎に必要)
+      {
+        path = "/run/sudo";
+        mode = "0711";
+        user = "root";
+        group = "root";
+      }
+      # 認証タイムスタンプ (grace period) の保存先
+      {
+        path = "/run/sudo/ts";
+        mode = "0700";
+        user = "root";
+        group = "root";
+      }
+    ];
+
     environment.etc."sudoers" = {
       mode = "0440";
       source = let

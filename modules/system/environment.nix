@@ -66,6 +66,7 @@ in {
     system.stateDirectories = mkOption {
       type = types.listOf dirOpts;
       default = [];
+      merge = lib.concatLists;
       description = "neet-activate によって起動時/切り替え時に作成・権限設定されるディレクトリ群";
     };
   };

@@ -80,5 +80,14 @@ in {
   config = mkIf (cfg != {}) {
     # Rust 側がパースするための設定ファイルを出力
     environment.etc."wrappers.json".text = builtins.toJSON wrappersJsonData;
+
+    system.stateDirectories = [
+      {
+        path = "/run/wrappers/bin";
+        mode = "0755";
+        user = "root";
+        group = "root";
+      }
+    ];
   };
 }

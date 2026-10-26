@@ -5,12 +5,39 @@
   ...
 }: {
   config = lib.mkIf config.neet.security.enable {
-    # D-Bus のポリシー (system.d) とサービス定義を /etc/dbus-1 に取り込む。
-    # これが無いと polkitd は org.freedesktop.PolicyKit1 を所有できず、
-    # "Lost the name" で終了して s6 に再起動され続ける。
+    # D-Bus ポリシーとパッケージ
     services.dbus.packages = [pkgs.polkit.out];
     environment.systemPackages = [pkgs.polkit];
 
+    # 1. Nixpkgs がハードコードしている "polkituser" を定義
+    neet.gids.polkituser = lib.mkDefault 999;
+    neet.users.polkituser = {
+      uid = lib.mkDefault 999;
+      gid = config.neet.gids.polkituser;
+      description = "Polkit daemon user";
+      shell = "/bin/sh";
+      home = "/var/empty";
+      createHome = false;
+    };
+
+    # 2. polkituser 所有でステートディレクトリを確保
+    system.stateDirectories = [
+      {
+        path = "/var/lib/polkit-1";
+        mode = "0700";
+        user = "polkituser";
+        group = "polkituser";
+      }
+    ];
+
+    # 3. デフォルトルールの配置
+    environment.etc."polkit-1/rules.d/50-default.rules".text = ''
+      polkit.addAdminRule(function(action, subject) {
+          return ["unix-group:wheel"];
+      });
+    '';
+
+    # 4. s6-rc サービス定義
     system.s6-rc.services.polkitd = {
       type = "longrun";
       dependencies =

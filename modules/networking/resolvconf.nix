@@ -78,6 +78,15 @@ in {
     # （後で iwd や dhcpcd から呼び出せるようになります）
     environment.systemPackages = [cfg.package];
 
+    system.stateDirectories = [
+      {
+        path = "/run/resolvconf";
+        mode = "0755";
+        user = "root";
+        group = "root";
+      }
+    ];
+
     # s6-rc: 起動時に resolvconf -u を叩いて初期状態を反映する oneshot サービス
     system.s6-rc.services.resolvconf = {
       type = "oneshot";

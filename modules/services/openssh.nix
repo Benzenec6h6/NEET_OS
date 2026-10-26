@@ -237,6 +237,23 @@ in {
     # 1. sshd グループの定義
     neet.gids.sshd = lib.mkDefault 998;
 
+    system.stateDirectories = [
+      # ホスト鍵を格納するディレクトリ（rootのみアクセス可）
+      {
+        path = "/var/lib/sshd";
+        mode = "0700";
+        user = "root";
+        group = "root";
+      }
+      # 特権分離用（environment.nix にある場合は重複定義を避けるか、openssh側に統一）
+      {
+        path = "/var/empty";
+        mode = "0755";
+        user = "root";
+        group = "root";
+      }
+    ];
+
     # 2. sshd ユーザーの定義
     neet.users.sshd = {
       uid = lib.mkDefault 998;

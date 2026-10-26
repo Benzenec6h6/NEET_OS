@@ -75,6 +75,21 @@ in {
 
     environment.etc."sshguard.conf".source = confFile;
 
+    system.stateDirectories = [
+      {
+        path = "/var/db/sshguard";
+        mode = "0700";
+        user = "root";
+        group = "root";
+      }
+      {
+        path = "/var/log/sshguard";
+        mode = "0750";
+        user = "root";
+        group = "root";
+      }
+    ];
+
     system.s6-rc.services.sshguard = {
       type = "longrun";
       dependencies =
@@ -90,16 +105,12 @@ in {
           pkgs.coreutils
         ]}:$PATH"
 
-        # 永続ブロック等の DB を保持するディレクトリ
-        mkdir -p /var/lib/sshguard
-
         exec ${cfg.package}/bin/sshguard
       '';
 
       # sshguard 自身のログ（誰をブロックしたか等）も s6-log で記録
       logRun = ''
         #!/bin/sh
-        mkdir -p -m 0750 /var/log/sshguard
         exec ${pkgs.s6}/bin/s6-log -b n10 s500000 /var/log/sshguard
       '';
     };
