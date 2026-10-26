@@ -78,6 +78,7 @@ in {
       squashfs-tools
 
       git
+      vim
       curl
 
       sbctl

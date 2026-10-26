@@ -18,7 +18,7 @@ in {
     certPath = lib.mkOption {
       type = lib.types.str;
       default = "/var/lib/sbctl/keys/db/db.pem";
-      description = "セキュアブート証明書 (db.crt) のパス";
+      description = "セキュアブート証明書 (db.pem) のパス";
     };
   };
 
