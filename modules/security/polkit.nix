@@ -9,7 +9,7 @@ in {
   options.neet.security.polkit = {
     enable = lib.mkOption {
       type = lib.types.bool;
-      default = true; # デフォルトで有効
+      default = true;
       description = "Whether to enable Polkit daemon.";
     };
   };
