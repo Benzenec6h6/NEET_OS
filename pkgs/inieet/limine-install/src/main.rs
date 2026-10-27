@@ -5,7 +5,6 @@
 //! - Generates /boot/limine.conf atomically
 //! - Idempotently registers Limine into UEFI NVRAM via neet_core::uefi
 
-use bootspec::Document;
 use neet_core::{generation, uefi};
 use std::env;
 use std::fs;
@@ -19,6 +18,7 @@ struct Opts {
     limine_pkg: PathBuf,
     key: Option<PathBuf>,
     cert: Option<PathBuf>,
+    timeout: u32,
 }
 
 fn err(msg: String) -> io::Error {
@@ -31,6 +31,7 @@ fn parse_args() -> Result<Opts, String> {
     let mut limine_pkg = None;
     let mut key = None;
     let mut cert = None;
+    let mut timeout = 5;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -41,6 +42,12 @@ fn parse_args() -> Result<Opts, String> {
                 cert = Some(PathBuf::from(
                     args.next().ok_or("missing value for --cert")?,
                 ));
+            }
+            "--timeout" => {
+                let val = args.next().ok_or("missing value for --timeout")?;
+                timeout = val
+                    .parse::<u32>()
+                    .map_err(|e| format!("invalid value for --timeout: {e}"))?;
             }
             s if !s.starts_with('-') => {
                 if boot_dir.is_none() {
@@ -55,17 +62,6 @@ fn parse_args() -> Result<Opts, String> {
         }
     }
 
-    if key.is_none() {
-        if let Ok(k) = env::var("SECUREBOOT_KEY") {
-            key = Some(PathBuf::from(k));
-        }
-    }
-    if cert.is_none() {
-        if let Ok(c) = env::var("SECUREBOOT_CERT") {
-            cert = Some(PathBuf::from(c));
-        }
-    }
-
     let boot_dir = boot_dir
         .ok_or("usage: limine-install [--key <key>] [--cert <cert>] <boot-dir> <limine-pkg>")?;
     let limine_pkg = limine_pkg
@@ -76,6 +72,7 @@ fn parse_args() -> Result<Opts, String> {
         limine_pkg,
         key,
         cert,
+        timeout,
     })
 }
 
@@ -114,7 +111,7 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    generate_limine_conf(&opts.boot_dir, &generations)?;
+    generate_limine_conf(&opts.boot_dir, &generations, opts.timeout)?;
 
     // 3. UEFI NVRAM へ Limine を登録 (未登録時のみ / neet-core::uefi 利用)
     register_nvram_if_needed(&opts.boot_dir)?;
@@ -124,46 +121,33 @@ fn main() -> io::Result<()> {
 }
 
 /// limine.conf のアトミック生成
-fn generate_limine_conf(boot_dir: &Path, generations: &[generation::Generation]) -> io::Result<()> {
-    let timeout: u32 = env::var("LIMINE_TIMEOUT")
-        .ok()
-        .and_then(|t| t.parse().ok())
-        .unwrap_or(5);
-
+fn generate_limine_conf(
+    boot_dir: &Path,
+    generations: &[generation::Generation],
+    timeout: u32,
+) -> io::Result<()> {
     let mut conf = String::new();
     conf.push_str(&format!("timeout: {}\n\n", timeout));
 
     for (idx, gen) in generations.iter().enumerate() {
-        let is_latest = idx == 0;
-        let gen_num = gen.number;
-        let boot_json_path = gen.toplevel.join("boot.json");
-
-        if !boot_json_path.exists() {
+        let Some(spec) = gen.bootspec()? else {
             continue;
-        }
+        };
 
-        let json_str = fs::read_to_string(&boot_json_path)?;
-        let doc: Document = serde_json::from_str(&json_str).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("failed to parse boot.json: {e}"),
-            )
-        })?;
-        let spec = doc.bootspec;
-
+        let is_latest = idx == 0;
         let title = if is_latest {
-            format!("/NEET OS (Generation {gen_num} - Current)")
+            format!("/NEET OS (Generation {} - Current)", gen.number)
         } else {
-            format!("/NEET OS (Generation {gen_num})")
+            format!("/NEET OS (Generation {})", gen.number)
         };
 
         if spec.uki.is_some() {
-            let uki_path = format!("boot():/EFI/Linux/neet-gen-{gen_num}.efi");
+            let uki_path = format!("boot():/EFI/Linux/{}", gen.uki_name());
             conf.push_str(&format!("{title}\n"));
             conf.push_str("    protocol: efi_chainload\n");
             conf.push_str(&format!("    image_path: {uki_path}\n\n"));
         } else {
-            let kernel_path = format!("boot():/kernels/neet-gen-{gen_num}-vmlinuz");
+            let kernel_path = format!("boot():/kernels/{}", gen.kernel_name());
             let cmdline = format!("init={} {}", spec.init, spec.kernel_params.join(" "));
 
             conf.push_str(&format!("{title}\n"));
@@ -171,7 +155,7 @@ fn generate_limine_conf(boot_dir: &Path, generations: &[generation::Generation])
             conf.push_str(&format!("    kernel_path: {kernel_path}\n"));
 
             if spec.initrd.is_some() {
-                let initrd_path = format!("boot():/kernels/neet-gen-{gen_num}-initrd");
+                let initrd_path = format!("boot():/kernels/{}", gen.initrd_name());
                 conf.push_str(&format!("    module_path: {initrd_path}\n"));
             }
 

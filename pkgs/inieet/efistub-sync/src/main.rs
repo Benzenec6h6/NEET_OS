@@ -3,11 +3,9 @@
 //! Synchronizes UEFI NVRAM boot entries with current Nix system profiles.
 //! Does NOT touch ESP files directly (delegated to esp-sync).
 
-use bootspec::Document;
 use neet_core::{generation, uefi};
 use std::collections::HashSet;
 use std::env;
-use std::fs;
 use std::io;
 use std::path::Path;
 
@@ -59,37 +57,24 @@ fn main() -> io::Result<()> {
 
     // 3. 各世代を NVRAM に同期 (不足していれば作成)
     for gen in &generations {
-        let gen_num = gen.number;
-        keep_gen_numbers.insert(gen_num);
-
-        let boot_json_path = gen.toplevel.join("boot.json");
-        if !boot_json_path.exists() {
+        let Some(spec) = gen.bootspec()? else {
             continue;
-        }
+        };
 
-        let json_text = fs::read_to_string(&boot_json_path)?;
-        let doc: Document = serde_json::from_str(&json_text)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        keep_gen_numbers.insert(gen.number);
+        let label = gen.label();
 
-        let spec = &doc.bootspec;
-        let label = format!("NEET OS (Generation {gen_num})");
-
-        // 既に NVRAM に存在する場合はスキップ
         if existing_entries.contains_key(&label) {
             continue;
         }
 
         if spec.uki.is_some() {
-            // --- パターン A: UKI ---
-            let uefi_loader_path = format!(r"\EFI\Linux\neet-gen-{gen_num}.efi");
+            let uefi_loader_path = format!(r"\EFI\Linux\{}", gen.uki_name());
             println!("efistub-sync: creating NVRAM entry for '{label}' (UKI)...");
-
             uefi::create_boot_entry(&disk_dev, &part_num, &label, &uefi_loader_path, None)?;
         } else {
-            // --- パターン B: Raw カーネル ---
-            let uefi_loader_path = format!(r"\kernels\neet-gen-{gen_num}-vmlinuz");
-            let uefi_initrd_path = format!(r"\kernels\neet-gen-{gen_num}-initrd");
-
+            let uefi_loader_path = format!(r"\kernels\{}", gen.kernel_name());
+            let uefi_initrd_path = format!(r"\kernels\{}", gen.initrd_name());
             let cmdline = format!(
                 "initrd={} init={} {}",
                 uefi_initrd_path,

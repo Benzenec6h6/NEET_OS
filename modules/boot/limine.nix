@@ -9,6 +9,10 @@
   limineInstall = config.system.build.limineInstall;
   liminePkg = cfg.package;
 
+  sbFlags =
+    lib.optionalString config.boot.secureBoot.enable
+    "--key '${toString config.boot.secureBoot.keyPath}' --cert '${toString config.boot.secureBoot.certPath}'";
+
   installBootloader = pkgs.writeShellScript "install-limine" ''
     set -euo pipefail
 
@@ -21,18 +25,14 @@
 
     BOOT_DIR="${cfg.bootDir}"
     LIMINE_PKG="${liminePkg}"
-    export LIMINE_TIMEOUT="${toString cfg.timeout}"
-
-    ${lib.optionalString config.boot.secureBoot.enable ''
-      export SECUREBOOT_KEY="${toString config.boot.secureBoot.keyPath}"
-      export SECUREBOOT_CERT="${toString config.boot.secureBoot.certPath}"
-    ''}
 
     echo "==> [install-limine] 1/2: Synchronizing payloads to ESP..."
-    ${espSync}/bin/esp-sync "$BOOT_DIR"
+    ${espSync}/bin/esp-sync ${sbFlags} "$BOOT_DIR"
 
     echo "==> [install-limine] 2/2: Updating Limine binaries, config and NVRAM..."
-    exec ${limineInstall}/bin/limine-install "$BOOT_DIR" "$LIMINE_PKG"
+    exec ${limineInstall}/bin/limine-install \
+      --timeout "${toString cfg.timeout}" \
+      ${sbFlags} "$BOOT_DIR" "$LIMINE_PKG"
   '';
 in {
   options = {

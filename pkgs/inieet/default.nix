@@ -4,61 +4,37 @@
 }: let
   src = lib.cleanSource ./.;
   cargoLockFile = ./Cargo.lock;
+
+  # 共通のビルド関数（subdir が省略されたら pname と同じにする）
+  mkPackage = {
+    pname,
+    subdir ? pname,
+    platform ? pkgs.rustPlatform,
+  }:
+    platform.buildRustPackage {
+      inherit pname src;
+      version = "0.1.0";
+      cargoLock.lockFile = cargoLockFile;
+      buildAndTestSubdir = subdir;
+    };
 in {
-  neetMount = pkgs.pkgsStatic.rustPlatform.buildRustPackage {
+  # pkgsStatic を使う例外
+  neetMount = mkPackage {
     pname = "neet-mount";
-    version = "0.1.0";
-    inherit src;
-    cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "neet-mount";
+    platform = pkgs.pkgsStatic.rustPlatform;
   };
-  neetActivate = pkgs.rustPlatform.buildRustPackage {
-    pname = "neet-activate";
-    version = "0.1.0";
-    inherit src;
-    cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "neet-activate";
-  };
-  neetSecret = pkgs.rustPlatform.buildRustPackage {
-    pname = "neet-secret";
-    version = "0.1.0";
-    inherit src;
-    cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "neet-secret";
-  };
-  limineInstall = pkgs.rustPlatform.buildRustPackage {
-    pname = "limine-install";
-    version = "0.1.0";
-    inherit src;
-    cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "limine-install";
-  };
-  efistubSync = pkgs.rustPlatform.buildRustPackage {
-    pname = "efistub-sync";
-    version = "0.1.0";
-    inherit src;
-    cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "efistub-sync";
-  };
-  espSync = pkgs.rustPlatform.buildRustPackage {
-    pname = "esp-sync";
-    version = "0.1.0";
-    inherit src;
-    cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "esp-sync";
-  };
-  bootspecWrite = pkgs.rustPlatform.buildRustPackage {
+
+  # 通常のパッケージ（1行で書ける）
+  neetActivate = mkPackage {pname = "neet-activate";};
+  neetSecret = mkPackage {pname = "neet-secret";};
+  limineInstall = mkPackage {pname = "limine-install";};
+  efistubSync = mkPackage {pname = "efistub-sync";};
+  espSync = mkPackage {pname = "esp-sync";};
+  diskSetup = mkPackage {pname = "disk-setup";};
+
+  # ディレクトリ名とパッケージ名が異なる例外
+  bootspecWrite = mkPackage {
     pname = "bootspec-write";
-    version = "0.1.0";
-    inherit src;
-    cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "bootspec";
-  };
-  diskSetup = pkgs.rustPlatform.buildRustPackage {
-    pname = "disk-setup";
-    version = "0.1.0";
-    inherit src;
-    cargoLock.lockFile = cargoLockFile;
-    buildAndTestSubdir = "disk-setup";
+    subdir = "bootspec";
   };
 }

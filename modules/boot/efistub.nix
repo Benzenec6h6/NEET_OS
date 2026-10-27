@@ -8,7 +8,10 @@
   espSync = config.system.build.espSync;
   efistubSync = config.system.build.efistubSync;
 
-  # パイプライン: ESP の成果物配置・GC -> NVRAM の同期・GC
+  sbFlags =
+    lib.optionalString config.boot.secureBoot.enable
+    "--key '${toString config.boot.secureBoot.keyPath}' --cert '${toString config.boot.secureBoot.certPath}'";
+
   installBootloader = pkgs.writeShellScript "install-efistub" ''
     set -euo pipefail
 
@@ -19,13 +22,9 @@
       pkgs.sbsigntool
     ]}:$PATH"
 
-    ${lib.optionalString config.boot.secureBoot.enable ''
-      export SECUREBOOT_KEY="${toString config.boot.secureBoot.keyPath}"
-      export SECUREBOOT_CERT="${toString config.boot.secureBoot.certPath}"
-    ''}
-
     echo "==> [install-efistub] 1/2: Synchronizing payloads to ESP..."
-    ${espSync}/bin/esp-sync "${cfg.bootDir}"
+    # CLI 引数として渡す
+    ${espSync}/bin/esp-sync ${sbFlags} "${cfg.bootDir}"
 
     echo "==> [install-efistub] 2/2: Synchronizing UEFI NVRAM entries..."
     exec ${efistubSync}/bin/efistub-sync \

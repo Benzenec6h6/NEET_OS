@@ -3,7 +3,6 @@
 //! Synchronizes kernel/UKI payloads between Nix profiles and the EFI System Partition (ESP),
 //! signs EFI binaries if keys are provided, and garbage-collects obsolete files.
 
-use bootspec::Document;
 use neet_core::{atomic, generation};
 use std::collections::HashSet;
 use std::env;
@@ -50,17 +49,6 @@ fn parse_args() -> Result<Opts, String> {
                 boot_dir = Some(PathBuf::from(s));
             }
             _ => return Err(format!("esp-sync: unexpected argument or option '{arg}'")),
-        }
-    }
-
-    if key.is_none() {
-        if let Ok(k) = env::var("SECUREBOOT_KEY") {
-            key = Some(PathBuf::from(k));
-        }
-    }
-    if cert.is_none() {
-        if let Ok(c) = env::var("SECUREBOOT_CERT") {
-            cert = Some(PathBuf::from(c));
         }
     }
 
@@ -129,29 +117,17 @@ fn main() -> io::Result<()> {
 
     // 3. 各世代の boot.json を読み取り、ESP へ配置
     for gen in &generations {
-        let gen_num = gen.number;
-        let boot_json_path = gen.toplevel.join("boot.json");
-
-        if !boot_json_path.exists() {
+        let Some(spec) = gen.bootspec()? else {
             eprintln!(
-                "esp-sync: warning: boot.json not found in {}, skipping generation {gen_num}",
-                gen.toplevel.display()
+                "esp-sync: warning: boot.json not found in {}, skipping generation {}",
+                gen.toplevel.display(),
+                gen.number
             );
             continue;
-        }
-
-        let json_str = fs::read_to_string(&boot_json_path)?;
-        let doc: Document = serde_json::from_str(&json_str).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("failed to parse {}: {e}", boot_json_path.display()),
-            )
-        })?;
-
-        let spec = doc.bootspec;
+        };
 
         if let Some(ref uki_src) = spec.uki {
-            let uki_filename = format!("neet-gen-{gen_num}.efi");
+            let uki_filename = gen.uki_name();
             let dest = efi_linux_dir.join(&uki_filename);
 
             neet_core::secureboot::install_and_sign_efi_cached(
@@ -165,10 +141,7 @@ fn main() -> io::Result<()> {
             keep_uki_files.insert(uki_filename.clone());
             keep_uki_files.insert(format!("{uki_filename}.hash"));
         } else {
-            // ==========================================
-            // パターン B: Raw カーネル (atomic_copy_if_changed)
-            // ==========================================
-            let vmlinuz_filename = format!("neet-gen-{gen_num}-vmlinuz");
+            let vmlinuz_filename = gen.kernel_name();
             let dest_kernel = kernels_dir.join(&vmlinuz_filename);
             if atomic::atomic_copy_if_changed(Path::new(&spec.kernel), &dest_kernel, 0o755)? {
                 println!("esp-sync: installed {}", dest_kernel.display());
@@ -176,7 +149,7 @@ fn main() -> io::Result<()> {
             keep_kernel_files.insert(vmlinuz_filename);
 
             if let Some(ref initrd_src) = spec.initrd {
-                let initrd_filename = format!("neet-gen-{gen_num}-initrd");
+                let initrd_filename = gen.initrd_name();
                 let dest_initrd = kernels_dir.join(&initrd_filename);
                 if atomic::atomic_copy_if_changed(Path::new(initrd_src), &dest_initrd, 0o644)? {
                     println!("esp-sync: installed {}", dest_initrd.display());

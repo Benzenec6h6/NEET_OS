@@ -1,3 +1,5 @@
+use bootspec::{BootspecV1, Document};
+
 use std::{
     fs, io,
     path::{Path, PathBuf},
@@ -13,6 +15,39 @@ pub struct Generation {
 }
 
 impl Generation {
+    // boot.json を読み込んで BootSpec を返す
+    pub fn bootspec(&self) -> io::Result<Option<BootspecV1>> {
+        let path = self.toplevel.join("boot.json");
+        if !path.exists() {
+            return Ok(None);
+        }
+        let text = fs::read_to_string(&path)?;
+        let doc: Document = serde_json::from_str(&text).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("failed to parse {}: {e}", path.display()),
+            )
+        })?;
+        Ok(Some(doc.bootspec))
+    }
+
+    // インスタンスから引数なしで呼べるショートカット
+    pub fn uki_name(&self) -> String {
+        Self::uki_filename(self.number)
+    }
+
+    pub fn kernel_name(&self) -> String {
+        Self::kernel_filename(self.number)
+    }
+
+    pub fn initrd_name(&self) -> String {
+        Self::initrd_filename(self.number)
+    }
+
+    pub fn label(&self) -> String {
+        Self::nvram_label(self.number)
+    }
+
     pub fn uki_filename(gen_num: u32) -> String {
         format!("{GEN_PREFIX}{gen_num}.efi")
     }
