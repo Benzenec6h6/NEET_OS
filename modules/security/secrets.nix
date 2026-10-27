@@ -151,7 +151,7 @@ in {
 
       package = mkOption {
         type = types.package;
-        default = pkgs.inieet;
+        default = config.system.build.neetSecret;
         defaultText = literalExpression "pkgs.inieet";
         description = "neet-secret バイナリを提供するパッケージ";
       };
