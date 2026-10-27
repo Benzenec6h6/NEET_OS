@@ -9,6 +9,7 @@ in {
     # system.build に各 Rust バイナリをぶら下げる
     system.build.stage1Mount = inieet.neetMount;
     system.build.neetActivate = inieet.neetActivate;
+    system.build.neetSecret = inieet.neetSecret;
     system.build.limineInstall = inieet.limineInstall;
     system.build.efistubSync = inieet.efistubSync;
     system.build.espSync = inieet.espSync;

@@ -25,6 +25,21 @@ with lib; let
         ${pkgs.s6}/bin/s6-log ${escapeShellArgs log.args}
     '';
 
+  # ★ 追加: envdirs を s6-envdir コマンド列に変換して元の run を exec するラッパー
+  wrapRunScript = name: svc: let
+    innerScript = pkgs.writeScript "${name}-run-inner" svc.run;
+    # s6-envdir /dir1 s6-envdir /dir2 ... のチェインを組み立てる
+    # ※ -I を指定すると、もしディレクトリが存在しなくてもエラー終了せずスルーしてくれる
+    envdirCmds = concatMapStrings (dir: "${pkgs.s6}/bin/s6-envdir -I ${escapeShellArg dir} ") svc.envdirs;
+  in
+    if svc.envdirs == []
+    then pkgs.writeScript "${name}-run" svc.run
+    else
+      pkgs.writeScript "${name}-run" ''
+        #!${pkgs.runtimeShell}
+        exec ${envdirCmds}${innerScript} "$@"
+      '';
+
   # 本体サービス
   makeServiceDir = name: svc: let
     files =
@@ -35,7 +50,7 @@ with lib; let
         "dependencies" = pkgs.writeText "${name}-dependencies" (concatStringsSep "\n" svc.dependencies);
       }
       // optionalAttrs (svc.type == "longrun") ({
-          "run" = pkgs.writeScript "${name}-run" svc.run;
+          "run" = wrapRunScript name svc;
         }
         // optionalAttrs (svc.notification-fd != null) {
           "notification-fd" = pkgs.writeText "${name}-notification-fd" (toString svc.notification-fd);
@@ -76,7 +91,6 @@ with lib; let
         name = "consumer-for";
         path = pkgs.writeText "${name}-log-consumer-for" name;
       }
-      # ★ 1. pipeline-name を復活させる（s6-rc-compile が自動的にパイプライン用バンドルを生成する）
       {
         name = "pipeline-name";
         path = pkgs.writeText "${name}-log-pipeline-name" "${name}-pipeline";
@@ -86,9 +100,6 @@ with lib; let
   autoStartServices = filterAttrs (_: svc: svc.autoStart) services;
   loggedServices = filterAttrs (_: hasLog) services;
 
-  # ★ 2. top バンドルに入れるべき内容を正しく選別する:
-  # - ロガーを持つサービスは「${name}-pipeline」を入れる（個別の name や name-log は入れてはいけない）
-  # - ロガーを持たないサービスは「${name}」をそのまま入れる
   topContents =
     mapAttrsToList (
       name: svc:

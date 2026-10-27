@@ -6,6 +6,7 @@ members = [
     "neet-mount",
     "neet-core",
     "neet-activate",
+    "neet-secret",
     "limine-install",
     "efistub-sync",
     "esp-sync",

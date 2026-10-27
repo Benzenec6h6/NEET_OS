@@ -41,6 +41,18 @@ with lib; let
         description = "ブート時に自動起動する (top bundle に含める) かどうか";
       };
 
+      envdirs = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = "起動前に s6-envdir で読み込む環境変数ディレクトリ一覧";
+      };
+
+      loadSecrets = mkOption {
+        type = types.bool;
+        default = false;
+        description = "シークレット復号サービス (secrets) への依存と /run/secrets/env/<name> の読み込みを自動化する";
+      };
+
       log = {
         enable = mkEnableOption "s6-log によるロガー (<name>-log) の自動生成";
         user = mkOption {
@@ -68,12 +80,27 @@ with lib; let
     };
   };
 
+  resolvedServices =
+    mapAttrs (
+      name: svc:
+        svc
+        // {
+          dependencies =
+            svc.dependencies
+            ++ optional (svc.loadSecrets && (config.neet.security.secrets.enable or false)) "secrets";
+          envdirs =
+            svc.envdirs
+            ++ optional svc.loadSecrets "/run/secrets/env/${name}";
+        }
+    )
+    cfg.services;
+
   hasLog = svc: svc.type == "longrun" && (svc.log.enable || svc.logRun != null);
 
   # ソースディレクトリの組み立て
   s6SourceDir = import ./build-source.nix {
     inherit lib pkgs;
-    inherit (cfg) services;
+    services = resolvedServices;
   };
 in {
   options.system.s6-rc = {
