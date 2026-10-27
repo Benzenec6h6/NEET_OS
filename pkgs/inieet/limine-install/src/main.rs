@@ -6,12 +6,11 @@
 //! - Idempotently registers Limine into UEFI NVRAM via neet_core::uefi
 
 use bootspec::Document;
-use neet_core::{atomic, generation, uefi};
+use neet_core::{generation, uefi};
 use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 const LIMINE_NVRAM_LABEL: &str = "Limine Bootloader";
 
@@ -97,15 +96,15 @@ fn main() -> io::Result<()> {
 
     // 1. Limine UEFI バイナリ (BOOTX64.EFI) を配置＆署名
     let efi_boot_dir = opts.boot_dir.join("EFI/BOOT");
-    fs::create_dir_all(&efi_boot_dir)?;
-
     let src_efi = opts.limine_pkg.join("share/limine/BOOTX64.EFI");
     let dest_efi = efi_boot_dir.join("BOOTX64.EFI");
-    install_and_sign_efi(
+
+    neet_core::secureboot::install_and_sign_efi_cached(
         &src_efi,
         &dest_efi,
         opts.key.as_deref(),
         opts.cert.as_deref(),
+        Some("limine-install"),
     )?;
 
     // 2. プロファイルから世代を取得し limine.conf を生成 (neet-core)
@@ -121,58 +120,6 @@ fn main() -> io::Result<()> {
     register_nvram_if_needed(&opts.boot_dir)?;
 
     println!("limine-install: Limine setup completed successfully");
-    Ok(())
-}
-
-/// EFI バイナリのインストールと署名（ハッシュキャッシュ対応）
-fn install_and_sign_efi(
-    src: &Path,
-    dest: &Path,
-    key: Option<&Path>,
-    cert: Option<&Path>,
-) -> io::Result<()> {
-    if !src.exists() {
-        return Err(err(format!(
-            "source EFI binary not found: {}",
-            src.display()
-        )));
-    }
-
-    let hash_file = dest.with_file_name("BOOTX64.EFI.hash");
-    let src_hash = hex_encode(&atomic::sha256_file(src)?);
-
-    if dest.exists() && hash_file.exists() {
-        if let Ok(cached) = fs::read_to_string(&hash_file) {
-            if cached.trim() == src_hash {
-                return Ok(()); // 既に最新
-            }
-        }
-    }
-
-    if let (Some(k), Some(c)) = (key, cert) {
-        println!("limine-install: signing and installing {}", dest.display());
-        let status = Command::new("sbsign")
-            .args([
-                "--key",
-                k.to_str().unwrap(),
-                "--cert",
-                c.to_str().unwrap(),
-                "--output",
-                dest.to_str().unwrap(),
-            ])
-            .arg(src)
-            .status()
-            .map_err(|e| err(format!("failed to execute sbsign: {e}")))?;
-
-        if !status.success() {
-            return Err(err("sbsign failed for BOOTX64.EFI".into()));
-        }
-    } else {
-        println!("limine-install: installing un-signed {}", dest.display());
-        fs::copy(src, dest)?;
-    }
-
-    let _ = fs::write(hash_file, src_hash);
     Ok(())
 }
 
@@ -270,13 +217,4 @@ fn register_nvram_if_needed(boot_dir: &Path) -> io::Result<()> {
     )?;
 
     Ok(())
-}
-
-fn hex_encode(bytes: &[u8; 32]) -> String {
-    let mut s = String::with_capacity(64);
-    for b in bytes {
-        use std::fmt::Write;
-        let _ = write!(s, "{:02x}", b);
-    }
-    s
 }
