@@ -3,12 +3,28 @@ resolver = "2"
 members = [
     "bootspec",
     "disk-setup",
-    "neet-mount",
-    "neet-core",
-    "neet-activate",
-    "neet-secret",
-    "neet-uki",
-    "limine-install",
     "efistub-sync",
     "esp-sync",
+    "limine-install",
+    "neet-activate",
+    "neet-core",
+    "neet-mount",
+    "neet-secret",
+    "neet-uki",
 ]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+# 内部クレート
+bootspec = { path = "bootspec" }
+disk-setup = { path = "disk-setup" }
+neet-core = { path = "neet-core" }
+neet-mount = { path = "neet-mount" }
+
+# 共通外部クレート
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+nix = "0.31.3"

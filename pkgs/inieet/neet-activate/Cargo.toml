@@ -1,11 +1,11 @@
 [package]
 name = "neet-activate"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-neet-mount = { path = "../neet-mount" }
-neet-core = { path = "../neet-core" }
-nix = { version = "0.31.3", features = ["fs", "user", "mount", "reboot"] }
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+neet-core.workspace = true
+neet-mount.workspace = true
+nix = { workspace = true, features = ["fs", "user", "mount", "reboot"] }
+serde.workspace = true
+serde_json.workspace = true

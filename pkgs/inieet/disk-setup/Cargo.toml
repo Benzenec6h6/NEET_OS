@@ -1,17 +1,9 @@
 [package]
 name = "disk-setup"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-name = "disk_setup"
-path = "src/lib.rs"
-
-[[bin]]
-name = "disk-setup"
-path = "src/main.rs"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-neet-mount = { path = "../neet-mount" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+neet-mount.workspace = true
+serde.workspace = true
+serde_json.workspace = true

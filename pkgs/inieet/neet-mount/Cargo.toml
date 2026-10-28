@@ -1,17 +1,9 @@
 [package]
 name = "neet-mount"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-nix = { version = "0.31.3", features = ["fs", "mount"] }
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-
-[[bin]]
-name = "stage1-mount"
-path = "src/bin/stage1-mount.rs"
-
-[lib]
-name = "neet_mount"
-path = "src/lib.rs"
+nix = { workspace = true, features = ["fs", "mount"] }
+serde.workspace = true
+serde_json.workspace = true
