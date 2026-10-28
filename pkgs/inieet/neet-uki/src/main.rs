@@ -5,8 +5,8 @@
 
 use std::env;
 use std::fs;
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::io::{self};
+use std::path::PathBuf;
 
 const PE_MAGIC_PE32: u16 = 0x10b;
 const PE_MAGIC_PE32_PLUS: u16 = 0x20b;
@@ -89,7 +89,7 @@ fn main() -> io::Result<()> {
     };
 
     // 1. 各ペイロードの読み込み
-    let mut stub_bytes = fs::read(&args.stub_path)?;
+    let stub_bytes = fs::read(&args.stub_path)?;
     let osrel_data = fs::read(&args.osrel_path)?;
     let cmdline_data = if let Some(text) = args.cmdline_str {
         let mut d = text.into_bytes();
