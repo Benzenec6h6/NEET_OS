@@ -66,6 +66,28 @@ in {
       };
     };
 
+    neet.users = {
+      root = {
+        uid = 0;
+        gid = 0;
+        shell = "/bin/bash";
+        home = "/root";
+        description = "System Administrator";
+        initialHashedPassword = "";
+      };
+      neet = {
+        uid = 1000;
+        gid = 1000;
+        shell = "/bin/bash";
+        home = "/home/neet";
+        description = "Primary User";
+        extraGroups = ["audio" "video" "input" "seat" "wheel"];
+        initialHashedPassword = "";
+      };
+    };
+    # 必要に応じてホスト名やキーマップなどを追加
+    networking.hostName = "neet-installer";
+
     # 5. インストール・暗号化・検証に必要なツール類
     environment.systemPackages = with pkgs; [
       cryptsetup
