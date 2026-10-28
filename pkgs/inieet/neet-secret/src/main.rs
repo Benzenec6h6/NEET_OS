@@ -29,8 +29,12 @@ enum Commands {
         tpm: bool,
 
         /// TPM NVRAM のインデックス (デフォルト: 0x01500000)
-        #[arg(long, default_value = "0x01500000")]
-        tpm_nv_index: String,
+        #[arg(
+            long,
+            default_value_t = tpm::DEFAULT_AGE_NV_INDEX,
+            value_parser = parse_hex_or_dec
+        )]
+        tpm_nv_index: u32,
 
         #[arg(short, long, default_value = "/run/secrets")]
         out_dir: PathBuf,
@@ -50,16 +54,22 @@ enum Commands {
         tpm: bool,
 
         /// TPM NVRAM のインデックス (デフォルト: 0x01500000)
-        #[arg(long, default_value = "0x01500000")]
-        tpm_nv_index: String,
+        #[arg(
+            long,
+            default_value_t = tpm::DEFAULT_AGE_NV_INDEX,
+            value_parser = parse_hex_or_dec
+        )]
+        tpm_nv_index: u32,
     },
 }
 
-fn parse_hex_or_dec(s: &str) -> anyhow::Result<u32> {
+/// 16進数 ("0x...") または 10進数の文字列を u32 にパースする
+fn parse_hex_or_dec(s: &str) -> Result<u32, String> {
     if let Some(stripped) = s.strip_prefix("0x") {
-        Ok(u32::from_str_radix(stripped, 16)?)
+        u32::from_str_radix(stripped, 16).map_err(|e| format!("Invalid hex index: {}", e))
     } else {
-        Ok(s.parse::<u32>()?)
+        s.parse::<u32>()
+            .map_err(|e| format!("Invalid index: {}", e))
     }
 }
 
@@ -80,8 +90,8 @@ fn main() -> anyhow::Result<()> {
             }
 
             let identity = if tpm {
-                let idx = parse_hex_or_dec(&tpm_nv_index)?;
-                tpm::load_tpm_identity(idx)?
+                // すでに u32 にパース済みなのでそのまま渡せる
+                tpm::load_tpm_identity(tpm_nv_index)?
             } else {
                 decrypt::load_ssh_identity(&key)?
             };
@@ -96,8 +106,8 @@ fn main() -> anyhow::Result<()> {
             tpm_nv_index,
         } => {
             let identity = if tpm {
-                let idx = parse_hex_or_dec(&tpm_nv_index)?;
-                tpm::load_tpm_identity(idx)?
+                // すでに u32 にパース済みなのでそのまま渡せる
+                tpm::load_tpm_identity(tpm_nv_index)?
             } else if let Some(key_path) = key {
                 decrypt::load_ssh_identity(&key_path)?
             } else {

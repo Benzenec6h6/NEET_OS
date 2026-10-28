@@ -3,9 +3,11 @@ use std::str::FromStr;
 use tss_esapi::{
     attributes::SessionAttributesBuilder,
     constants::SessionType,
-    handles::NvIndexHandle,
-    interface_types::{algorithm::HashingAlgorithm, session_handles::AuthSession},
-    structures::{NvIndex, PcrSelectionListBuilder, PcrSlot},
+    handles::{NvIndexHandle, NvIndexTpmHandle, TpmHandle},
+    interface_types::{
+        algorithm::HashingAlgorithm, resource_handles::NvAuth, session_handles::PolicySession,
+    },
+    structures::{Digest, PcrSelectionListBuilder, PcrSlot, SymmetricDefinition},
     Context as TssContext, TctiNameConf,
 };
 
@@ -19,13 +21,18 @@ pub fn load_tpm_identity(nv_index_raw: u32) -> Result<Box<dyn age::Identity>> {
         .context("Failed to configure TCTI for /dev/tpmrm0")?;
     let mut ctx = TssContext::new(tcti).context("Failed to connect to TPM 2.0 device")?;
 
-    let nv_index = NvIndex::try_from(nv_index_raw)
+    // TPM 物理インデックスから ESYS ハンドルを取得
+    let nv_tpm_handle = NvIndexTpmHandle::new(nv_index_raw)
         .map_err(|e| anyhow!("Invalid NV index 0x{:08x}: {:?}", nv_index_raw, e))?;
-    let nv_handle = NvIndexHandle::from(nv_index);
+    let esys_handle = ctx
+        .tr_from_tpm_public(TpmHandle::NvIndex(nv_tpm_handle))
+        .context("Failed to retrieve ESYS handle for NV index from TPM")?;
+    let nv_handle = NvIndexHandle::from(esys_handle);
 
     // 2. PCR 7 (SecureBoot) と PCR 11 (UKI) のセッションポリシーを作成
     // ※ セッション暗号化 (Parameter Encryption) を有効にしてバス盗聴を遮断
-    let session_attrs = SessionAttributesBuilder::new()
+    // 7.7 では build() が (SessionAttributes, SessionAttributesMask) のタプルを返します
+    let (session_attrs, session_attrs_mask) = SessionAttributesBuilder::new()
         .with_decrypt(true)
         .with_encrypt(true)
         .build();
@@ -36,33 +43,31 @@ pub fn load_tpm_identity(nv_index_raw: u32) -> Result<Box<dyn age::Identity>> {
             None,
             None,
             SessionType::Policy,
-            tss_esapi::interface_types::algorithm::SymmetricMode::Cfb,
+            SymmetricDefinition::AES_256_CFB, // 暗号化アルゴリズムを明示指定
             HashingAlgorithm::Sha256,
         )
         .context("Failed to start TPM policy session")?;
 
     let session_handle = session.ok_or_else(|| anyhow!("Expected auth session handle"))?;
-    ctx.set_session_attrs(session_handle, session_attrs)?;
+    // ESYS 仕様名に合わせた tr_sess_set_attributes に変更
+    ctx.tr_sess_set_attributes(session_handle, session_attrs, session_attrs_mask)?;
 
-    // PCR 7 と 11 を選択
+    // PCR 7 と 11 を選択 (.with_size_of_select(3) は省略可能で自動計算されます)
     let pcr_selection = PcrSelectionListBuilder::new()
-        .with_size_of_select(3)
         .with_selection(HashingAlgorithm::Sha256, &[PcrSlot::Slot7, PcrSlot::Slot11])
         .build()
         .context("Failed to build PCR selection")?;
 
     // ポリシーを実行 (PCR 7+11 の現在の値と一致するかハードウェア検証)
-    ctx.policy_pcr(
-        session_handle.try_into()?,
-        Default::default(),
-        pcr_selection,
-    )
-    .context("TPM PCR policy check failed (PCR 7 or 11 mismatch: tampering detected!)")?;
+    let policy_session = PolicySession::try_from(session_handle)
+        .context("Failed to convert AuthSession to PolicySession")?;
+    ctx.policy_pcr(policy_session, Digest::default(), pcr_selection)
+        .context("TPM PCR policy check failed (PCR 7 or 11 mismatch: tampering detected!)")?;
 
     // 3. NVRAM からデータを読み出し (最大 128 バイト程度)
-    ctx.set_sessions((Some(AuthSession::from(session_handle)), None, None));
+    ctx.set_sessions((Some(session_handle), None, None));
     let raw_data = ctx
-        .nv_read(nv_handle.into(), nv_handle, 128, 0)
+        .nv_read(NvAuth::NvIndex(nv_handle), nv_handle, 128, 0)
         .context("Failed to read age secret key from TPM NVRAM")?;
 
     let key_str = std::str::from_utf8(raw_data.as_slice())

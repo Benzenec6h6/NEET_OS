@@ -12,7 +12,7 @@
     platform ? pkgs.rustPlatform,
     ...
   } @ args: let
-    cleanArgs = builtins.removeAttrs args ["platform"];
+    cleanArgs = removeAttrs args ["platform"];
   in
     platform.buildRustPackage (cleanArgs
       // {
@@ -31,7 +31,7 @@ in {
   neetSecret = mkPackage {
     pname = "neet-secret";
     platform = pkgs.pkgsStatic.rustPlatform;
-    nativeBuildInputs = [pkgs.pkgsStatic.pkg-config];
+    nativeBuildInputs = [pkgs.buildPackages.pkg-config];
     buildInputs = [pkgs.pkgsStatic.tpm2-tss];
   };
 
