@@ -11,8 +11,10 @@
     subdir ? pname,
     platform ? pkgs.rustPlatform,
     ...
-  } @ args:
-    platform.buildRustPackage (args
+  } @ args: let
+    cleanArgs = builtins.removeAttrs args ["platform"];
+  in
+    platform.buildRustPackage (cleanArgs
       // {
         inherit pname src;
         version = "0.1.0";
@@ -20,6 +22,7 @@
         buildAndTestSubdir = subdir;
       });
 in {
+  # pkgsStatic を使う例外
   neetMount = mkPackage {
     pname = "neet-mount";
     platform = pkgs.pkgsStatic.rustPlatform;
