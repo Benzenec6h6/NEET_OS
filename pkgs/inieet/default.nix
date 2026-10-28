@@ -31,8 +31,17 @@ in {
   neetSecret = mkPackage {
     pname = "neet-secret";
     platform = pkgs.pkgsStatic.rustPlatform;
-    nativeBuildInputs = [pkgs.buildPackages.pkg-config];
-    buildInputs = [pkgs.pkgsStatic.tpm2-tss];
+
+    nativeBuildInputs = [
+      pkgs.buildPackages.pkg-config
+    ];
+
+    buildInputs = [
+      pkgs.pkgsStatic.tpm2-tss
+      pkgs.pkgsStatic.openssl
+    ];
+
+    PKG_CONFIG_ALL_STATIC = "1";
   };
 
   # 通常のパッケージ（1行で書ける）
