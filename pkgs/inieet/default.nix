@@ -10,15 +10,16 @@
     pname,
     subdir ? pname,
     platform ? pkgs.rustPlatform,
-  }:
-    platform.buildRustPackage {
-      inherit pname src;
-      version = "0.1.0";
-      cargoLock.lockFile = cargoLockFile;
-      buildAndTestSubdir = subdir;
-    };
+    ...
+  } @ args:
+    platform.buildRustPackage (args
+      // {
+        inherit pname src;
+        version = "0.1.0";
+        cargoLock.lockFile = cargoLockFile;
+        buildAndTestSubdir = subdir;
+      });
 in {
-  # pkgsStatic を使う例外
   neetMount = mkPackage {
     pname = "neet-mount";
     platform = pkgs.pkgsStatic.rustPlatform;
