@@ -34,6 +34,11 @@ with lib; let
         default = [];
         description = "cryptsetup open に渡す追加引数";
       };
+      keySecret = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "解錠に使用する neet.secrets の名前（例: 'luks-root-key'）";
+      };
     };
   };
 
@@ -44,6 +49,28 @@ with lib; let
         ++ optional (dev.keyFile != null) "--key-file ${dev.keyFile}"
         ++ dev.extraOpenArgs;
       argsStr = concatStringsSep " " args;
+
+      # keySecret が指定されている場合の解錠ブロック
+      tpmUnlockScript = let
+        secretPath = "/etc/secrets/${dev.keySecret}.age";
+      in ''
+        echo "NEET OS Stage 1: Attempting TPM 2.0 unlock for ${dev.name}..."
+        if [ -f "${secretPath}" ] && /bin/neet-secret print --tpm "${secretPath}" 2>/dev/null \
+            | cryptsetup open ${argsStr} --key-file - "${dev.device}" "${dev.name}"; then
+            echo "NEET OS Stage 1: Successfully unlocked ${dev.name} with TPM 2.0!"
+        else
+            echo "NEET OS Stage 1: TPM unlock failed. Falling back to passphrase..."
+            cryptsetup open ${argsStr} "${dev.device}" "${dev.name}" \
+                || die "Failed to unlock LUKS device ${dev.device}"
+        fi
+      '';
+
+      # 従来のパスフレーズ/キーファイル手動入力ブロック
+      manualUnlockScript = ''
+        echo "NEET OS Stage 1: Unlocking LUKS device ${dev.name} (${dev.device})..."
+        cryptsetup open ${argsStr} "${dev.device}" "${dev.name}" \
+            || die "Failed to unlock LUKS device ${dev.device}"
+      '';
     in ''
       # --- Device: ${dev.name} ---
       echo "NEET OS Stage 1: Waiting for LUKS device ${dev.device}..."
@@ -58,9 +85,11 @@ with lib; let
       fi
 
       if [ ! -e "/dev/mapper/${dev.name}" ]; then
-          echo "NEET OS Stage 1: Unlocking LUKS device ${dev.name} (${dev.device})..."
-          cryptsetup open ${argsStr} "${dev.device}" "${dev.name}" \
-              || die "Failed to unlock LUKS device ${dev.device}"
+          ${
+        if dev.keySecret != null
+        then tpmUnlockScript
+        else manualUnlockScript
+      }
       fi
     '')
     cfg.devices

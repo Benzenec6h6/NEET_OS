@@ -21,6 +21,7 @@ done
 cp "@mdevd@/bin/mdevd" "$out/bin/mdevd"
 cp "@mdevd@/bin/mdevd-coldplug" "$out/bin/mdevd-coldplug"
 cp "@stage1Mount@/bin/stage1-mount" "$out/bin/stage1-mount"
+cp "@neetSecret@/bin/neet-secret" "$out/bin/neet-secret"
 cp "@mdevdDiskScript@" "$out/bin/mdevd-disk.sh"
 chmod 755 "$out/bin/"*
 

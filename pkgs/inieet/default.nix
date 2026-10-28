@@ -24,9 +24,15 @@ in {
     platform = pkgs.pkgsStatic.rustPlatform;
   };
 
+  neetSecret = mkPackage {
+    pname = "neet-secret";
+    platform = pkgs.pkgsStatic.rustPlatform;
+    nativeBuildInputs = [pkgs.pkgsStatic.pkg-config];
+    buildInputs = [pkgs.pkgsStatic.tpm2-tss];
+  };
+
   # 通常のパッケージ（1行で書ける）
   neetActivate = mkPackage {pname = "neet-activate";};
-  neetSecret = mkPackage {pname = "neet-secret";};
   limineInstall = mkPackage {pname = "limine-install";};
   efistubSync = mkPackage {pname = "efistub-sync";};
   espSync = mkPackage {pname = "esp-sync";};

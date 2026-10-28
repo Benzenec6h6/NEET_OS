@@ -83,6 +83,12 @@ with lib; let
           description = "注入する環境変数名 (例: 'DATABASE_PASSWORD')";
         };
       };
+
+      inInitrd = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Stage 1 (initrd 内) に含めるシークレットかどうか";
+      };
     };
   };
 
@@ -155,6 +161,18 @@ in {
         defaultText = literalExpression "pkgs.inieet";
         description = "neet-secret バイナリを提供するパッケージ";
       };
+
+      backend = mkOption {
+        type = types.enum ["ssh" "tpm2"];
+        default = "ssh";
+        description = "シークレットの復号に使用するバックエンド";
+      };
+
+      tpmNvIndex = mkOption {
+        type = types.str;
+        default = "0x01500000";
+        description = "TPM2 NVRAM のインデックス番号";
+      };
     };
   };
 
@@ -191,5 +209,25 @@ in {
       '';
       down = "";
     };
+
+    system.s6-rc.services.secrets.up =
+      if secCfg.backend == "tpm2"
+      then ''
+        ${secCfg.package}/bin/neet-secret decrypt \
+          --tpm \
+          --tpm-nv-index "${secCfg.tpmNvIndex}" \
+          --manifest /etc/secrets-manifest.json \
+          --out-dir /run/secrets
+      ''
+      else ''
+        if [ -s "${secCfg.identityPath}" ]; then
+          ${secCfg.package}/bin/neet-secret decrypt \
+            --manifest /etc/secrets-manifest.json \
+            --key ${escapeShellArg secCfg.identityPath} \
+            --out-dir /run/secrets
+        else
+          echo "neet-secret: [warning] SSH host key ${secCfg.identityPath} not found."
+        fi
+      '';
   };
 }

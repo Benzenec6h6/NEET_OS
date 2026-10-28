@@ -18,6 +18,7 @@
       utilLinux = "${pkgs.pkgsStatic.util-linux}";
       mdevd = "${pkgs.pkgsStatic.mdevd}";
       stage1Mount = "${config.system.build.stage1Mount}";
+      neetSecret = "${config.system.build.neetSecret}";
       mdevdDiskScript = "${config.system.build.mdevdDisk}/bin/mdevd-disk.sh";
       extraBin = "${pkgs.buildEnv {
         name = "initrd-extra-bin";
@@ -57,28 +58,33 @@ in {
     system.build.initrd = pkgs.makeInitrdNG {
       name = "stage1-initrd";
       prepend = config.boot.initrd.prepend;
-      contents = [
-        {
-          source = config.system.build.stage1Script;
-          target = "/init";
-        }
-        {
-          source = "${initrdEnv}/bin";
-          target = "/bin";
-        }
-        {
-          source = "${modulesClosure}/lib";
-          target = "/lib";
-        }
-        {
-          source = pkgs.writeText "mdev.conf" config.services.mdevd.rules;
-          target = "/etc/mdev.conf";
-        }
-        {
-          source = config.system.build.stage1MountPlan;
-          target = "/mount-plan.json";
-        }
-      ];
+      contents =
+        [
+          {
+            source = config.system.build.stage1Script;
+            target = "/init";
+          }
+          {
+            source = "${initrdEnv}/bin";
+            target = "/bin";
+          }
+          {
+            source = "${modulesClosure}/lib";
+            target = "/lib";
+          }
+          {
+            source = pkgs.writeText "mdev.conf" config.services.mdevd.rules;
+            target = "/etc/mdev.conf";
+          }
+          {
+            source = config.system.build.stage1MountPlan;
+            target = "/mount-plan.json";
+          }
+        ]
+        ++ (lib.mapAttrsToList (name: secret: {
+          source = secret.file;
+          target = "/etc/secrets/${name}.age";
+        }) (lib.filterAttrs (_: s: s.inInitrd or false) config.neet.secrets));
     };
   };
 }
