@@ -27,7 +27,11 @@ nix-env -p /nix/var/nix/profiles/system --set "$TOPLEVEL"
 
 # 3. ブートローダの更新 (boot と switch の両方で実行)
 echo "==> [neet-rebuild] Updating bootloader..."
-if command -v install-bootloader >/dev/null 2>&1; then
+NEW_INSTALLER="$TOPLEVEL/bin/install-bootloader"
+
+if [ -x "$NEW_INSTALLER" ]; then
+  "$NEW_INSTALLER"
+elif command -v install-bootloader >/dev/null 2>&1; then
   install-bootloader
 else
   echo "==> [neet-rebuild] warning: 'install-bootloader' not found. Skipping bootloader update."
