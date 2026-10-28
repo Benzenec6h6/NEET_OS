@@ -36,11 +36,18 @@ with lib; let
   in
     foldl' step 0 chars;
 
+  # 各シークレットの定義スキーマ
   secretOpts = {name, ...}: {
     options = {
       file = mkOption {
         type = types.path;
         description = "暗号化された .age ファイルへのパス (リポジトリ内の相対パスなど)";
+      };
+
+      inInitrd = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Stage 1 (LUKS 解錠前) の initrd 内に含めるシークレットかどうか";
       };
 
       path = mkOption {
@@ -83,16 +90,10 @@ with lib; let
           description = "注入する環境変数名 (例: 'DATABASE_PASSWORD')";
         };
       };
-
-      inInitrd = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Stage 1 (initrd 内) に含めるシークレットかどうか";
-      };
     };
   };
 
-  # neet-secret が読み込むマニフェスト JSON の生成
+  # (inInitrd = true のものは Stage 1 用なので、Stage 2 のマニフェストからは除外しても構いませんが、含んでいても問題ありません)
   manifestJson = pkgs.writeText "secrets-manifest.json" (builtins.toJSON {
     secrets =
       mapAttrsToList (name: s: {
@@ -113,19 +114,19 @@ with lib; let
           }
           else null;
       })
-      cfg;
+      (filterAttrs (_: s: !s.inInitrd) cfg);
   });
 in {
   options = {
-    # 各シークレットの定義
+    # 各シークレットの定義 (元のまま secretOpts を渡すだけ)
     neet.secrets = mkOption {
       type = types.attrsOf (types.submodule secretOpts);
       default = {};
       example = literalExpression ''
         {
-          "wg-private-key" = {
-            file = ./secrets/wg.age;
-            mode = "0400";
+          "luks-root-key" = {
+            file = ./secrets/luks-root.age;
+            inInitrd = true;
           };
           "db-password" = {
             file = ./secrets/db-pass.age;
@@ -149,29 +150,32 @@ in {
         description = "neet-secret によるシークレット復号機構を有効にするかどうか";
       };
 
+      # ★ 追加: 復号バックエンドの切り替え
+      backend = mkOption {
+        type = types.enum ["ssh" "tpm2"];
+        default = "ssh";
+        description = "復号に使用する鍵ソース (ssh: SSHホスト鍵, tpm2: TPM 2.0 NVRAM)";
+      };
+
+      # backend = "ssh" の場合に使用
       identityPath = mkOption {
         type = types.str;
         default = "/var/lib/sshd/ssh_host_ed25519_key";
-        description = "復号に使用する SSH 秘密鍵のパス";
+        description = "backend = 'ssh' の時に使用する SSH 秘密鍵のパス";
+      };
+
+      # ★ 追加: backend = "tpm2" の場合に使用
+      tpmNvIndex = mkOption {
+        type = types.str;
+        default = "0x01500000";
+        description = "backend = 'tpm2' の時に使用する TPM NVRAM インデックス番号";
       };
 
       package = mkOption {
         type = types.package;
         default = config.system.build.neetSecret;
-        defaultText = literalExpression "pkgs.inieet";
+        defaultText = literalExpression "config.system.build.neetSecret";
         description = "neet-secret バイナリを提供するパッケージ";
-      };
-
-      backend = mkOption {
-        type = types.enum ["ssh" "tpm2"];
-        default = "ssh";
-        description = "シークレットの復号に使用するバックエンド";
-      };
-
-      tpmNvIndex = mkOption {
-        type = types.str;
-        default = "0x01500000";
-        description = "TPM2 NVRAM のインデックス番号";
       };
     };
   };
@@ -194,40 +198,30 @@ in {
       format = "sh";
       autoStart = true;
 
-      # ホスト鍵が openssh 側で生成される場合は、その生成完了を待つ
-      dependencies = optional (config.services.openssh.enable or false) "sshd-prepare";
+      # SSH バックエンドの時だけホスト鍵の生成 (sshd-prepare) を待つ。TPM の時は依存なし。
+      dependencies = optional (secCfg.backend == "ssh" && (config.services.openssh.enable or false)) "sshd-prepare";
 
-      up = ''
-        if [ -s "${secCfg.identityPath}" ]; then
+      up =
+        if secCfg.backend == "tpm2"
+        then ''
           ${secCfg.package}/bin/neet-secret decrypt \
             --manifest /etc/secrets-manifest.json \
-            --key ${escapeShellArg secCfg.identityPath} \
+            --tpm \
+            --tpm-nv-index "${secCfg.tpmNvIndex}" \
             --out-dir /run/secrets
-        else
-          echo "neet-secret: [warning] SSH host key ${secCfg.identityPath} not found. Skipping secret decryption."
-        fi
-      '';
+        ''
+        else ''
+          if [ -s "${secCfg.identityPath}" ]; then
+            ${secCfg.package}/bin/neet-secret decrypt \
+              --manifest /etc/secrets-manifest.json \
+              --key ${escapeShellArg secCfg.identityPath} \
+              --out-dir /run/secrets
+          else
+            echo "neet-secret: [warning] SSH host key ${secCfg.identityPath} not found. Skipping secret decryption."
+          fi
+        '';
+
       down = "";
     };
-
-    system.s6-rc.services.secrets.up =
-      if secCfg.backend == "tpm2"
-      then ''
-        ${secCfg.package}/bin/neet-secret decrypt \
-          --tpm \
-          --tpm-nv-index "${secCfg.tpmNvIndex}" \
-          --manifest /etc/secrets-manifest.json \
-          --out-dir /run/secrets
-      ''
-      else ''
-        if [ -s "${secCfg.identityPath}" ]; then
-          ${secCfg.package}/bin/neet-secret decrypt \
-            --manifest /etc/secrets-manifest.json \
-            --key ${escapeShellArg secCfg.identityPath} \
-            --out-dir /run/secrets
-        else
-          echo "neet-secret: [warning] SSH host key ${secCfg.identityPath} not found."
-        fi
-      '';
   };
 }
