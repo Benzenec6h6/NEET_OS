@@ -164,13 +164,6 @@ in {
         description = "backend = 'ssh' の時に使用する SSH 秘密鍵のパス";
       };
 
-      # ★ 追加: backend = "tpm2" の場合に使用
-      tpmNvIndex = mkOption {
-        type = types.str;
-        default = "0x01500000";
-        description = "backend = 'tpm2' の時に使用する TPM NVRAM インデックス番号";
-      };
-
       package = mkOption {
         type = types.package;
         default = config.system.build.neetSecret;
@@ -207,7 +200,6 @@ in {
           ${secCfg.package}/bin/neet-secret decrypt \
             --manifest /etc/secrets-manifest.json \
             --tpm \
-            --tpm-nv-index "${secCfg.tpmNvIndex}" \
             --out-dir /run/secrets
         ''
         else ''
