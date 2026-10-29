@@ -52,6 +52,11 @@ with lib; let
         default = null;
         description = "パスワードハッシュ";
       };
+      hashedPasswordSecret = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "パスワードハッシュを供給する neet.secrets の名前（例: 'user-neet-hash'）";
+      };
     };
   };
 
