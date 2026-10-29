@@ -1,13 +1,10 @@
-{
-  pkgs,
-  lib,
-  ...
-}: {
+{...}: {
   imports = [
     ./nix-daemon.nix
     ./dbus.nix
     ./seatd.nix
     ./device-manager.nix
+    ./display-manager
     ./gardendevd
     ./mdevd
     ./dhcpcd.nix

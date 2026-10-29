@@ -1,9 +1,4 @@
-{
-  config,
-  pkgs,
-  lib,
-  ...
-}: {
+{...}: {
   imports = [
     ./console.nix
     ./firmware.nix

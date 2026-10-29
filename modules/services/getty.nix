@@ -7,11 +7,16 @@
   cfg = config.services.getty;
   primaryConsole = builtins.head config.boot.consoles;
 
+  # DMが有効な場合はそのTTY（例: "tty1"）を取得してagettyの対象から外す
+  dmTty =
+    if (config.services.displayManager.enable or false)
+    then "tty${toString config.services.displayManager.tty}"
+    else null;
+
+  activeConsoles = builtins.filter (tty: tty != dmTty) config.boot.consoles;
+
   mkGettyCmd = tty: let
     isSerial = lib.hasPrefix "ttyS" tty || lib.hasPrefix "ttyUSB" tty;
-
-    # ★ ここがポイント:
-    # autologinUser が設定されていて、かつ「先頭のコンソール(プライマリ)」である場合のみ autologin を有効化
     isAutologin = (cfg.autologinUser != null) && (tty == primaryConsole);
 
     flags =
@@ -55,6 +60,6 @@ in {
   };
 
   config = {
-    system.s6-rc.services = builtins.listToAttrs (map mkGettyService config.boot.consoles);
+    system.s6-rc.services = builtins.listToAttrs (map mkGettyService activeConsoles);
   };
 }
