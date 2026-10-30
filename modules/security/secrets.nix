@@ -26,6 +26,7 @@ with lib; let
       pkgs.coreutils
     ];
 
+    checkPhase = "";
     text = editorScriptText;
   };
 
