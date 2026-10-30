@@ -8,6 +8,28 @@ with lib; let
   cfg = config.neet.secrets;
   secCfg = config.neet.security.secrets;
 
+  editorScriptText =
+    replaceStrings
+    ["@defaultRecipients@" "@defaultIdentity@"]
+    [
+      (concatMapStringsSep " " (k: escapeShellArg "-r ${k}") secCfg.editor.publicKeys)
+      (escapeShellArg secCfg.editor.defaultIdentity)
+    ]
+    (builtins.readFile ./neet-secret-edit.sh);
+
+  # ★ runtimeInputs を使って堅牢なパッケージにする
+  secretEditorPkg = pkgs.writeShellApplication {
+    name = "neet-secret-edit";
+
+    runtimeInputs = [
+      pkgs.age
+      pkgs.coreutils
+    ];
+
+    text = editorScriptText;
+  };
+
+  # 複数のage 秘密鍵は想定されない
   # 8進数文字列 ("0400", "0644" など) を 10進数整数 (256, 420 など) に変換するヘルパー
   octalToDecimal = str: let
     cleanStr = removePrefix "0o" (removePrefix "0" (toString str));
@@ -170,6 +192,26 @@ in {
         defaultText = literalExpression "config.system.build.neetSecret";
         description = "neet-secret バイナリを提供するパッケージ";
       };
+
+      editor = {
+        # 暗号化の受信者として登録する公開鍵リスト
+        publicKeys = mkOption {
+          type = types.listOf types.str;
+          default = [];
+          example = [
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..." # 開発者の SSH 鍵
+            "age1ql3z7hjyfk5pw7k9..." # TPM 用の age 公開鍵
+          ];
+          description = "シークレット暗号化時に合鍵として含める公開鍵リスト";
+        };
+
+        # 開発者が手元で復号するために使う秘密鍵のデフォルトパス
+        defaultIdentity = mkOption {
+          type = types.str;
+          default = "$HOME/.ssh/id_ed25519";
+          description = "手元で編集時に復号用として使うデフォルト秘密鍵パス";
+        };
+      };
     };
   };
 
@@ -184,6 +226,8 @@ in {
 
     # マニフェストを /etc に配置
     environment.etc."secrets-manifest.json".source = manifestJson;
+
+    environment.systemPackages = [secretEditorPkg];
 
     # s6-rc: ブート時にシークレットを復号する oneshot サービス
     system.s6-rc.services.secrets = {
