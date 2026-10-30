@@ -33,7 +33,7 @@ tpm2_nvdefine "$NV_INDEX" \
 
 # 4. age 鍵ペアを生成し、秘密鍵はファイルを作らず直接 TPM に書き込む
 KEY_OUTPUT=$(age-keygen 2>&1)
-PUB_KEY=$(echo "$KEY_OUTPUT" | grep "^public key:" | cut -d' ' -f3)
+PUB_KEY=$(echo "$KEY_OUTPUT" | grep -o 'age1[0-9a-z]\+')
 
 echo "$KEY_OUTPUT" | grep -v "^#" | tr -d '\r\n' | tpm2_nvwrite "$NV_INDEX" -C o -i -
 unset KEY_OUTPUT
