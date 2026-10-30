@@ -185,7 +185,14 @@ in {
         description = "neet-secret によるシークレット復号機構を有効にするかどうか";
       };
 
-      # ★ 追加: 復号バックエンドの切り替え
+      tools = {
+        enable = mkOption {
+          type = types.bool;
+          default = false;
+          description = "neet-secret-edit や neet-tpm-enroll などの管理用 CLI を環境に導入するかどうか";
+        };
+      };
+
       backend = mkOption {
         type = types.enum ["ssh" "tpm2"];
         default = "ssh";
@@ -228,49 +235,50 @@ in {
     };
   };
 
-  config = mkIf secCfg.enable {
-    # 整合性チェック
-    assertions =
-      mapAttrsToList (name: s: {
-        assertion = (s.env.service != null) == (s.env.var != null);
-        message = "neet.secrets.${name}: env.service と env.var は両方指定するか、両方 null にする必要があります。";
-      })
-      cfg;
+  config = mkMerge [
+    # ① 復号サービス本体 (シークレットが定義されている、または明示的に enable の時だけ動く)
+    (mkIf secCfg.enable {
+      assertions =
+        mapAttrsToList (name: s: {
+          assertion = (s.env.service != null) == (s.env.var != null);
+          message = "neet.secrets.${name}: env.service と env.var は両方指定するか、両方 null にする必要があります。";
+        })
+        cfg;
 
-    # マニフェストを /etc に配置
-    environment.etc."secrets-manifest.json".source = manifestJson;
+      environment.etc."secrets-manifest.json".source = manifestJson;
 
-    environment.systemPackages = [secretEditorPkg tpmEnrollPkg];
+      system.s6-rc.services.secrets = {
+        type = "oneshot";
+        format = "sh";
+        autoStart = true;
+        dependencies = optional (secCfg.backend == "ssh" && (config.services.openssh.enable or false)) "sshd-prepare";
 
-    # s6-rc: ブート時にシークレットを復号する oneshot サービス
-    system.s6-rc.services.secrets = {
-      type = "oneshot";
-      format = "sh";
-      autoStart = true;
-
-      # SSH バックエンドの時だけホスト鍵の生成 (sshd-prepare) を待つ。TPM の時は依存なし。
-      dependencies = optional (secCfg.backend == "ssh" && (config.services.openssh.enable or false)) "sshd-prepare";
-
-      up =
-        if secCfg.backend == "tpm2"
-        then ''
-          ${secCfg.package}/bin/neet-secret decrypt \
-            --manifest /etc/secrets-manifest.json \
-            --tpm \
-            --out-dir /run/secrets
-        ''
-        else ''
-          if [ -s "${secCfg.identityPath}" ]; then
+        up =
+          if secCfg.backend == "tpm2"
+          then ''
             ${secCfg.package}/bin/neet-secret decrypt \
               --manifest /etc/secrets-manifest.json \
-              --key ${escapeShellArg secCfg.identityPath} \
+              --tpm \
               --out-dir /run/secrets
-          else
-            echo "neet-secret: [warning] SSH host key ${secCfg.identityPath} not found. Skipping secret decryption."
-          fi
-        '';
+          ''
+          else ''
+            if [ -s "${secCfg.identityPath}" ]; then
+              ${secCfg.package}/bin/neet-secret decrypt \
+                --manifest /etc/secrets-manifest.json \
+                --key ${escapeShellArg secCfg.identityPath} \
+                --out-dir /run/secrets
+            else
+              echo "neet-secret: [warning] SSH host key ${secCfg.identityPath} not found. Skipping secret decryption."
+            fi
+          '';
 
-      down = "";
-    };
-  };
+        down = "";
+      };
+    })
+
+    # ② CLI ツール群 (復号サービス有効時、または明示的に tools.enable = true の時に導入)
+    (mkIf (secCfg.enable || secCfg.tools.enable) {
+      environment.systemPackages = [secretEditorPkg tpmEnrollPkg];
+    })
+  ];
 }
