@@ -240,9 +240,7 @@ in {
     # マニフェストを /etc に配置
     environment.etc."secrets-manifest.json".source = manifestJson;
 
-    environment.systemPackages =
-      [secretEditorPkg]
-      ++ optional (secCfg.backend == "tpm2") tpmEnrollPkg;
+    environment.systemPackages = [secretEditorPkg tpmEnrollPkg];
 
     # s6-rc: ブート時にシークレットを復号する oneshot サービス
     system.s6-rc.services.secrets = {
