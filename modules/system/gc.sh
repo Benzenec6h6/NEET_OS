@@ -22,7 +22,13 @@ nix-store --gc
 # 3. ブート環境の同期
 # (esp-sync が古い UKI/カーネルを削除し、efistub-sync が古い BootXXXX を削除し、limine は conf を再生成する)
 echo "==> [neet-gc] Synchronizing bootloader environment..."
-if command -v install-bootloader >/dev/null 2>&1; then
+
+PROFILE_BOOTLOADER="/nix/var/nix/profiles/system/bin/install-bootloader"
+
+if [ -x "$PROFILE_BOOTLOADER" ]; then
+  "$PROFILE_BOOTLOADER"
+elif command -v install-bootloader >/dev/null 2>&1; then
+  echo "==> [neet-gc] warning: Profile bootloader not found. Falling back to current PATH."
   install-bootloader
 else
   echo "==> [neet-gc] warning: 'install-bootloader' not found. Skipping bootloader sync."

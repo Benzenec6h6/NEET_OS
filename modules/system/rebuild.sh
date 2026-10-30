@@ -29,12 +29,12 @@ nix-env -p /nix/var/nix/profiles/system --set "$TOPLEVEL"
 echo "==> [neet-rebuild] Updating bootloader..."
 NEW_INSTALLER="$TOPLEVEL/bin/install-bootloader"
 
+# ★ 新しくビルドされた toplevel のインストーラを直接実行
 if [ -x "$NEW_INSTALLER" ]; then
   "$NEW_INSTALLER"
-elif command -v install-bootloader >/dev/null 2>&1; then
-  install-bootloader
 else
-  echo "==> [neet-rebuild] warning: 'install-bootloader' not found. Skipping bootloader update."
+  echo "==> [neet-rebuild] error: Bootloader installer not found at $NEW_INSTALLER" >&2
+  exit 1
 fi
 
 # 4. switch の場合のみ、稼働中のシステムを動的切り替え

@@ -13,14 +13,16 @@ set -euo pipefail
 : "${hostSystem:?hostSystem must be set}"
 : "${kernelVersion:?kernelVersion must be set}"
 : "${core:?core must be set}"
+: "${installBootLoader:?installBootLoader must be set}"
 
-mkdir -p "$out"
+mkdir -p "$out/bin"
 
 # 1. 基本システムリンク
 ln -s "$core" "$out/core"
 ln -s "$stage2Init" "$out/init"
 ln -s "$systemPath" "$out/system-path"
 ln -s "$etc" "$out/etc"
+ln -s "$installBootLoader" "$out/bin/install-bootloader"
 
 # 2. グラフィックスドライバ (rebuild.sh 判定用 / オプション)
 if [ -n "${graphicsDrivers:-}" ]; then

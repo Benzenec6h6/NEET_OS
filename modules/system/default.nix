@@ -46,6 +46,7 @@
       stage2Init = stage2Init;
       systemPath = config.system.path;
       etc = config.system.etc.package;
+      installBootLoader = "${config.system.build.installBootLoader}";
 
       graphicsDrivers = lib.optionalString (config.hardware.graphics.enable or false) config.system.build.graphicsDrivers;
       graphicsDrivers32 = lib.optionalString (config.hardware.graphics.enable32Bit or false) config.system.build.graphicsDrivers32;
