@@ -29,7 +29,20 @@ with lib; let
     text = editorScriptText;
   };
 
-  # 複数のage 秘密鍵は想定されない
+  tpmEnrollPkg = pkgs.writeShellApplication {
+    name = "neet-tpm-enroll";
+
+    runtimeInputs = with pkgs; [
+      tpm2-tools
+      age
+      coreutils
+      gnugrep
+      util-linux # mount, umount 用
+    ];
+
+    text = builtins.readFile ./neet-tpm-enroll.sh;
+  };
+
   # 8進数文字列 ("0400", "0644" など) を 10進数整数 (256, 420 など) に変換するヘルパー
   octalToDecimal = str: let
     cleanStr = removePrefix "0o" (removePrefix "0" (toString str));
@@ -227,7 +240,9 @@ in {
     # マニフェストを /etc に配置
     environment.etc."secrets-manifest.json".source = manifestJson;
 
-    environment.systemPackages = [secretEditorPkg];
+    environment.systemPackages =
+      [secretEditorPkg]
+      ++ optional (secCfg.backend == "tpm2") tpmEnrollPkg;
 
     # s6-rc: ブート時にシークレットを復号する oneshot サービス
     system.s6-rc.services.secrets = {
