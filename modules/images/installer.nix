@@ -89,6 +89,8 @@ in {
     networking.hostName = "neet-installer";
 
     # 5. インストール・暗号化・検証に必要なツール類
+    neet.security.secrets.tools.enable = true;
+
     environment.systemPackages = with pkgs; [
       cryptsetup
       gptfdisk
