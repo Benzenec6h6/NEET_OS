@@ -24,7 +24,7 @@ in {
     # 指定された設定ファイルを /etc/hypr/hyprland.conf として配置
     environment.etc."hypr/hyprland.conf".source = cfg.configFile;
 
-    environment.sessionVariables = {
+    environment.variables = {
       WLR_NO_HARDWARE_CURSORS = "1";
     };
 

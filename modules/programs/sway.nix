@@ -25,7 +25,7 @@ in {
     environment.etc."sway/config".source = cfg.configFile;
 
     # VMでのマウス消失を防ぐ環境変数
-    environment.sessionVariables = {
+    environment.variables = {
       WLR_NO_HARDWARE_CURSORS = "1";
     };
 
