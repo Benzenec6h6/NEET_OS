@@ -84,6 +84,11 @@
         default = null;
         description = "マッパー名 (/dev/mapper/<name>)。null の場合は 'crypt_<partition.name>'";
       };
+      keySecret = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Stage 1 で TPM 解錠に使う neet.secrets の名前（例: 'luks-root-key'）";
+      };
       content = mkOption {
         type = types.nullOr (types.submodule contentOpts);
         default = null;

@@ -186,6 +186,7 @@
       value = {
         inherit name;
         device = "/dev/disk/by-partuuid/${p.guid}";
+        keySecret = p.content.keySecret or null;
       };
     })
     luksPartitions);
