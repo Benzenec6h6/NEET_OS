@@ -10,9 +10,9 @@ with lib; let
 
   editorScriptText =
     replaceStrings
-    ["@defaultRecipients@" "@defaultIdentity@"]
+    ["@defaultPublicKeys@" "@defaultIdentity@"]
     [
-      (concatMapStringsSep " " (k: escapeShellArg "-r ${k}") secCfg.editor.publicKeys)
+      (concatMapStringsSep " " escapeShellArg secCfg.editor.publicKeys)
       (escapeShellArg secCfg.editor.defaultIdentity)
     ]
     (builtins.readFile ./neet-secret-edit.sh);

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Nix のオプションから注入されるデフォルト値
-DEFAULT_RECIPIENTS=(@defaultRecipients@)
+# Nix のオプションから注入される公開鍵リスト
+DEFAULT_KEYS=(@defaultPublicKeys@)
+DEFAULT_RECIPIENTS=()
+for k in "${DEFAULT_KEYS[@]}"; do
+  DEFAULT_RECIPIENTS+=("-r" "$k")
+done
+
 IDENTITY="${NEET_SECRET_IDENTITY:-@defaultIdentity@}"
 
 # 引数解析
