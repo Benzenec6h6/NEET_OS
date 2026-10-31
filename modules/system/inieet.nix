@@ -22,6 +22,7 @@ in {
       inieet.neetActivate
       inieet.espSync
       inieet.diskSetup
+      inieet.neetSecret
     ];
   };
 }

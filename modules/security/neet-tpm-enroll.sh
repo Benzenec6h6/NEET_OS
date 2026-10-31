@@ -5,7 +5,7 @@ set -euo pipefail
 export TPM2TOOLS_TCTI="device:/dev/tpmrm0"
 
 NV_INDEX="0x01500000"
-PCR_LIST="sha256:7,11"
+PCR_LIST="sha256:7"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "neet-tpm-enroll: error: root privileges are required (run with sudo or doas)." >&2
