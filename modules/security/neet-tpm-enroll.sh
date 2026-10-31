@@ -1,3 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# カーネルのリソースマネージャを直接指定 (余計な D-Bus 警告を消す)
+export TPM2TOOLS_TCTI="device:/dev/tpmrm0"
+
 NV_INDEX="0x01500000"
 PCR_LIST="sha256:7,11"
 
@@ -24,18 +30,19 @@ tpm2_createpolicy --policy-pcr --pcr-list "$PCR_LIST" -f "$TMP_DIR/pcr.bin" --po
 # 2. 既存スロットがあれば解放
 tpm2_nvundefine "$NV_INDEX" -C o 2>/dev/null || true
 
-# 3. NVRAM スロットを定義
+# 3. NVRAM スロットを定義 (128 バイト, PCR ポリシー制限)
 tpm2_nvdefine "$NV_INDEX" \
     -C o \
     -s 128 \
     -a "ownerread|policyread|ownerwrite" \
     -L "$TMP_DIR/pcr.policy"
 
-# 4. age 鍵ペアを生成し、秘密鍵はファイルを作らず直接 TPM に書き込む
+# 4. age 鍵ペアを生成
 KEY_OUTPUT=$(age-keygen 2>&1)
-PUB_KEY=$(echo "$KEY_OUTPUT" | grep -o 'age1[0-9a-z]\+')
+PUB_KEY=$(echo "$KEY_OUTPUT" | grep -o 'age1[0-9a-z]\+' | head -n 1)
 
-echo "$KEY_OUTPUT" | grep -v "^#" | tr -d '\r\n' | tpm2_nvwrite "$NV_INDEX" -C o -i -
+# ★ 修正: AGE-SECRET-KEY で始まる行だけを抽出し、改行を消して流し込む (約73バイト)
+echo "$KEY_OUTPUT" | grep '^AGE-SECRET-KEY-' | tr -d '\r\n' | tpm2_nvwrite "$NV_INDEX" -C o -i -
 unset KEY_OUTPUT
 
 echo ""
