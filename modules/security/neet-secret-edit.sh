@@ -55,7 +55,7 @@ if [[ -f "$TARGET_FILE" ]]; then
 fi
 
 # エディタ起動
-"${EDITOR:-nano}" "$TMP_FILE"
+"${EDITOR:-vim}" "$TMP_FILE"
 
 # 保存・暗号化
 mkdir -p "$(dirname "$TARGET_FILE")"

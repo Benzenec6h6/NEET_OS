@@ -24,6 +24,7 @@ with lib; let
     runtimeInputs = [
       pkgs.age
       pkgs.coreutils
+      pkg.vim
     ];
 
     checkPhase = "";
