@@ -31,7 +31,6 @@ echo "NEET OS Stage 1: Loading drivers..."
 echo /bin/modprobe > /proc/sys/kernel/modprobe
 for mod in @kernelModules@; do
     if command -v modprobe >/dev/null 2>&1; then
-        # 失敗を握りつぶさず表示する（モジュール名の誤りに気づけるように）
         modprobe $mod || echo "NEET OS Stage 1: warning: modprobe $mod failed"
     else
         find "/lib/modules/@kernelVersion@" -name "$mod.ko*" -exec insmod {} \; 2>/dev/null || true
@@ -52,15 +51,15 @@ if ! mountpoint -q /mnt; then
     die "/mnt is not a mountpoint after stage1-mount"
 fi
 
-echo "NEET OS Stage 1: Preparing Stage 2 env..."
-mkdir -p /mnt/bin /mnt/etc /mnt/run /mnt/root /mnt/proc /mnt/sys /mnt/dev /mnt/tmp /mnt/var/log \
+echo "NEET OS Stage 1: Preparing Stage 2 minimal mountpoints..."
+# ★ 改善: switch_root に必要な最小限（マウント移動先と bin 置場）だけに絞る
+# (/var/log や /root 等の状態ディレクトリ作成は Stage 2 の neet-activate に任せる)
+mkdir -p /mnt/proc /mnt/sys /mnt/dev /mnt/run /mnt/bin /mnt/usr/bin \
     || die "failed to prepare /mnt (read-only root?)"
 
-ln -sf "@systemPath@/bin/sh" /mnt/bin/sh || die "failed to link /mnt/bin/sh"
-
-# /usr/bin/env の作成 (一般的な #!/usr/bin/env bash スクリプトのために必須)
-mkdir -p /mnt/usr/bin
-ln -sf "@systemPath@/bin/env" /mnt/usr/bin/env 2>/dev/null || true
+# ★ 改善: Nix 側から注入された確実な実体へリンクを張る
+ln -sf "@shBin@" /mnt/bin/sh || die "failed to link /mnt/bin/sh"
+ln -sf "@envBin@" /mnt/usr/bin/env || die "failed to link /mnt/usr/bin/env"
 
 # プロパゲーションが private になったので、正常に move できる
 mount --move /proc /mnt/proc || die "failed to move /proc"

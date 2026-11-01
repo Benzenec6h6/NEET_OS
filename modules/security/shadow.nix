@@ -19,14 +19,19 @@ with lib; let
   # シークレットからハッシュを注入する必要があるユーザー一覧
   usersWithSecret = filterAttrs (_: u: u.hashedPasswordSecret != null) cfg;
 
+  # コマンドのピン留め (セキュリティ担保と PATH 非依存化)
+  core = pkgs.coreutils;
+  sed = "${pkgs.gnused}/bin/sed";
+
   # s6-rc で実行する注入スクリプト
   applyScript = concatStringsSep "\n" (
     mapAttrsToList (name: u: ''
       _secret_file="/run/secrets/by-name/${u.hashedPasswordSecret}"
       if [ -s "$_secret_file" ]; then
-        _hash=$(cat "$_secret_file")
-        # sed の区切り文字にはハッシュに含まれない | を使用
-        sed -i "s|^${name}:[^:]*:|${name}:''${_hash}:|" /etc/shadow
+        # ★ 改善: cat を絶対パス化
+        _hash=$(${core}/bin/cat "$_secret_file")
+        # ★ 改善: sed を絶対パス化 (区切り文字は | )
+        ${sed} -i "s|^${name}:[^:]*:|${name}:''${_hash}:|" /etc/shadow
       else
         echo "shadow: [warning] Secret for user ${name} not found at $_secret_file"
       fi
@@ -55,10 +60,16 @@ in {
 
         up = ''
           # /etc/shadow が Nix store へのシンボリックリンクだった場合、
-          # 実体コピーに置き換えて書き込み可能にする (安全策)
+          # 実体コピーに安全に置き換えて書き込み可能にする
           if [ -L /etc/shadow ]; then
-            cp --remove-destination "$(readlink -f /etc/shadow)" /etc/shadow
-            chmod 0600 /etc/shadow
+            # ★ 改善: リンク先を確定パスの readlink で解決
+            _store_target=$(${core}/bin/readlink -f /etc/shadow)
+
+            # ★ 改善: 一時ファイルを作成して権限を 0600 に設定してから mv で不可分に入れ替える
+            # (一瞬たりとも /etc/shadow が消えたり不用意な権限で露出するのを防ぐ)
+            ${core}/bin/cp "$_store_target" /etc/shadow.tmp
+            ${core}/bin/chmod 0600 /etc/shadow.tmp
+            ${core}/bin/mv -f /etc/shadow.tmp /etc/shadow
           fi
 
           ${applyScript}

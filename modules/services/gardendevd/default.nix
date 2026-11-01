@@ -59,7 +59,7 @@ in {
     ];
 
     services.gardendevd.path = [
-      config.programs.coreutils.package
+      pkgs.coreutils
       pkgs.gnugrep
       pkgs.gnused
       pkgs.kmod
@@ -128,9 +128,9 @@ in {
             --replace-quiet \"/sbin/mdadm \"${pkgs.mdadm}/sbin/mdadm \
             --replace-quiet \"/sbin/blkid \"${pkgs.util-linux}/sbin/blkid \
             --replace-quiet \"/bin/mount \"${pkgs.util-linux}/bin/mount \
-            --replace-quiet /usr/bin/readlink ${lib.getExe' config.programs.coreutils.package "readlink"} \
-            --replace-quiet /usr/bin/cat ${lib.getExe' config.programs.coreutils.package "cat"} \
-            --replace-quiet /usr/bin/basename ${lib.getExe' config.programs.coreutils.package "basename"} 2>/dev/null
+            --replace-quiet /usr/bin/readlink ${pkgs.coreutils}/bin/readlink \
+            --replace-quiet /usr/bin/cat ${pkgs.coreutils}/bin/cat \
+            --replace-quiet /usr/bin/basename ${pkgs.coreutils}/bin/basename 2>/dev/null
         done
       '';
 

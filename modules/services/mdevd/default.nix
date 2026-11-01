@@ -8,7 +8,26 @@ with lib; let
   cfg = config.services.mdevd;
   gidOf = name: toString (config.neet.gids.${name} or 0);
 
-  mdevd-disk = pkgs.writeScriptBin "mdevd-disk.sh" (builtins.readFile ./mdevd-disk.sh);
+  diskScriptBinPath = lib.makeBinPath [
+    pkgs.pkgsStatic.util-linux
+    pkgs.pkgsStatic.busybox
+  ];
+
+  mdevd-disk-script = pkgs.replaceVarsWith {
+    src = ./mdevd-disk.sh;
+    replacements = {
+      binPath = diskScriptBinPath;
+    };
+    isExecutable = true;
+  };
+
+  # /bin/mdevd-disk.sh として配置できるパッケージ
+  mdevd-disk = pkgs.runCommand "mdevd-disk" {} ''
+    mkdir -p $out/bin
+    cp ${mdevd-disk-script} $out/bin/mdevd-disk.sh
+    chmod 755 $out/bin/mdevd-disk.sh
+  '';
+
   isMdevdStage2 = config.services.deviceManager == "mdevd";
 in {
   options.services.mdevd = {

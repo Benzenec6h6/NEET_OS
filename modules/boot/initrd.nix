@@ -4,34 +4,67 @@
   lib,
   ...
 }: let
+  # 1. 有効なファイルシステムのツール群
   extraFsPackages = lib.concatLists (
     lib.catAttrs "packages" (lib.attrValues (
-      lib.filterAttrs (n: fs: fs.enable) config.boot.initrd.supportedFilesystems
+      lib.filterAttrs (_: fs: fs.enable) config.boot.initrd.supportedFilesystems
     ))
   );
-  # ビルド用スクリプトの生成（変数の注入）
-  buildInitrdEnvScript = pkgs.replaceVarsWith {
-    src = ./build-initrd.sh;
-    replacements = {
-      busybox = "${pkgs.pkgsStatic.busybox}";
-      kmod = "${pkgs.pkgsStatic.kmod}";
-      utilLinux = "${pkgs.pkgsStatic.util-linux}";
-      mdevd = "${pkgs.pkgsStatic.mdevd}";
-      stage1Mount = "${config.system.build.stage1Mount}";
-      neetSecret = "${config.system.build.neetSecret}";
-      mdevdDiskScript = "${config.system.build.mdevdDisk}/bin/mdevd-disk.sh";
-      extraBin = "${pkgs.buildEnv {
-        name = "initrd-extra-bin";
-        paths = extraFsPackages;
-      }}";
-    };
-    isExecutable = true;
+
+  # 2. Stage 1 で優先して含めたいバイナリ・パッケージ群の宣言
+  primaryPackages =
+    [
+      # 自作ツール・スクリプト
+      config.system.build.stage1Mount
+      config.system.build.neetSecret
+      config.system.build.mdevdDisk
+
+      # デーモン
+      pkgs.pkgsStatic.mdevd
+
+      # util-linux から必須コマンドだけを抽出
+      (pkgs.runCommand "initrd-util-linux" {} ''
+        mkdir -p $out/bin
+        for b in mount umount losetup blkid fdisk fsck switch_root; do
+          p="${pkgs.pkgsStatic.util-linux}/bin/$b"
+          [ ! -f "$p" ] && p="${pkgs.pkgsStatic.util-linux}/sbin/$b"
+          cp -f "$p" $out/bin/
+        done
+      '')
+
+      # kmod (modprobe として配置)
+      (pkgs.runCommand "initrd-kmod" {} ''
+        mkdir -p $out/bin
+        cp -f "${pkgs.pkgsStatic.kmod}/bin/kmod" $out/bin/modprobe
+      '')
+    ]
+    ++ extraFsPackages;
+
+  # 3. 優先パッケージ群を 1 つのツリーにまとめる
+  primaryBin = pkgs.buildEnv {
+    name = "initrd-primary-bin";
+    paths = primaryPackages;
   };
 
-  # スクリプトを実行して initrdEnv を生成
+  # 4. BusyBox と優先バイナリを合成して initrdEnv を作成
+  # （スクリプトが数行に縮んだため、runCommand にインライン化）
   initrdEnv = pkgs.runCommand "initrd-env" {} ''
-    export out=$out
-    ${buildInitrdEnvScript}
+    mkdir -p "$out/bin"
+
+    # 宣言された優先バイナリ群をコピー (bin / sbin 両対応)
+    if [ -d "${primaryBin}/bin" ]; then
+      cp -fL "${primaryBin}/bin/"* "$out/bin/"
+    fi
+    if [ -d "${primaryBin}/sbin" ]; then
+      cp -fL "${primaryBin}/sbin/"* "$out/bin/"
+    fi
+
+    # サブツールとして BusyBox を配置
+    cp -fL "${pkgs.pkgsStatic.busybox}/bin/busybox" "$out/bin/busybox"
+    chmod 755 "$out/bin/"*
+
+    # 既存の優先バイナリを上書きせずに、足りないコマンドを BusyBox リンクで埋める
+    "$out/bin/busybox" --install -s "$out/bin"
   '';
 
   modulesClosure = pkgs.makeModulesClosure {
@@ -53,6 +86,7 @@ in {
       description = "initrd の先頭に連結する非圧縮 cpio イメージのリスト（マイクロコード等）";
     };
   };
+
   config = {
     system.build.debugModulesClosure = modulesClosure;
     system.build.initrd = pkgs.makeInitrdNG {

@@ -6,17 +6,21 @@
 }:
 with lib; let
   cfg = config.services.displayManager;
+  core = pkgs.coreutils;
 
   # 純粋な Wayland 用セッションラッパー
   sessionWrapper = pkgs.writeShellScript "neet-wayland-session" ''
     set -e
 
     # 1. XDG_RUNTIME_DIR の担保
+    # (users.nix により通常ユーザーは作成済みだが、greeter などのシステムUIDや未設定時のフォールバック)
     if [ -z "$XDG_RUNTIME_DIR" ]; then
-      export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+      # ★ 改善: id を絶対パス化
+      export XDG_RUNTIME_DIR="/run/user/$(${core}/bin/id -u)"
       if [ ! -d "$XDG_RUNTIME_DIR" ]; then
-        mkdir -p "$XDG_RUNTIME_DIR"
-        chmod 0700 "$XDG_RUNTIME_DIR"
+        # ★ 改善: mkdir と chmod を絶対パス化
+        ${core}/bin/mkdir -p "$XDG_RUNTIME_DIR"
+        ${core}/bin/chmod 0700 "$XDG_RUNTIME_DIR"
       fi
     fi
 

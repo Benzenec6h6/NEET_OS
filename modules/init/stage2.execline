@@ -1,5 +1,5 @@
 #!@execline@/bin/execlineb -P
-export PATH @core@/system-path/bin:@core@/system-path/sbin
+export PATH @execline@/bin:@s6@/bin:@s6Rc@/bin:@core@/system-path/bin:@core@/system-path/sbin
 fdmove -c 2 1
 foreground { echo "[stage2] Starting stage2 init sequence..." }
 
@@ -7,9 +7,6 @@ foreground { echo "[stage2] Starting stage2 init sequence..." }
 foreground { echo "[stage2] Running activation script (neet-activate)..." }
 if { @neetActivateBin@ @core@ }
 foreground { echo "[stage2] Activation done." }
-
-# /run のマウントが完了した後で、s6-rc 用のディレクトリを作る
-foreground { mkdir -p /run/service }
 
 # -------------------------------------------------------------
 # 同期用パイプの作成: fd 3 = 読み取り端, fd 4 = 書き込み端
@@ -25,13 +22,14 @@ background
 
   # fd 3 から1文字/1行が送られてくるまで待機
   # (標準入力を fd 3 に向け、head -n 1 で1行読み捨ててブロック解除)
-  foreground { fdmove 0 3 head -n 1 }
+  # ★ 改善: 注入された @head@ を直接叩くため、PATH に依存しない
+  foreground { fdmove 0 3 @head@ -n 1 }
   fdclose 3
 
   foreground { echo "[stage2-bg] Running s6-rc-init..." }
-  if { s6-rc-init -c @core@/s6-rc /run/service }
+  if { @s6Rc@/bin/s6-rc-init -c @core@/s6-rc /run/service }
   foreground { echo "[stage2-bg] Changing state to top..." }
-  s6-rc -u change top
+  @s6Rc@/bin/s6-rc -u change top
 }
 
 # [親プロセス] 読み取り用 fd 3 は使わないので閉じる
@@ -40,4 +38,4 @@ foreground { echo "[stage2] Executing s6-svscan..." }
 
 # -d 4 を指定して s6-svscan に exec
 # 準備完了時に s6-svscan が fd 4 に '\n' を書き込み、バックグラウンドが即座に起床する
-s6-svscan -d 4 /run/service
+@s6@/bin/s6-svscan -d 4 /run/service

@@ -99,19 +99,25 @@ in {
     # パッケージ導入
     environment.systemPackages = [cfg.package];
 
-    # --- 提案されたサービス定義に置き換え ---
+    system.stateDirectories = [
+      {
+        path = "/var/lib/nftables";
+        mode = "0700";
+      }
+    ];
+
+    # --- サービス定義 ---
     system.s6-rc.services.nftables = {
       type = "oneshot";
       format = "sh";
       up = ''
-        mkdir -p /var/lib/nftables
-        [ -e ${state} ] || : > ${state}
+        [ -e "${state}" ] || : > "${state}"
         ${cfg.package}/bin/nft -f ${ruleset}
-        cp ${deletions} ${state}
+        ${pkgs.coreutils}/bin/cp -f ${deletions} ${state}
       '';
       down = ''
         ${cfg.package}/bin/nft -f ${state}
-        : > ${state}
+        : > "${state}"
       '';
     };
   };
