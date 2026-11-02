@@ -5,6 +5,7 @@
   ...
 }: let
   neetRebuild = pkgs.writeShellScriptBin "neet-rebuild" (builtins.readFile ./rebuild.sh);
+  userRebuild = pkgs.writeShellScriptBin "user-rebuild" (builtins.readFile ./user-rebuild.sh);
   neetGC = pkgs.writeShellScriptBin "neet-gc" (builtins.readFile ./gc.sh);
   neetInstall = pkgs.writeShellScriptBin "neet-install" (builtins.readFile ./install.sh);
   inherit (lib) mkOption types;
@@ -74,6 +75,7 @@ in {
     # 必須の基幹ツール群を標準で含める
     environment.systemPackages = with pkgs; [
       neetRebuild
+      userRebuild
       neetGC
       neetInstall
       config.environment.execline

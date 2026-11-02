@@ -7,78 +7,8 @@
 with lib; let
   cfg = config.system.s6-rc;
 
-  serviceOpts = {name, ...}: {
-    options = {
-      type = mkOption {type = types.enum ["longrun" "oneshot"];};
-      run = mkOption {
-        type = types.lines;
-        default = "";
-      };
-      up = mkOption {
-        type = types.lines;
-        default = "";
-      };
-      down = mkOption {
-        type = types.lines;
-        default = "";
-      };
-      dependencies = mkOption {
-        type = types.listOf types.str;
-        default = [];
-      };
-      notification-fd = mkOption {
-        type = types.nullOr types.int;
-        default = null;
-      };
-      format = mkOption {
-        type = types.enum ["execline" "sh"];
-        default = "execline";
-        description = "oneshot スクリプトの記述言語 (execline または sh)";
-      };
-      autoStart = mkOption {
-        type = types.bool;
-        default = true;
-        description = "ブート時に自動起動する (top bundle に含める) かどうか";
-      };
-
-      envdirs = mkOption {
-        type = types.listOf types.str;
-        default = [];
-        description = "起動前に s6-envdir で読み込む環境変数ディレクトリ一覧";
-      };
-
-      loadSecrets = mkOption {
-        type = types.bool;
-        default = false;
-        description = "シークレット復号サービス (secrets) への依存と /run/secrets/env/<name> の読み込みを自動化する";
-      };
-
-      log = {
-        enable = mkEnableOption "s6-log によるロガー (<name>-log) の自動生成";
-        user = mkOption {
-          type = types.str;
-          default = "s6log";
-          description = "s6-log を実行するユーザー。/etc/passwd に存在する必要がある。";
-        };
-        dirs = mkOption {
-          type = types.listOf types.str;
-          default = ["/var/log/${name}"];
-          description = "事前に作成して user 所有にするログディレクトリ。args に現れるものを全て列挙する。";
-        };
-        args = mkOption {
-          type = types.listOf types.str;
-          default = ["n10" "s1000000" "T" "/var/log/${name}"];
-          description = "s6-log に渡す引数 (制御ディレクティブ、選択行、logdir)。";
-        };
-      };
-
-      logRun = mkOption {
-        type = types.nullOr types.lines;
-        default = null;
-        description = "ロガーの run スクリプトを丸ごと上書きする (log.* より優先)。longrun のみ有効。";
-      };
-    };
-  };
+  # ★ 変更点①: サービスオプションを共通ファイルからインポート
+  serviceOpts = import ./service-options.nix {inherit lib pkgs;};
 
   resolvedServices =
     mapAttrs (
@@ -103,6 +33,11 @@ with lib; let
     services = resolvedServices;
   };
 in {
+  # ★ 変更点②: user.nix を読み込む
+  imports = [
+    ./user.nix
+  ];
+
   options.system.s6-rc = {
     services = mkOption {
       type = types.attrsOf (types.submodule serviceOpts);

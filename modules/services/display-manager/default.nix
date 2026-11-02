@@ -6,41 +6,61 @@
 }:
 with lib; let
   cfg = config.services.displayManager;
-  core = pkgs.coreutils;
 
-  # 純粋な Wayland 用セッションラッパー
-  sessionWrapper = pkgs.writeShellScript "neet-wayland-session" ''
+  userSessionRunner = pkgs.writeShellScript "neet-user-session" ''
     set -e
 
-    # 1. XDG_RUNTIME_DIR の担保
-    # (users.nix により通常ユーザーは作成済みだが、greeter などのシステムUIDや未設定時のフォールバック)
-    if [ -z "$XDG_RUNTIME_DIR" ]; then
-      # ★ 改善: id を絶対パス化
-      export XDG_RUNTIME_DIR="/run/user/$(${core}/bin/id -u)"
-      if [ ! -d "$XDG_RUNTIME_DIR" ]; then
-        # ★ 改善: mkdir と chmod を絶対パス化
-        ${core}/bin/mkdir -p "$XDG_RUNTIME_DIR"
-        ${core}/bin/chmod 0700 "$XDG_RUNTIME_DIR"
-      fi
-    fi
-
-    # 2. Wayland 必須環境変数
+    USER_NAME="$(id -un)"
+    USER_UID="$(id -u)"
+    export XDG_RUNTIME_DIR="/run/user/$USER_UID"
+    export HOME="''${HOME:-/home/$USER_NAME}"
     export XDG_SESSION_TYPE=wayland
-    export XDG_CURRENT_DESKTOP="''${XDG_CURRENT_DESKTOP:-wlroots}"
-    export MOZ_ENABLE_WAYLAND=1
-    export QT_QPA_PLATFORM="wayland;xcb"
-    export _JAVA_AWT_WM_NONREPARENTING=1
 
-    # 3. seatd ソケット
     if [ -S /run/seatd/seatd.sock ]; then
       export SEATD_SOCK=/run/seatd/seatd.sock
     fi
 
-    # 4. D-Bus セッションバスを立ち上げてコンポジタを exec
-    if command -v ${pkgs.dbus}/bin/dbus-run-session >/dev/null 2>&1; then
-      exec ${pkgs.dbus}/bin/dbus-run-session -- "$@"
+    SERVICE_DIR="$XDG_RUNTIME_DIR/service"
+    LIVE_DIR="$XDG_RUNTIME_DIR/s6-rc"
+    COMPILED_DB="/etc/s6-rc/users/$USER_NAME/compiled"
+    DEFINITIONS="/etc/s6-rc/users/$USER_NAME/definitions"
+
+    if [ -d "$COMPILED_DB" ]; then
+      mkdir -p "$SERVICE_DIR"
+
+      # restartOnUpdate = false 用の実体スクリプト群をリンク
+      if [ -d "$DEFINITIONS" ]; then
+        rm -rf "$XDG_RUNTIME_DIR/service-definitions"
+        ln -sfn "$DEFINITIONS" "$XDG_RUNTIME_DIR/service-definitions"
+      fi
+
+      # 1. ユーザー用 s6-svscan をバックグラウンド起動
+      ${pkgs.s6}/bin/s6-svscan "$SERVICE_DIR" &
+      SVSCAN_PID=$!
+
+      until [ -p "$SERVICE_DIR/.s6-svscan/control" ] || [ -S "$SERVICE_DIR/.s6-svscan/control" ]; do
+        sleep 0.05
+      done
+
+      # 2. s6-rc を初期化してトップサービス群を一括起動！
+      ${pkgs.s6-rc}/bin/s6-rc-init -c "$COMPILED_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
+      ${pkgs.s6-rc}/bin/s6-rc -l "$LIVE_DIR" -u change top
+
+      # 3. セッション維持 (svscan の終了を見守る)
+      wait $SVSCAN_PID 2>/dev/null || true
+
+      # 4. ログアウト処理
+      if [ -d "$LIVE_DIR" ]; then
+        ${pkgs.s6-rc}/bin/s6-rc -l "$LIVE_DIR" -da change || true
+      fi
+      ${pkgs.s6}/bin/s6-svscanctl -t "$SERVICE_DIR" || true
+
     else
-      exec "$@"
+      if [ -n "$1" ]; then
+        exec "$@"
+      else
+        exec /bin/sh
+      fi
     fi
   '';
 in {
@@ -60,26 +80,18 @@ in {
 
     tty = mkOption {
       type = types.int;
-      default = 1; # tty1 をメインに設定
+      default = 1;
       description = "DMが使用する仮想端末 (VT/TTY) 番号";
-    };
-
-    defaultSession = mkOption {
-      type = types.str;
-      default = "";
-      example = "hyprland";
-      description = "デフォルトで起動するコンポジタ/セッションコマンド";
     };
 
     sessionWrapper = mkOption {
       type = types.package;
-      default = sessionWrapper;
-      description = "Waylandセッション起動時に環境を整備するラッパースクリプト";
+      default = userSessionRunner;
+      description = "ユーザーログイン時に実行されるセッションランナー";
     };
   };
 
   config = mkIf cfg.enable {
-    # PAM 設定に pam_sessiond.so を組み込み（デバイス権限委譲）
     neet.security.pam.services = {
       greetd.text = mkIf (cfg.provider == "greetd") ''
         auth      required    ${pkgs.pam}/lib/security/pam_unix.so nullok

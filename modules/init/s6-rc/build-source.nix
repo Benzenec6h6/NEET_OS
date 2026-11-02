@@ -2,6 +2,9 @@
   lib,
   pkgs,
   services,
+  # ユーザーサービス用には "/run/user/<uid>/service-definitions"、
+  # システム用には "/run/s6-rc-definitions" を指定可能
+  liveDefDir ? "/run/s6-rc-definitions",
 }:
 with lib; let
   hasLog = svc: svc.type == "longrun" && (svc.log.enable || svc.logRun != null);
@@ -25,20 +28,31 @@ with lib; let
         ${pkgs.s6}/bin/s6-log ${escapeShellArgs log.args}
     '';
 
-  # ★ 追加: envdirs を s6-envdir コマンド列に変換して元の run を exec するラッパー
   wrapRunScript = name: svc: let
     innerScript = pkgs.writeScript "${name}-run-inner" svc.run;
-    # s6-envdir /dir1 s6-envdir /dir2 ... のチェインを組み立てる
-    # ※ -I を指定すると、もしディレクトリが存在しなくてもエラー終了せずスルーしてくれる
     envdirCmds = concatMapStrings (dir: "${pkgs.s6}/bin/s6-envdir -I ${escapeShellArg dir} ") svc.envdirs;
+
+    # 通常の run スクリプト（Nix store 直結）
+    directRun =
+      if svc.envdirs == []
+      then pkgs.writeScript "${name}-run" svc.run
+      else
+        pkgs.writeScript "${name}-run" ''
+          #!${pkgs.runtimeShell}
+          exec ${envdirCmds}${innerScript} "$@"
+        '';
+
+    # ★ restartOnUpdate = false 用の固定ラッパー
+    # s6-rc-compile に渡す中身は「固定パスを実行するだけ」なので、
+    # 世代更新されてもハッシュが変わらず s6-rc-update に無視される
+    stableWrapper = pkgs.writeScript "${name}-run-stable" ''
+      #!${pkgs.runtimeShell}
+      exec ${liveDefDir}/${name}/run "$@"
+    '';
   in
-    if svc.envdirs == []
-    then pkgs.writeScript "${name}-run" svc.run
-    else
-      pkgs.writeScript "${name}-run" ''
-        #!${pkgs.runtimeShell}
-        exec ${envdirCmds}${innerScript} "$@"
-      '';
+    if svc.restartOnUpdate
+    then directRun
+    else stableWrapper;
 
   # 本体サービス
   makeServiceDir = name: svc: let
@@ -76,7 +90,6 @@ with lib; let
       })
       files);
 
-  # ロガーサービス (<name>-log)
   makeLoggerDir = name: svc:
     pkgs.linkFarm "${name}-log-srv-dir" [
       {
