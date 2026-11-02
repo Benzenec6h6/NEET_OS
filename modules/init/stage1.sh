@@ -54,7 +54,7 @@ fi
 echo "NEET OS Stage 1: Preparing Stage 2 minimal mountpoints..."
 # ★ 改善: switch_root に必要な最小限（マウント移動先と bin 置場）だけに絞る
 # (/var/log や /root 等の状態ディレクトリ作成は Stage 2 の neet-activate に任せる)
-mkdir -p /mnt/proc /mnt/sys /mnt/dev /mnt/run /mnt/bin /mnt/usr/bin \
+mkdir -p /mnt/proc /mnt/sys /mnt/dev /mnt/run /mnt/bin /mnt/usr/bin /mnt/etc /mnt/tmp /mnt/root /mnt/var/log \
     || die "failed to prepare /mnt (read-only root?)"
 
 # ★ 改善: Nix 側から注入された確実な実体へリンクを張る
