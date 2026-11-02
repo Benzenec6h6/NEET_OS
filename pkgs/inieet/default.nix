@@ -52,7 +52,7 @@ in {
       OPENSSL_LIB_DIR = "${pkgs.pkgsStatic.openssl.out}/lib";
       OPENSSL_INCLUDE_DIR = "${pkgs.pkgsStatic.openssl.dev}/include";
 
-      NIX_LDFLAGS = "-Wl,--start-group -ltss2-tcti-device -ltss2-tcti-swtpm -ltss2-tcti-mssim -lc -Wl,--end-group";
+      NIX_LDFLAGS = "--start-group -ltss2-tcti-device -ltss2-tcti-swtpm -ltss2-tcti-mssim -lc --end-group";
     };
   };
 
