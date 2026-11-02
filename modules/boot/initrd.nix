@@ -64,7 +64,12 @@
     chmod 755 "$out/bin/"*
 
     # 既存の優先バイナリを上書きせずに、足りないコマンドを BusyBox リンクで埋める
-    (cd "$out/bin" && ./busybox --install -s .)
+    cd "$out/bin"
+    for app in $(./busybox --list); do
+      if [ ! -e "$app" ]; then
+        ln -s busybox "$app"
+      fi
+    done
   '';
 
   modulesClosure = pkgs.makeModulesClosure {
