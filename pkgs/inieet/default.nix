@@ -51,6 +51,8 @@ in {
       OPENSSL_DIR = "${pkgs.pkgsStatic.openssl.dev}";
       OPENSSL_LIB_DIR = "${pkgs.pkgsStatic.openssl.out}/lib";
       OPENSSL_INCLUDE_DIR = "${pkgs.pkgsStatic.openssl.dev}/include";
+
+      NIX_LDFLAGS = "-ltss2-tcti-device -ltss2-tcti-swtpm -ltss2-tcti-mssim";
     };
   };
 
