@@ -47,8 +47,6 @@ in {
   };
 
   config = mkMerge [
-    # 注意: neet.users は services の属性名 (dbus-user-* など) に依存しているため、
-    # `cfg.services != {}` の mkIf の中に置くと無限再帰になる。無条件で定義すること。
     {
       neet.users.s6log = {
         uid = mkDefault 980;

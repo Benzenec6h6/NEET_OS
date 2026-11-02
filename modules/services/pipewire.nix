@@ -16,50 +16,28 @@
     )
     config.neet.users;
 
-  pipewireServices =
-    lib.concatMapAttrs (
-      name: u: let
-        uidStr = toString u.uid;
-        runtimeDir = "/run/user/${uidStr}";
-        busAddress = "unix:path=${runtimeDir}/bus";
-        homeDir =
-          if u.home != null
-          then u.home
-          else "/home/${name}";
-      in {
-        # 1. PipeWire メインサーバー
-        "pipewire-${name}" = {
-          type = "longrun";
-          dependencies = ["devd-coldplug" "dbus-user-${name}"];
-          run = ''
-            #!/bin/sh
-            export HOME="${homeDir}"
-            export USER="${name}"
-            export XDG_RUNTIME_DIR="${runtimeDir}"
-            export DBUS_SESSION_BUS_ADDRESS="${busAddress}"
+  # ユーザー用 s6-rc サービス定義
+  mkUserPipewireServices = name: u: {
+    # 1. PipeWire コア
+    pipewire = {
+      type = "longrun";
+      dependencies = ["dbus"]; # ユーザーバスの dbus に依存
+      run = ''
+        #!/bin/sh
+        exec ${cfg.package}/bin/pipewire
+      '';
+    };
 
-            exec ${pkgs.s6}/bin/s6-setuidgid ${name} \
-              ${cfg.package}/bin/pipewire
-          '';
-        };
-
-        # 2. PulseAudio エミュレーション (pulse.enable 時のみ)
-        "pipewire-pulse-${name}" = lib.mkIf cfg.pulse.enable {
-          type = "longrun";
-          dependencies = ["pipewire-${name}"];
-          run = ''
-            #!/bin/execlineb -P
-            export HOME ${homeDir}
-            export USER ${name}
-            export XDG_RUNTIME_DIR ${runtimeDir}
-            export DBUS_SESSION_BUS_ADDRESS ${busAddress}
-            ${pkgs.s6}/bin/s6-setuidgid ${name}
-            ${cfg.package}/bin/pipewire -c pipewire-pulse.conf
-          '';
-        };
-      }
-    )
-    runtimeUsers;
+    # 2. PulseAudio 互換レイヤー
+    pipewire-pulse = mkIf cfg.pulse.enable {
+      type = "longrun";
+      dependencies = ["pipewire"];
+      run = ''
+        #!/bin/sh
+        exec ${cfg.package}/bin/pipewire -c pipewire-pulse.conf
+      '';
+    };
+  };
 in {
   options.services.pipewire = {
     enable = mkEnableOption "PipeWire multimedia service";
@@ -90,7 +68,7 @@ in {
 
     fallbackStaticNodes = mkOption {
       type = types.bool;
-      default = !hasUdev; # udev が使えない環境（mdevd等）なら自動で true
+      default = !hasUdev;
       description = ''
         udev が存在しない環境で、ALSA デバイス (hw:0,0) を直接静的ノードとして登録するかどうか。
       '';
@@ -98,7 +76,6 @@ in {
   };
 
   config = mkIf cfg.enable {
-    # リアルタイムスケジューリングのため RTKit も自動でオンに
     services.rtkit.enable = lib.mkDefault true;
 
     services.udev.extraRules = ''
@@ -125,10 +102,9 @@ in {
     environment.systemPackages = [
       cfg.package
       pkgs.alsa-utils
-      pkgs.alsa-ucm-conf # ノートPC内蔵スピーカー等の初期化に必須
+      pkgs.alsa-ucm-conf
     ];
 
-    # 1. ALSA の出力を PipeWire プラグイン経由にする (/etc/asound.conf)
     environment.etc."asound.conf".text = mkIf cfg.alsa.enable ''
       <confdir:pcm/default.conf>
 
@@ -143,10 +119,14 @@ in {
       }
     '';
 
-    # 2. ALSA プラグインの探索パスを ALSA アプリに知らせる
     environment.etc."alsa/conf.d/50-pipewire.conf".source = "${cfg.package}/share/alsa/alsa.conf.d/50-pipewire.conf";
     environment.etc."alsa/conf.d/99-pipewire-default.conf".source = "${cfg.package}/share/alsa/alsa.conf.d/99-pipewire-default.conf";
 
-    system.s6-rc.services = pipewireServices;
+    # ★ システム s6-rc ではなく、ユーザー s6-rc に登録！
+    system.s6-rc.users =
+      lib.mapAttrs (name: u: {
+        services = mkUserPipewireServices name u;
+      })
+      runtimeUsers;
   };
 }

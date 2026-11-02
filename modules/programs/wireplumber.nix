@@ -14,35 +14,6 @@
         && u.uid >= 1000
     )
     config.neet.users;
-
-  wireplumberServices =
-    lib.mapAttrs' (
-      name: u: let
-        uidStr = toString u.uid;
-        runtimeDir = "/run/user/${uidStr}";
-        busAddress = "unix:path=${runtimeDir}/bus";
-        homeDir =
-          if u.home != null
-          then u.home
-          else "/home/${name}";
-      in
-        lib.nameValuePair "wireplumber-${name}" {
-          type = "longrun";
-          dependencies = ["pipewire-${name}" "dbus-user-${name}"];
-          run = ''
-            #!/bin/sh
-            export HOME="${homeDir}"
-            export USER="${name}"
-            export XDG_RUNTIME_DIR="${runtimeDir}"
-            export XDG_STATE_HOME="${homeDir}/.local/state"
-            export DBUS_SESSION_BUS_ADDRESS="${busAddress}"
-
-            exec ${pkgs.s6}/bin/s6-setuidgid ${name} \
-              ${cfg.package}/bin/wireplumber
-          '';
-        }
-    )
-    runtimeUsers;
 in {
   options.programs.wireplumber = {
     enable = lib.mkEnableOption "WirePlumber session manager";
@@ -65,11 +36,23 @@ in {
 
     environment.systemPackages = [cfg.package];
 
-    # WirePlumber のカスタム設定をシステム全体に配布
     environment.etc."wireplumber/wireplumber.conf.d/99-neet.conf" = lib.mkIf (cfg.settings != {}) {
       source = format.generate "99-neet.conf" cfg.settings;
     };
 
-    system.s6-rc.services = wireplumberServices;
+    # ★ ユーザー s6-rc 側に純粋な "wireplumber" として登録！
+    system.s6-rc.users =
+      lib.mapAttrs (name: u: {
+        services.wireplumber = {
+          type = "longrun";
+          dependencies = ["pipewire"];
+          run = ''
+            #!/bin/sh
+            export XDG_STATE_HOME="$HOME/.local/state"
+            exec ${cfg.package}/bin/wireplumber
+          '';
+        };
+      })
+      runtimeUsers;
   };
 }

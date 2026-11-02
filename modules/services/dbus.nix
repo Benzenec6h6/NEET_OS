@@ -3,48 +3,17 @@
   pkgs,
   lib,
   ...
-}: let
-  runtimeUsers =
-    lib.filterAttrs (
-      _name: u:
-        u.createRuntimeDir
-        && u.uid >= 1000
-    )
-    config.neet.users;
-
-  userBusServices =
-    lib.mapAttrs' (
-      name: u: let
-        uidStr = toString u.uid;
-        runtimeDir = "/run/user/${uidStr}";
-        busAddress = "unix:path=${runtimeDir}/bus";
-      in
-        lib.nameValuePair "dbus-user-${name}" {
-          type = "longrun";
-          dependencies = ["dbus"];
-          notification-fd = 3;
-          # ディレクトリ作成は Rust に任せ、s6 は環境変数設定と権限降格だけを行う
-          run = ''
-            #!/bin/execlineb -P
-            export XDG_RUNTIME_DIR ${runtimeDir}
-            export DBUS_SESSION_BUS_ADDRESS ${busAddress}
-            ${pkgs.s6}/bin/s6-setuidgid ${name}
-            # ★ ユーザーバスも同様に --print-pid=3
-            ${cfg.package}/bin/dbus-daemon --session --address=${busAddress} --nofork --nopidfile --syslog-only --print-pid=3
-          '';
-        }
-    )
-    runtimeUsers;
-
+}:
+with lib; let
   cfg = config.services.dbus;
   homeDir = "/run/dbus";
 
-  # Nixのヘルパーを使ってXML設定ディレクトリを自動生成
   configDir = pkgs.makeDBusConf.override {
     serviceDirectories = cfg.packages;
   };
 
-  inherit (lib) mkOption mkIf types;
+  # デスクトップ用一般ユーザーの抽出
+  runtimeUsers = filterAttrs (_name: u: u.createRuntimeDir && u.uid >= 1000) config.neet.users;
 in {
   options.services.dbus = {
     enable = mkOption {
@@ -56,30 +25,19 @@ in {
     package = mkOption {
       type = types.package;
       default = pkgs.dbus;
-      defaultText = lib.literalExpression "pkgs.dbus";
       description = "使用する D-Bus パッケージ";
     };
 
     packages = mkOption {
       type = types.listOf types.path;
       default = [];
-      description = ''
-        D-Bus設定ファイルを取り込むパッケージのリスト。
-      '';
-    };
-
-    userBus.enable = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "createRuntimeDir が有効なユーザー向けの D-Bus User Bus を自動起動するか";
+      description = "D-Bus設定ファイルを取り込むパッケージのリスト。";
     };
   };
 
   config = mkIf cfg.enable {
-    # 1. 生成された完全な /etc/dbus-1 を配置
     environment.etc."dbus-1".source = configDir;
 
-    # 2. NEET-OS 独自のユーザー・グループ定義に messagebus を注入
     neet.users.messagebus = {
       uid = 81;
       gid = 81;
@@ -88,7 +46,6 @@ in {
       description = "D-Bus system message bus daemon user";
     };
 
-    # 3. システムパッケージ & パス設定
     environment.systemPackages = [cfg.package];
 
     services.dbus.packages =
@@ -96,21 +53,18 @@ in {
       ++ config.environment.systemPackages;
 
     system.stateDirectories = [
-      # システムバス用ソケット置き場
       {
         path = "/run/dbus";
         mode = "0755";
         user = "messagebus";
         group = "messagebus";
       }
-      # machine-id 等の置き場
       {
         path = "/var/lib/dbus";
         mode = "0755";
         user = "root";
         group = "root";
       }
-      # 伝統的なサブシステムロック領域
       {
         path = "/run/lock/subsys";
         mode = "0755";
@@ -119,23 +73,31 @@ in {
       }
     ];
 
-    # 4. s6-scan 経由での D-Bus システムデーモン起動定義
-    system.s6-rc.services =
-      {
-        dbus = {
+    # システム s6-rc: システムバスのみ
+    system.s6-rc.services.dbus = {
+      type = "longrun";
+      notification-fd = 3;
+      dependencies = optional config.services.syslog.enable "syslog";
+      log.enable = true;
+      run = ''
+        #!/bin/execlineb -P
+        foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
+        ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only --print-pid=3
+      '';
+    };
+
+    # ★ ユーザー s6-rc: 各ユーザーのツリーに純粋な "dbus" として自動登録！
+    system.s6-rc.users =
+      mapAttrs (name: u: {
+        services.dbus = {
           type = "longrun";
           notification-fd = 3;
-          dependencies = lib.optional config.services.syslog.enable "syslog";
-          log.enable = true;
           run = ''
-            #!/bin/execlineb -P
-            foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
-
-            # ★ --print-pid=3 で直接 fd 3 に準備完了を通知させる
-            ${cfg.package}/bin/dbus-daemon --nofork --system --syslog-only --print-pid=3
+            #!/bin/sh
+            exec ${cfg.package}/bin/dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --nofork --nopidfile --print-pid=3
           '';
         };
-      }
-      // lib.optionalAttrs cfg.userBus.enable userBusServices;
+      })
+      runtimeUsers;
   };
 }

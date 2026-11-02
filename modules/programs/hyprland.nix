@@ -6,6 +6,7 @@
 }:
 with lib; let
   cfg = config.programs.hyprland;
+  runtimeUsers = filterAttrs (_name: u: u.createRuntimeDir && u.uid >= 1000) config.neet.users;
 in {
   options.programs.hyprland = {
     enable = mkEnableOption "Hyprland Wayland compositor";
@@ -20,20 +21,34 @@ in {
     environment.systemPackages = [pkgs.hyprland];
 
     services.seatd.enable = mkDefault true;
-
-    # 指定された設定ファイルを /etc/hypr/hyprland.conf として配置
     environment.etc."hypr/hyprland.conf".source = cfg.configFile;
-
     environment.variables = {
       WLR_NO_HARDWARE_CURSORS = "1";
     };
 
-    # DMが探索する Wayland セッションメタデータ
+    # 勝手には起動させない
+    system.s6-rc.users =
+      mapAttrs (name: u: {
+        services.hyprland = {
+          type = "longrun";
+          autoStart = false;
+          dependencies = ["dbus"];
+          restartOnUpdate = false;
+          run = ''
+            #!/bin/sh
+            ${pkgs.hyprland}/bin/Hyprland
+            ${pkgs.s6}/bin/s6-svscanctl -t "$XDG_RUNTIME_DIR/service"
+          '';
+        };
+      })
+      runtimeUsers;
+
+    # DM は引数 "hyprland" を付けて呼ぶ
     environment.etc."wayland-sessions/hyprland.desktop".text = ''
       [Desktop Entry]
       Name=Hyprland
       Comment=Dynamic tiling Wayland compositor
-      Exec=${pkgs.hyprland}/bin/Hyprland
+      Exec=${config.services.displayManager.sessionWrapper} hyprland
       Type=Application
     '';
   };
