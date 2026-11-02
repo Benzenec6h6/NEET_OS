@@ -86,6 +86,13 @@ in {
       description = "使用するディスプレイマネージャ実装";
     };
 
+    defaultSession = mkOption {
+      type = types.str;
+      default = "";
+      example = "sway";
+      description = "デフォルトで選択されるセッション名";
+    };
+
     tty = mkOption {
       type = types.int;
       default = 1;

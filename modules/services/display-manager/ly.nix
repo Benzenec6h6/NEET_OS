@@ -11,7 +11,7 @@ with lib; let
   configFile = pkgs.writeText "ly-config.ini" ''
     tty = ${toString dmCfg.tty}
     session_wrapper = ${dmCfg.sessionWrapper}
-    waylandsessions = /run/current-system/sw/share/wayland-sessions
+    waylandsessions = /etc/wayland-sessions
     ${optionalString (dmCfg.defaultSession != "") "default_input = ${dmCfg.defaultSession}"}
     ${optionalString lyCfg.save "save = true"}
     ${optionalString (!lyCfg.save) "save = false"}

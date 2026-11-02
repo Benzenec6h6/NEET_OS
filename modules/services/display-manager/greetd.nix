@@ -7,14 +7,13 @@
 with lib; let
   dmCfg = config.services.displayManager;
 
-  # greetd 設定ファイル (TOML)
-  # フロントエンドには最も軽量で TTY 親和性の高い tuigreet を標準採用
+  # tuigreet に /etc/wayland-sessions を読ませる
   greetdConfig = pkgs.writeText "greetd.toml" ''
     [terminal]
     vt = ${toString dmCfg.tty}
 
     [default_session]
-    command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --cmd ${dmCfg.sessionWrapper}"
+    command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --sessions /etc/wayland-sessions ${optionalString (dmCfg.defaultSession != "") "--cmd ${dmCfg.defaultSession}"}"
     user = "greeter"
   '';
 in {
@@ -24,7 +23,6 @@ in {
       pkgs.greetd.tuigreet
     ];
 
-    # greetd 用の専用無特権ユーザー
     neet.users.greeter = {
       uid = mkDefault 970;
       gid = mkDefault 970;
@@ -35,7 +33,6 @@ in {
       createRuntimeDir = true;
     };
 
-    # /var/log/greetd などのディレクトリ準備
     system.stateDirectories = [
       {
         path = "/var/lib/greetd";
@@ -45,7 +42,6 @@ in {
       }
     ];
 
-    # s6-rc サービス定義
     system.s6-rc.services.greetd = {
       type = "longrun";
       dependencies =
