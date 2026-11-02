@@ -39,9 +39,20 @@ in {
     buildInputs = [
       pkgs.pkgsStatic.tpm2-tss
       pkgs.pkgsStatic.openssl
+      pkgs.pkgsStatic.json-c
+      pkgs.pkgsStatic.curl
     ];
 
+    # ★ 静的リンク & クロスコンパイルを Rust に認識させるための環境変数
     PKG_CONFIG_ALL_STATIC = "1";
+    PKG_CONFIG_ALLOW_CROSS = "1";
+    OPENSSL_STATIC = "1";
+    OPENSSL_NO_VENDOR = "1";
+
+    # openssl / tpm2-tss の探索パスを明示
+    OPENSSL_DIR = "${pkgs.pkgsStatic.openssl.dev}";
+    OPENSSL_LIB_DIR = "${pkgs.pkgsStatic.openssl.out}/lib";
+    OPENSSL_INCLUDE_DIR = "${pkgs.pkgsStatic.openssl.dev}/include";
   };
 
   # 通常のパッケージ（1行で書ける）
