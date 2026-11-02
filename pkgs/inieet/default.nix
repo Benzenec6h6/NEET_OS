@@ -39,7 +39,7 @@ in {
     buildInputs = [
       pkgs.pkgsStatic.tpm2-tss
       pkgs.pkgsStatic.openssl
-      pkgs.pkgsStatic.json-c
+      pkgs.pkgsStatic.json_c
       pkgs.pkgsStatic.curl
     ];
 
