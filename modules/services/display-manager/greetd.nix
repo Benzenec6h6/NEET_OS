@@ -7,12 +7,26 @@
 with lib; let
   dmCfg = config.services.displayManager;
 
+  # tuigreet のコマンドライン
+  # env で greeter 用の XDG_RUNTIME_DIR を明示的に設定して起動する
+  tuigreetCmd = concatStringsSep " " [
+    "${pkgs.coreutils}/bin/env"
+    "XDG_RUNTIME_DIR=/run/user/970"
+    "${pkgs.greetd.tuigreet}/bin/tuigreet"
+    "--time"
+    "--remember"
+    "--remember-session"
+    "--sessions /etc/wayland-sessions"
+    "--session-wrapper ${dmCfg.sessionWrapper}"
+    (optionalString (dmCfg.defaultSession != "") "--cmd ${dmCfg.defaultSession}")
+  ];
+
   greetdConfig = pkgs.writeText "greetd.toml" ''
     [terminal]
     vt = ${toString dmCfg.tty}
 
     [default_session]
-    command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --session-wrapper ${dmCfg.sessionWrapper} --sessions /etc/wayland-sessions ${optionalString (dmCfg.defaultSession != "") "--cmd ${dmCfg.defaultSession}"}"
+    command = "${tuigreetCmd}"
     user = "greeter"
   '';
 in {
@@ -22,6 +36,7 @@ in {
       pkgs.greetd.tuigreet
     ];
 
+    # greeter ユーザーの定義
     neet.users.greeter = {
       uid = mkDefault 970;
       gid = mkDefault 970;
@@ -30,8 +45,17 @@ in {
       shell = "${pkgs.coreutils}/bin/false";
       createHome = true;
       createRuntimeDir = true;
+
+      # ★ 描画・入力デバイスにアクセスするためのグループを追加
+      extraGroups =
+        [
+          "video"
+          "input"
+        ]
+        ++ optional config.services.seatd.enable "seat";
     };
 
+    # 必要なステートディレクトリの準備
     system.stateDirectories = [
       {
         path = "/var/lib/greetd";
@@ -39,6 +63,14 @@ in {
         user = "greeter";
         group = "greeter";
       }
+      # ★ tuigreet の --remember 用キャッシュディレクトリ
+      {
+        path = "/var/cache/tuigreet";
+        mode = "0755";
+        user = "greeter";
+        group = "greeter";
+      }
+      # greeter 用の XDG_RUNTIME_DIR (UID: 970)
       {
         path = "/run/user/970";
         mode = "0700";

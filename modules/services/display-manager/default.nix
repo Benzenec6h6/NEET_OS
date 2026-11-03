@@ -10,7 +10,7 @@ with lib; let
   userSessionRunner = pkgs.writeShellScript "neet-user-session" ''
     set -e
 
-    TARGET_WM="''${1:-}"
+    TARGET_WM="''${1:-${cfg.defaultSession}}"
 
     USER_NAME="$(id -un)"
     USER_UID="$(id -u)"
@@ -49,7 +49,7 @@ with lib; let
       # 3. 基本サービス (D-Bus, PipeWire 等の autoStart=true なもの) を起動
       ${pkgs.s6-rc}/bin/s6-rc -l "$LIVE_DIR" -u change top
 
-      # ★ 4. DM で選ばれた WM (sway / hyprland) を起動！
+      # 4. DM で選ばれた WM (sway / hyprland) を起動！
       if [ -n "$TARGET_WM" ]; then
         ${pkgs.s6-rc}/bin/s6-rc -l "$LIVE_DIR" -u change "$TARGET_WM"
       fi
@@ -71,31 +71,36 @@ with lib; let
       fi
     fi
   '';
+
+  defaultVtTty =
+    if (config.boot ? vt && config.boot.vt.consoles != [])
+    then builtins.head config.boot.vt.consoles
+    else 1;
 in {
   imports = [
     ./greetd.nix
-    ./ly.nix
+    ./lemurs.nix
   ];
 
   options.services.displayManager = {
     enable = mkEnableOption "Display Manager";
 
     provider = mkOption {
-      type = types.enum ["greetd" "ly"];
-      default = "ly";
+      type = types.enum ["greetd" "lemurs"];
+      default = "lemurs";
       description = "使用するディスプレイマネージャ実装";
     };
 
     defaultSession = mkOption {
       type = types.str;
-      default = "";
-      example = "sway";
-      description = "デフォルトで選択されるセッション名";
+      default = "hyprland";
+      example = "hyprland";
+      description = "デフォルトで選択・起動されるセッション名";
     };
 
     tty = mkOption {
       type = types.int;
-      default = 1;
+      default = defaultVtTty;
       description = "DMが使用する仮想端末 (VT/TTY) 番号";
     };
 
@@ -112,15 +117,19 @@ in {
         auth      required    ${pkgs.pam}/lib/security/pam_unix.so nullok
         account   required    ${pkgs.pam}/lib/security/pam_unix.so
         password  required    ${pkgs.pam}/lib/security/pam_unix.so sha512 shadow nullok
+        session   required    ${pkgs.pam}/lib/security/pam_env.so
+        session   optional    ${pkgs.pam}/lib/security/pam_loginuid.so
         session   required    ${pkgs.pam}/lib/security/pam_unix.so
         ${optionalString config.services.sessiond.enable
           "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"}
       '';
 
-      ly.text = mkIf (cfg.provider == "ly") ''
+      lemurs.text = mkIf (cfg.provider == "lemurs") ''
         auth      required    ${pkgs.pam}/lib/security/pam_unix.so nullok
         account   required    ${pkgs.pam}/lib/security/pam_unix.so
         password  required    ${pkgs.pam}/lib/security/pam_unix.so sha512 shadow nullok
+        session   required    ${pkgs.pam}/lib/security/pam_env.so
+        session   optional    ${pkgs.pam}/lib/security/pam_loginuid.so
         session   required    ${pkgs.pam}/lib/security/pam_unix.so
         ${optionalString config.services.sessiond.enable
           "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"}
