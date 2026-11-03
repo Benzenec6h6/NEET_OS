@@ -126,6 +126,14 @@ in {
       default = {};
       description = "System Shared Group IDs";
     };
+
+    sessionUsers = mkOption {
+      type = types.attrsOf userOpts;
+      internal = true;
+      readOnly = true;
+      default = filterAttrs (_name: u: u.createRuntimeDir && u.uid >= 1000) cfg;
+      description = "デスクトップセッションやユーザーサービスを配備する対象のユーザー一覧";
+    };
   };
 
   config = {

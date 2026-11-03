@@ -11,9 +11,6 @@ with lib; let
   configDir = pkgs.makeDBusConf.override {
     serviceDirectories = cfg.packages;
   };
-
-  # デスクトップ用一般ユーザーの抽出
-  runtimeUsers = filterAttrs (_name: u: u.createRuntimeDir && u.uid >= 1000) config.neet.users;
 in {
   options.services.dbus = {
     enable = mkOption {
@@ -98,6 +95,6 @@ in {
           '';
         };
       })
-      runtimeUsers;
+      config.neet.sessionUsers;
   };
 }

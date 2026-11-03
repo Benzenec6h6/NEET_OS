@@ -7,13 +7,12 @@
 with lib; let
   dmCfg = config.services.displayManager;
 
-  # tuigreet に /etc/wayland-sessions を読ませる
   greetdConfig = pkgs.writeText "greetd.toml" ''
     [terminal]
     vt = ${toString dmCfg.tty}
 
     [default_session]
-    command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --sessions /etc/wayland-sessions ${optionalString (dmCfg.defaultSession != "") "--cmd ${dmCfg.defaultSession}"}"
+    command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --session-wrapper ${dmCfg.sessionWrapper} --sessions /etc/wayland-sessions ${optionalString (dmCfg.defaultSession != "") "--cmd ${dmCfg.defaultSession}"}"
     user = "greeter"
   '';
 in {
@@ -37,6 +36,12 @@ in {
       {
         path = "/var/lib/greetd";
         mode = "0750";
+        user = "greeter";
+        group = "greeter";
+      }
+      {
+        path = "/run/user/970";
+        mode = "0700";
         user = "greeter";
         group = "greeter";
       }

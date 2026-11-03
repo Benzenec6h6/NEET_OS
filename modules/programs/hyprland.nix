@@ -6,7 +6,6 @@
 }:
 with lib; let
   cfg = config.programs.hyprland;
-  runtimeUsers = filterAttrs (_name: u: u.createRuntimeDir && u.uid >= 1000) config.neet.users;
 in {
   options.programs.hyprland = {
     enable = mkEnableOption "Hyprland Wayland compositor";
@@ -41,14 +40,14 @@ in {
           '';
         };
       })
-      runtimeUsers;
+      config.neet.sessionUsers;
 
     # DM は引数 "hyprland" を付けて呼ぶ
     environment.etc."wayland-sessions/hyprland.desktop".text = ''
       [Desktop Entry]
       Name=Hyprland
       Comment=Dynamic tiling Wayland compositor
-      Exec=${config.services.displayManager.sessionWrapper} hyprland
+      Exec=hyprland
       Type=Application
     '';
   };

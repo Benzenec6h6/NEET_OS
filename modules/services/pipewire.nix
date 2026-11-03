@@ -8,13 +8,6 @@
   inherit (lib) mkOption mkEnableOption mkIf types;
 
   hasUdev = config.services.deviceManager == "gardendevd";
-  runtimeUsers =
-    lib.filterAttrs (
-      _name: u:
-        u.createRuntimeDir
-        && u.uid >= 1000
-    )
-    config.neet.users;
 
   # ユーザー用 s6-rc サービス定義
   mkUserPipewireServices = name: u: {
@@ -127,6 +120,6 @@ in {
       lib.mapAttrs (name: u: {
         services = mkUserPipewireServices name u;
       })
-      runtimeUsers;
+      config.neet.sessionUsers;
   };
 }

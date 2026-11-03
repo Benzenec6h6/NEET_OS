@@ -8,10 +8,23 @@ with lib; let
   dmCfg = config.services.displayManager;
   lyCfg = config.services.displayManager.ly;
 
+  # ly の設定ファイル (config.ini)
   configFile = pkgs.writeText "ly-config.ini" ''
     tty = ${toString dmCfg.tty}
-    session_wrapper = ${dmCfg.sessionWrapper}
+
+    # 人間ユーザーのみ表示 (nixbld や root を除外)
+    min_uid = 1000
+    max_uid = 60000
+
+    # X11 サポートを完全無効化 (xinitrc や x11 セッションを出さない)
+    load = false
+
+    # Wayland セッションの探索パス
     waylandsessions = /etc/wayland-sessions
+
+    # セッション起動ラッパー
+    session_wrapper = ${dmCfg.sessionWrapper}
+
     ${optionalString (dmCfg.defaultSession != "") "default_input = ${dmCfg.defaultSession}"}
     ${optionalString lyCfg.save "save = true"}
     ${optionalString (!lyCfg.save) "save = false"}
@@ -27,6 +40,9 @@ in {
 
   config = mkIf (dmCfg.enable && dmCfg.provider == "ly") {
     environment.systemPackages = [pkgs.ly];
+
+    # ly は /etc/ly/config.ini を見に行く場合があるため念のため配置
+    environment.etc."ly/config.ini".source = configFile;
 
     system.stateDirectories = [
       {

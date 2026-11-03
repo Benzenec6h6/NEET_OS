@@ -6,14 +6,6 @@
 }: let
   cfg = config.programs.wireplumber;
   format = pkgs.formats.json {};
-
-  runtimeUsers =
-    lib.filterAttrs (
-      _name: u:
-        u.createRuntimeDir
-        && u.uid >= 1000
-    )
-    config.neet.users;
 in {
   options.programs.wireplumber = {
     enable = lib.mkEnableOption "WirePlumber session manager";
@@ -53,6 +45,6 @@ in {
           '';
         };
       })
-      runtimeUsers;
+      config.neet.sessionUsers;
   };
 }

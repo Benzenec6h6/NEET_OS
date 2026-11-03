@@ -6,7 +6,6 @@
 }:
 with lib; let
   cfg = config.programs.sway;
-  runtimeUsers = filterAttrs (_name: u: u.createRuntimeDir && u.uid >= 1000) config.neet.users;
 in {
   options.programs.sway = {
     enable = mkEnableOption "Sway Wayland compositor";
@@ -41,14 +40,14 @@ in {
           '';
         };
       })
-      runtimeUsers;
+      config.neet.sessionUsers;
 
     # DM は引数 "sway" を付けてセッションランナーを呼ぶ
     environment.etc."wayland-sessions/sway.desktop".text = ''
       [Desktop Entry]
       Name=Sway
       Comment=An i3-compatible Wayland compositor
-      Exec=${config.services.displayManager.sessionWrapper} sway
+      Exec=sway
       Type=Application
     '';
   };
