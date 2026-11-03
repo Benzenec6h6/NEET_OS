@@ -32,8 +32,8 @@ with lib; let
 in {
   config = mkIf (dmCfg.enable && dmCfg.provider == "greetd") {
     environment.systemPackages = [
-      pkgs.greetd.greetd
-      pkgs.greetd.tuigreet
+      pkgs.greetd
+      pkgs.tuigreet
     ];
 
     # greeter ユーザーの定義
