@@ -12,7 +12,7 @@ with lib; let
   tuigreetCmd = concatStringsSep " " [
     "${pkgs.coreutils}/bin/env"
     "XDG_RUNTIME_DIR=/run/user/970"
-    "${pkgs.greetd.tuigreet}/bin/tuigreet"
+    "${pkgs.tuigreet}/bin/tuigreet"
     "--time"
     "--remember"
     "--remember-session"
