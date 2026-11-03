@@ -57,11 +57,17 @@ in {
       type = "longrun";
       dependencies = ["dbus"];
 
-      # ★ s6 に通知を受け取る準備をさせる (通常 fd 3 を使う)
       notification-fd = 3;
 
       run = ''
         #!/bin/sh
+        # 自身をサブ cgroup (/sys/fs/cgroup/system) に所属させる
+        # これにより sessiond の親 cgroup が正常に /sys/fs/cgroup と認識される
+        if [ -d /sys/fs/cgroup ]; then
+          mkdir -p /sys/fs/cgroup/system
+          echo $$ > /sys/fs/cgroup/system/cgroup.procs
+        fi
+
         export RUST_LOG="${
           if cfg.debug
           then "debug,daemon=trace"
