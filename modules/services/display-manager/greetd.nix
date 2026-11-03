@@ -89,7 +89,7 @@ in {
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1
-        ${pkgs.greetd.greetd}/bin/greetd --config ${greetdConfig}
+        ${pkgs.greetd}/bin/greetd --config ${greetdConfig}
       '';
     };
   };
