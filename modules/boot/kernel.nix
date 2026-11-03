@@ -53,14 +53,16 @@
       (lib.concatStringsSep "\n" config.boot.kernelModules) + "\n";
 
     boot.kernelParams = let
-      # ttyS や ttyUSB などのシリアルなら ",115200" を自動で後ろにくっつける関数
-      formatConsole = tty:
-        if (lib.hasPrefix "ttyS" tty || lib.hasPrefix "ttyUSB" tty)
-        then "console=${tty},${toString config.boot.serialSpeed}"
-        else "console=${tty}";
+      vtParams = lib.optionals config.boot.vt.enable (
+        map (n: "console=tty${toString n}") config.boot.vt.consoles
+      );
+      serialParams = lib.optional config.boot.serial.enable "console=${config.boot.serial.device},${toString config.boot.serial.speed}";
     in
-      # 末尾優先のため reverseList して渡す
-      (map formatConsole (lib.reverseList config.boot.consoles))
+      (
+        if config.boot.primaryConsole == "serial"
+        then vtParams ++ serialParams
+        else serialParams ++ vtParams
+      )
       ++ ["panic=10"];
 
     # 標準でロードしておくべきモジュール

@@ -120,11 +120,9 @@ in {
 
   config = lib.mkIf cfg.enable {
     virtualisation.virtio.enable = lib.mkDefault true;
-    boot.consoles = lib.mkDefault (
-      if cfg.graphics
-      then ["ttyS0" "tty1"]
-      else ["ttyS0"]
-    );
+    boot.vt.enable = lib.mkDefault true;
+    boot.serial.enable = lib.mkDefault true;
+    boot.primaryConsole = lib.mkDefault "serial";
 
     boot.fileSystems."/etc/neet-os" = lib.mkIf cfg.sharedConfig {
       device = "neet_os_src";

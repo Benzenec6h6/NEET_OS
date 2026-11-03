@@ -25,7 +25,10 @@
       kernelVersion = "${kernel.modDirVersion}";
       stage2Init = "${config.system.build.stage2Init}";
       kernelModules = lib.concatStringsSep " " config.boot.initrd.availableKernelModules;
-      console = builtins.head config.boot.consoles;
+      console =
+        if config.boot.primaryConsole == "serial"
+        then config.boot.serial.device
+        else "tty${toString (builtins.head config.boot.vt.consoles)}";
       luksUnlockCommands = config.system.build.luksUnlockCommands or "";
 
       # ★ 依存を明示的に注入

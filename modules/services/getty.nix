@@ -5,47 +5,43 @@
   ...
 }: let
   cfg = config.services.getty;
-  primaryConsole = builtins.head config.boot.consoles;
+  dmEnabled = config.services.displayManager.enable or false;
+  dmTtyNum = config.services.displayManager.tty;
 
-  # DMが有効な場合はそのTTY（例: "tty1"）を取得してagettyの対象から外す
-  dmTty =
-    if (config.services.displayManager.enable or false)
-    then "tty${toString config.services.displayManager.tty}"
-    else null;
+  # 1. 仮想端末 (VT) 用の agetty サービス生成
+  # DMが有効な場合は、そのVT番号 (例: 1) を除外する
+  targetVts = lib.optionals config.boot.vt.enable (
+    builtins.filter (n: !(dmEnabled && n == dmTtyNum)) config.boot.vt.consoles
+  );
 
-  activeConsoles = builtins.filter (tty: tty != dmTty) config.boot.consoles;
-
-  mkGettyCmd = tty: let
-    isSerial = lib.hasPrefix "ttyS" tty || lib.hasPrefix "ttyUSB" tty;
-    isAutologin = (cfg.autologinUser != null) && (tty == primaryConsole);
-
-    flags =
-      lib.optional isAutologin "--autologin ${cfg.autologinUser}"
-      ++ (
-        if isSerial
-        then ["--keep-baud"]
-        else ["--noclear"]
-      );
-
-    args =
-      [tty]
-      ++ (
-        if isSerial
-        then [
-          (toString config.boot.serialSpeed)
-          "vt220"
-        ]
-        else ["linux"]
-      );
-  in "${pkgs.util-linux}/bin/agetty ${lib.concatStringsSep " " (flags ++ args)}";
-
-  mkGettyService = tty: {
+  mkVtGettyService = n: let
+    tty = "tty${toString n}";
+    isAutologin = (cfg.autologinUser != null) && (config.boot.primaryConsole == "vt") && (n == builtins.head config.boot.vt.consoles);
+    autologinFlag = lib.optionalString isAutologin "--autologin ${cfg.autologinUser} ";
+  in {
     name = "getty-${tty}";
     value = {
       type = "longrun";
       run = ''
         #!/bin/execlineb -P
-        ${mkGettyCmd tty}
+        ${pkgs.util-linux}/bin/agetty ${autologinFlag}--noclear ${tty} linux
+      '';
+    };
+  };
+
+  # 2. シリアル用の agetty サービス生成
+  mkSerialGettyService = let
+    dev = config.boot.serial.device;
+    speed = toString config.boot.serial.speed;
+    isAutologin = (cfg.autologinUser != null) && (config.boot.primaryConsole == "serial");
+    autologinFlag = lib.optionalString isAutologin "--autologin ${cfg.autologinUser} ";
+  in {
+    name = "getty-${dev}";
+    value = {
+      type = "longrun";
+      run = ''
+        #!/bin/execlineb -P
+        ${pkgs.util-linux}/bin/agetty ${autologinFlag}--keep-baud ${dev} ${speed} vt220
       '';
     };
   };
@@ -55,11 +51,14 @@ in {
       type = lib.types.nullOr lib.types.str;
       default = null;
       example = "root";
-      description = "自動ログインさせるユーザー名（プライマリコンソールのみに適用）";
+      description = "自動ログインさせるユーザー名（プライマリコンソールにのみ適用）";
     };
   };
 
   config = {
-    system.s6-rc.services = builtins.listToAttrs (map mkGettyService activeConsoles);
+    system.s6-rc.services = builtins.listToAttrs (
+      (map mkVtGettyService targetVts)
+      ++ (lib.optional config.boot.serial.enable mkSerialGettyService)
+    );
   };
 }

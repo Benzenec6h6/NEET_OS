@@ -8,26 +8,29 @@ with lib; let
   dmCfg = config.services.displayManager;
   lyCfg = config.services.displayManager.ly;
 
+  # デフォルトで選択させたい最初の一般ユーザー名
+  firstUser = head (attrNames config.neet.sessionUsers);
+
   # ly の設定ファイル (config.ini)
   configFile = pkgs.writeText "ly-config.ini" ''
     tty = ${toString dmCfg.tty}
 
-    # 人間ユーザーのみ表示 (nixbld や root を除外)
-    min_uid = 1000
-    max_uid = 60000
+    # ★ X11 および xinitrc を完全に無効化 (null に指定)
+    xinitrc = null
+    xsessions = null
 
-    # X11 サポートを完全無効化 (xinitrc や x11 セッションを出さない)
-    load = false
-
-    # Wayland セッションの探索パス
+    # ★ Wayland セッションの探索パス
     waylandsessions = /etc/wayland-sessions
 
     # セッション起動ラッパー
     session_wrapper = ${dmCfg.sessionWrapper}
 
-    ${optionalString (dmCfg.defaultSession != "") "default_input = ${dmCfg.defaultSession}"}
-    ${optionalString lyCfg.save "save = true"}
-    ${optionalString (!lyCfg.save) "save = false"}
+    # 前回ログインの記憶設定
+    save = ${boolToString lyCfg.save}
+    load = ${boolToString lyCfg.save}
+
+    # ★ 初期フォーカス（nixbld ではなく宣言されたユーザーを初期選択させる）
+    default_input = ${firstUser}
   '';
 in {
   options.services.displayManager.ly = {
@@ -41,7 +44,7 @@ in {
   config = mkIf (dmCfg.enable && dmCfg.provider == "ly") {
     environment.systemPackages = [pkgs.ly];
 
-    # ly は /etc/ly/config.ini を見に行く場合があるため念のため配置
+    # ly は自動的に /etc/ly/config.ini を読み込む
     environment.etc."ly/config.ini".source = configFile;
 
     system.stateDirectories = [
@@ -66,7 +69,8 @@ in {
         redirfd -r 0 /dev/tty${toString dmCfg.tty}
         redirfd -w 1 /dev/tty${toString dmCfg.tty}
         fdmove -c 2 1
-        ${pkgs.ly}/bin/ly -c ${configFile}
+        # ★ 引数なし (または -c <TTY番号>) で呼ぶ。設定ファイルパスを渡してはならない
+        ${pkgs.ly}/bin/ly -c ${toString dmCfg.tty}
       '';
     };
   };
