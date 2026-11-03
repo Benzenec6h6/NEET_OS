@@ -30,12 +30,6 @@
       description = "カーネルツリーに含める外部カーネルモジュールパッケージ (nvidia等)";
     };
 
-    boot.serialSpeed = lib.mkOption {
-      type = lib.types.int;
-      default = 115200;
-      description = "シリアルコンソールのボーレート (bps)";
-    };
-
     system.modulesTree = lib.mkOption {
       type = lib.types.path;
       internal = true;
