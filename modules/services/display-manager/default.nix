@@ -36,49 +36,53 @@ with lib; let
     COMPILED_DB="/etc/s6-rc/users/$USER_NAME/compiled"
     DEFINITIONS="/etc/s6-rc/users/$USER_NAME/definitions"
 
+    # ★ 追加: RAM 上に配置する書き込み可能なコンパイル済み DB のパス
+    WRITABLE_DB="$XDG_RUNTIME_DIR/s6-rc-compiled"
+
     if [ -d "$COMPILED_DB" ]; then
-      # ★ 2. 前回の古い残骸（壊れたリンクなど）を確実にクリーンアップ
-      rm -rf "$LIVE_DIR" "$SERVICE_DIR"
+      # 1. 前回の残骸を掃除
+      rm -rf "$LIVE_DIR"* "$SERVICE_DIR"* "$WRITABLE_DB"
       mkdir -p "$SERVICE_DIR"
+
+      # 2. ★ Nix store の Read-Only DB を RAM にコピーし、即座に書き込み権限を付与する
+      cp -r "$COMPILED_DB" "$WRITABLE_DB"
+      chmod -R u+w "$WRITABLE_DB"
 
       if [ -d "$DEFINITIONS" ]; then
         rm -rf "$XDG_RUNTIME_DIR/service-definitions"
         ln -sfn "$DEFINITIONS" "$XDG_RUNTIME_DIR/service-definitions"
       fi
 
-      # 1. ユーザー用 s6-svscan をバックグラウンド起動
+      # 3. ユーザー用 s6-svscan をバックグラウンド起動
       s6-svscan "$SERVICE_DIR" &
       SVSCAN_PID=$!
 
-      # コントロールソケットの準備ができるのを待つ
+      # コントロールソケットの準備を待つ
       until [ -p "$SERVICE_DIR/.s6-svscan/control" ] || [ -S "$SERVICE_DIR/.s6-svscan/control" ]; do
         sleep 0.05
       done
 
-      # ★ 3. s6-svscan が監視ループに入るのを少し確実に待つ
-      s6-svscanctl -a "$SERVICE_DIR" 2>/dev/null || true
+      # 4. ★ コピーした書き込み可能 DB を指定して s6-rc を初期化！
+      s6-rc-init -c "$WRITABLE_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
 
-      # 2. s6-rc の初期化
-      s6-rc-init -c "$COMPILED_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
-
-      # 3. 基本サービス (D-Bus 等) を起動
+      # 5. 基本サービス (D-Bus, PipeWire 等) を起動
       s6-rc -l "$LIVE_DIR" -u change top
 
-      # 4. DM で選ばれた WM を起動！
+      # 6. DM で選ばれた WM を起動！
       if [ -n "$TARGET_WM" ]; then
-        # ※ TARGET_WM に .desktop のパスが渡ってきた場合の保険 (basename で "hyprland" にする)
         WM_NAME="$(basename "$TARGET_WM" .desktop)"
         s6-rc -l "$LIVE_DIR" -u change "$WM_NAME"
       fi
 
-      # 5. セッション維持 (svscan の終了を見守る)
+      # 7. セッション維持
       wait $SVSCAN_PID 2>/dev/null || true
 
-      # 6. ログアウト処理
+      # 8. ログアウト処理
       if [ -d "$LIVE_DIR" ]; then
         s6-rc -l "$LIVE_DIR" -da change || true
       fi
       s6-svscanctl -t "$SERVICE_DIR" || true
+      rm -rf "$WRITABLE_DB"
 
     else
       if [ -n "$1" ]; then
