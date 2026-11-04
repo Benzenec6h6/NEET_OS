@@ -1,6 +1,6 @@
 #+TITLE: NEET_OS 開発日誌: 非systemd・独自NixOS構築におけるトラップと設計の軌跡
 #+AUTHOR: NEET_OS Developer
-#+DATE: 2026-09-06
+#+DATE: 2026-11-05
 
 * はじめに
 本ドキュメントは、非systemd環境かつ独自アーキテクチャでNixOS派生ディストリビューション（NEET_OS）を構築する過程で遭遇した技術的ハマりポイント（トラップ）と、その分析・解決に至るプロセスの記録である。
@@ -123,11 +123,129 @@ package = mkOption {
 
 これにより、~dhcpcd~ はLinuxカーネルと直接対話（netlink経由）してインターフェースを自己検出する本来のフォールバック動作に戻り、~mdevd~ 環境下でも起動直後にサイレント待機することなくIPv4アドレスとDNS情報を正常に取得可能となった。
 
-* 5. 結語：NEET_OSにおける到達点
-先人の試行錯誤と限界を踏まえ、NEET_OSでは以下のアーキテクチャを採用する方向性を確立した：
+* 5. Wayland/WM 構築における非systemd・デバイスマネージャの壁
+** 現象
+greetd（tuigreet）から Hyprland や Sway を起動しようとしても、即座にクラッシュしてログイン画面へ押し戻される。手動起動時も GPU デバイス（DRM）やキーボード・マウス（libinput）が認識されず起動に失敗する。
+
+** 原因
+*** ① デバイス検出ライブラリ（libudev）の暗黙の systemd 依存
+Hyprland の描画バックエンド（~aquamarine~）や Sway のバックエンド（~wlroots~）、および入力受付を担う ~libinput~ は、ハードウェア検出に ~libudev~ を利用している。
+Nixpkgs 標準のパッケージ群は ~systemd-udevd~ 由来の ~libudev~ とリンクされており、デーモンとの通信ソケット（~/run/udev/control~ 等）が存在しない ~mdevd~ や ~gardendevd~ 環境ではデバイス列挙が完全に無力化される。
+
+*** ② D-Bus セッションバスの分断・多重起動トラップ
+先行プロジェクト（Finix等）では、ログイン時に ~dbus-run-session~ を使って一時的な D-Bus セッションをフォークしていた。
+しかし、NEET_OS ではすでに ~$XDG_RUNTIME_DIR/bus~ に常駐するユーザー D-Bus（User Bus）を s6-rc で管理している。
+ここで安易に先人の真似をして ~dbus-run-session~ を被せると、**「s6-rc 側が管理する常駐バス」と「WM が接続する一時バス」の 2 つが同時に乱立する「バスの分裂」** が発生し、ポータル（xdg-desktop-portal）や通知デーモンが正しく機能しなくなる。
+
+** 対策
+*** ① libudev スタブの共通抽象化
+デバイスマネージャ（~mdevd~ / ~gardendevd~）の選択に応じて、カーネル netlink/sysfs を直接参照するスタブ（~libudev-zero~ / ~libudev-garden~）へ ~libinput~ を override する仕組みを ~modules/services/device-manager/~ 配下に集約・カプセル化した。
+
+#+BEGIN_SRC nix
+# modules/services/device-manager/default.nix
+options.services.deviceManagerUdevApi = lib.mkOption {
+  type = lib.types.nullOr lib.types.package;
+  readOnly = true;
+  default =
+    if cfg == "gardendevd" then pkgs.libudev-garden
+    else if cfg == "mdevd" then pkgs.libudev-zero
+    else null;
+};
+
+options.services.deviceManagerLibinput = lib.mkOption {
+  type = lib.types.package;
+  readOnly = true;
+  default =
+    if config.services.deviceManagerUdevApi != null then
+      pkgs.libinput.override {
+        udev = config.services.deviceManagerUdevApi;
+        wacomSupport = false;
+      }
+    else
+      pkgs.libinput;
+};
+#+END_SRC
+
+各コンポジタ（Hyprland, Sway 等）は、この共通オプション経由でオーバーライド済み ~libinput~ を参照し、併せて ~withSystemd = false~ を指定する。
+
+*** ② 常駐 D-Bus への正しい合流
+~dbus-run-session~ による使い捨て D-Bus の起動を廃止し、セッション起動時に常駐ソケット環境変数（~DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus~）を渡すことで、s6-rc ユーザーサービス群と単一のバス上で完全に結合させた。
+
+* 6. s6-rc ユーザーセッション管理と Nix Store の権限（DAC）トラップ
+** 現象
+greetd ログイン時にユーザーセッション用の ~s6-svscan~ および ~s6-rc-init~ を起動した際、以下の致命的エラーで停止し、セッションがクラッシュする。
+
+#+BEGIN_SRC text
+s6-rc-init: warning: directory /run/user/1000/s6-rc:s6-rc-init:XXXXXX looks like a live directory but has no supervisors running
+s6-rc-init: fatal: unable to supervise service directories in /run/user/1000/s6-rc/servicedirs: Permission denied
+#+END_SRC
+
+** 原因
+*** ① s6-rc-init の動作仕様
+~s6-rc-init~ は、コンパイル済み DB（~compiled/servicedirs~）内のメタデータをそのまま live ディレクトリ（~/run/user/1000/s6-rc/servicedirs~）へ verbatim copy（属性維持コピー）し、その各サービス配下に ~s6-supervise~ が監視用ディレクトリ（~supervise/~）や FIFO を生成する。
+
+*** ② Nix Store の不変性と Linux DAC（任意アクセス制御）の衝突
+- Nix Store（~/nix/store/...~）内の全オブジェクトは、セキュリティと再現性の担保のため強制的に Read-Only（~0555~ / ~0444~、書き込み権限 ~w~ なし）でコミットされる。
+- これをコピーした live ディレクトリ側も ~dr-xr-xr-x~（書き込み禁止）のまま生成される。
+- **root（UID 0）の場合:** ~CAP_DAC_OVERRIDE~ 特権を保持しているため、~dr-xr-xr-x~ ディレクトリであっても内部へのファイル/ソケット作成が許可される（ゆえにシステム用 s6-rc は正常動作していた）。
+- **一般ユーザー（UID 1000）の場合:** 特権がないため、ディレクトリに ~w~ 権限が存在しない場合、カーネルから即座に ~EACCES (Permission denied)~ が返される。
+
+結果として、一般ユーザー権限の ~s6-svscan~ は各サービスの ~supervise/~ ディレクトリを作成できず、スーパーバイザの起動に全滅して ~s6-rc-init~ が爆死していた。
+
+** 対策：ログインセッションランナー（RAM）による書き込み権限の動的付与
+Nix Store の不変ルールを汚さず、かつ一般ユーザーの DAC 制約をクリアするため、セッションランナー（~neet-user-session~）の初期化ルーチンにて、ログイン時に **RAM（~$XDG_RUNTIME_DIR~ / tmpfs）上にコンパイル済み DB を複製し、書き込み権限（~chmod -R u+w~）を付与してから ~s6-rc-init~ に渡す** 設計へと変更した。
+
+#+BEGIN_SRC bash
+# display-manager/default.nix (neet-user-session)
+SERVICE_DIR="$XDG_RUNTIME_DIR/service"
+LIVE_DIR="$XDG_RUNTIME_DIR/s6-rc"
+COMPILED_DB="/etc/s6-rc/users/$USER_NAME/compiled"
+WRITABLE_DB="$XDG_RUNTIME_DIR/s6-rc-compiled"
+
+if [ -d "$COMPILED_DB" ]; then
+  # 前回のゴミを掃除
+  rm -rf "$LIVE_DIR"* "$SERVICE_DIR"* "$WRITABLE_DB"
+  mkdir -p "$SERVICE_DIR"
+
+  # Nix store の Read-Only DB を RAM にコピーし、即座に書き込み権限を付与
+  cp -r "$COMPILED_DB" "$WRITABLE_DB"
+  chmod -R u+w "$WRITABLE_DB"
+
+  # ユーザー用 s6-svscan をバックグラウンド起動
+  s6-svscan "$SERVICE_DIR" &
+  SVSCAN_PID=$!
+
+  until [ -p "$SERVICE_DIR/.s6-svscan/control" ]; do
+    sleep 0.05
+  done
+
+  # 書き込み可能にした RAM 上の DB を渡して初期化（Exit Code 0 で成功！）
+  s6-rc-init -c "$WRITABLE_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
+
+  # 基本サービス群（D-Bus, PipeWire 等）を一括起動
+  s6-rc -l "$LIVE_DIR" -u change top
+
+  # DM で選ばれた WM（Hyprland / Sway）をセッション内で起動
+  if [ -n "$TARGET_WM" ]; then
+    WM_NAME="$(basename "$TARGET_WM" .desktop)"
+    s6-rc -l "$LIVE_DIR" -u change "$WM_NAME"
+  fi
+
+  wait $SVSCAN_PID 2>/dev/null || true
+  rm -rf "$WRITABLE_DB"
+fi
+#+END_SRC
+
+ファイルサイズは数十KB〜数MBに過ぎないため、コピー処理は1ミリ秒未満で完了する。これにより、Nix の宣言的ビルドと s6-rc による安全なユーザーセッション管理が完全に調和した。
+
+* 7. 結語：NEET_OSにおける到達点
+度重なるトラップの踏破と設計の洗練を経て、NEET_OSは以下の強固なアーキテクチャへと着地した：
+
 1. **Stage-1 の完全独立化 (Rust化):**
-   initrd段階の初期化・ファイルシステム準備・~switch_root~ は、特定のイニットシステムやシェルの限界に依存しない「依存ゼロの自作Rust単一バイナリ」で完結させる。
-2. **Stage-2 イニットシステムのポリモーフィズム化:**
-   Stage-1 と Stage-2 を完全に疎結合とし、~finit~ / ~dinit~ / ~s6~ などのイニットシステムを単なる「1サービス/1パッケージ」として切り替え可能（マルチInit対応）にする。
-3. **隠蔽されたsystemd/udev依存の徹底排除:**
-   D-Busやネットワークスタック等、一見独立して見えるパッケージ群がNixpkgs標準で抱え込む「暗黙のsystemd/udev結合」をパッケージ定義レベルから特定・無効化し、真にミニマルな非systemd環境を維持する。
+   initrd 段階の初期化・ファイルシステム準備・~switch_root~ は、シェルの限界や各Initの都合に振り回されず、「依存ゼロの自作Rust単一バイナリ（~pkgs/inieet/~）」で完結させる。
+2. **Stage-2 における s6 / s6-rc の徹底掌握:**
+   複数のInitに浮気するのではなく、Unix哲学（プロセス監視と状態遷移の明確な分離）を体現する ~s6~ および ~s6-rc~ を主軸として一本化。
+   Nix Store の Read-Only 制約と一般ユーザー権限（DAC）の摩擦を RAM 上の動的展開で吸収し、~systemd --user~ に依存しない完全自律型のユーザーセッション監視基盤を確立した。
+3. **隠蔽された systemd / udev 結合の徹底的排除とカプセル化:**
+   D-Bus、dhcpcd、Waylandコンポジタ（Hyprland/Sway）、libinput に至るまで、Nixpkgs標準が前提とする「暗黙のsystemd結合」をパッケージ定義から特定・排除。
+   ~mdevd~ や ~gardendevd~ への適合スタブをモジュール境界で綺麗にカプセル化し、真にミニマルかつ高純度な非systemdディストリビューションを実現した。
