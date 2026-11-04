@@ -3,10 +3,8 @@
     ./nix-daemon.nix
     ./dbus.nix
     ./seatd.nix
-    ./device-manager.nix
+    ./device-manager
     ./display-manager
-    ./gardendevd
-    ./mdevd
     ./dhcpcd.nix
     ./iwd.nix
     ./getty.nix

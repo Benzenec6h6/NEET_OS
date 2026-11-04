@@ -6,49 +6,53 @@
 }:
 with lib; let
   cfg = config.programs.sway;
+  libinput = config.services.deviceManagerLibinput;
+  isNonSystemd = config.services.deviceManagerUdevApi != null;
+
+  sway-unwrapped = pkgs.sway-unwrapped.override (o: let
+    wlrootsAttr = head (filter (hasPrefix "wlroots") (attrNames o));
+  in {
+    inherit libinput;
+    ${wlrootsAttr} = o.${wlrootsAttr}.override {inherit libinput;};
+    systemdSupport = !isNonSystemd;
+  });
+
+  swayPackage = pkgs.sway.override {
+    inherit sway-unwrapped;
+  };
+
+  sessionFile = pkgs.writeTextDir "share/wayland-sessions/sway.desktop" ''
+    [Desktop Entry]
+    Name=Sway
+    Comment=An i3-compatible Wayland compositor
+    Exec=env DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus ${lib.getExe swayPackage}
+    Type=Application
+    DesktopNames=sway;wlroots
+  '';
 in {
   options.programs.sway = {
     enable = mkEnableOption "Sway Wayland compositor";
-
     configFile = mkOption {
       type = types.path;
       description = "Sway 設定ファイル (sway.conf) のパス";
     };
+    package = mkOption {
+      type = types.package;
+      default = swayPackage;
+      description = "使用する Sway パッケージ";
+    };
   };
 
   config = mkIf cfg.enable {
-    environment.systemPackages = [pkgs.sway];
+    environment.systemPackages = [
+      cfg.package
+      (lib.hiPrio sessionFile)
+    ];
 
     services.seatd.enable = mkDefault true;
     environment.etc."sway/config".source = cfg.configFile;
     environment.variables = {
       WLR_NO_HARDWARE_CURSORS = "1";
     };
-
-    # ユーザー s6-rc に登録するが、勝手には起動させない (autoStart = false)
-    system.s6-rc.users =
-      mapAttrs (name: u: {
-        services.sway = {
-          type = "longrun";
-          autoStart = false;
-          dependencies = ["dbus"];
-          restartOnUpdate = false;
-          run = ''
-            #!/bin/sh
-            ${pkgs.sway}/bin/sway
-            ${pkgs.s6}/bin/s6-svscanctl -t "$XDG_RUNTIME_DIR/service"
-          '';
-        };
-      })
-      config.neet.sessionUsers;
-
-    # DM は引数 "sway" を付けてセッションランナーを呼ぶ
-    environment.etc."wayland-sessions/sway.desktop".text = ''
-      [Desktop Entry]
-      Name=Sway
-      Comment=An i3-compatible Wayland compositor
-      Exec=sway
-      Type=Application
-    '';
   };
 }
