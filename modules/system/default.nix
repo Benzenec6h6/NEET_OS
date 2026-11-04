@@ -73,6 +73,7 @@
 in {
   imports = [
     ./assertions.nix
+    ./cgroups.nix
     ./etc.nix
     ./inieet.nix
     ./users.nix

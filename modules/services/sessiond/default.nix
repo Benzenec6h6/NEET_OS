@@ -56,17 +56,11 @@ in {
     system.s6-rc.services.sessiond = {
       type = "longrun";
       dependencies = ["dbus"];
-
       notification-fd = 3;
 
       run = ''
         #!/bin/sh
-        # 自身をサブ cgroup (/sys/fs/cgroup/system) に所属させる
-        # これにより sessiond の親 cgroup が正常に /sys/fs/cgroup と認識される
-        if [ -d /sys/fs/cgroup ]; then
-          mkdir -p /sys/fs/cgroup/system
-          echo $$ > /sys/fs/cgroup/system/cgroup.procs
-        fi
+        echo $$ > /sys/fs/cgroup/system/sessiond/cgroup.procs
 
         export RUST_LOG="${
           if cfg.debug
@@ -79,7 +73,6 @@ in {
           else "info"
         }"
 
-        # s6-notify-fd-from-socket を挟んで起動
         exec ${pkgs.s6}/bin/s6-notify-fd-from-socket -3 3 \
           ${lib.getExe' cfg.package "sessiond"} --config ${configFile} --log-target stderr
       '';

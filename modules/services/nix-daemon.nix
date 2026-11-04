@@ -100,6 +100,17 @@ in {
       }
     ];
 
+    # cgroup の定義（OSクラッシュ防止）
+    system.cgroups = [
+      {
+        path = "/sys/fs/cgroup/system/nix-daemon";
+        settings = {
+          # 大規模ビルド（LLVM等）を通しつつ、暴走を防ぐ上限値
+          "pids.max" = "1048576";
+        };
+      }
+    ];
+
     # 6. s6-rc サービス定義
     system.s6-rc.services.nix-daemon = {
       type = "longrun";
@@ -109,6 +120,10 @@ in {
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1
+
+        foreground {
+          /bin/sh -c "echo $$ > /sys/fs/cgroup/system/nix-daemon/cgroup.procs"
+        }
 
         # 証明書環境変数を設定してデーモンを起動
         export SSL_CERT_FILE /etc/ssl/certs/ca-certificates.crt

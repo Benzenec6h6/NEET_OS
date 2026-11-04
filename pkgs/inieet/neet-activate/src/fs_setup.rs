@@ -1,6 +1,7 @@
 use crate::user_group::{resolve_gid, resolve_uid};
 use neet_core::atomic;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::os::unix::fs::PermissionsExt;
@@ -12,6 +13,18 @@ pub struct StateDirectory {
     pub mode: String,
     pub user: String,
     pub group: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CgroupPlanEntry {
+    pub path: String,
+    #[serde(default = "default_root")]
+    pub user: String,
+    #[serde(default = "default_root")]
+    pub group: String,
+    pub subtree_control: Option<String>,
+    #[serde(default)]
+    pub settings: HashMap<String, String>,
 }
 
 /// mount-plan.json をロードしてファイルシステムをマウントする
@@ -30,7 +43,61 @@ pub fn setup_filesystems(plan_path: &Path) -> io::Result<()> {
 
     // --- cgroup v2 のコントローラー有効化 ---
     setup_cgroups()?;
+    setup_cgroup_plan()?;
 
+    Ok(())
+}
+
+fn default_root() -> String {
+    "root".to_string()
+}
+
+/// /etc/cgroup-plan.json をロードして cgroup v2 階層を事前構築する
+pub fn setup_cgroup_plan() -> io::Result<()> {
+    let json_path = Path::new("/etc/cgroup-plan.json");
+    if !json_path.exists() {
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(json_path)?;
+    let entries: Vec<CgroupPlanEntry> = serde_json::from_str(&content)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    for entry in entries {
+        let path = Path::new(&entry.path);
+
+        // 1. cgroup ディレクトリの作成
+        if !path.exists() {
+            fs::create_dir_all(path)?;
+        }
+
+        // 2. 所有者の設定 (chown)
+        let uid = resolve_uid(&entry.user);
+        let gid = resolve_gid(&entry.group);
+        if uid.is_some() || gid.is_some() {
+            let _ = std::os::unix::fs::chown(path, uid, gid);
+            // 一般ユーザーが自分を所属させられるように cgroup.procs も chown
+            let procs = path.join("cgroup.procs");
+            if procs.exists() {
+                let _ = std::os::unix::fs::chown(&procs, uid, gid);
+            }
+        }
+
+        // 3. コントローラーの委譲 (subtree_control)
+        // ※ 親がプロセスを持っていない空の状態で書き込む必要があります
+        if let Some(controllers) = entry.subtree_control {
+            let subtree_path = path.join("cgroup.subtree_control");
+            let _ = fs::write(subtree_path, controllers);
+        }
+
+        // 4. 個別パラメータ (pids.max など)
+        for (key, value) in entry.settings {
+            let setting_path = path.join(key);
+            let _ = fs::write(setting_path, value);
+        }
+    }
+
+    println!("neet-activate: cgroup v2 plan applied successfully");
     Ok(())
 }
 
