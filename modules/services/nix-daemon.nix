@@ -122,7 +122,7 @@ in {
         fdmove -c 2 1
 
         foreground {
-          /bin/sh -c "echo $$ > /sys/fs/cgroup/system/nix-daemon/cgroup.procs"
+          /bin/sh -c "echo \$PPID > /sys/fs/cgroup/system/nix-daemon/cgroup.procs"
         }
 
         # 証明書環境変数を設定してデーモンを起動

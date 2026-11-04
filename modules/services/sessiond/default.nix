@@ -42,6 +42,10 @@ in {
       }
     ];
 
+    system.cgroups = [
+      {path = "/sys/fs/cgroup/system/sessiond";}
+    ];
+
     # D-Bus ポリシーの登録
     services.dbus.enable = true;
     services.dbus.packages = [cfg.package];
