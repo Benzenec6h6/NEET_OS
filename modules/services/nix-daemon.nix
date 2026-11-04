@@ -118,18 +118,13 @@ in {
       dependencies = lib.optional config.programs.resolvconf.enable "resolvconf";
       log.enable = true;
       run = ''
-        #!/bin/execlineb -P
-        fdmove -c 2 1
+        #!/bin/sh
+        echo $$ > /sys/fs/cgroup/system/nix-daemon/cgroup.procs
 
-        foreground {
-          /bin/sh -c "echo \$PPID > /sys/fs/cgroup/system/nix-daemon/cgroup.procs"
-        }
+        export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+        export CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
-        # 証明書環境変数を設定してデーモンを起動
-        export SSL_CERT_FILE /etc/ssl/certs/ca-certificates.crt
-        export CURL_CA_BUNDLE /etc/ssl/certs/ca-certificates.crt
-
-        ${cfg.package}/bin/nix-daemon --daemon
+        exec ${cfg.package}/bin/nix-daemon --daemon
       '';
     };
   };

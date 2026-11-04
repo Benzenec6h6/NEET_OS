@@ -310,7 +310,7 @@ in {
       # 2. sshd デーモン本体 (longrun)
       "sshd" = {
         type = "longrun";
-        autoStart = cfg.startOnBoot; # ★ ここで自動起動を制御
+        autoStart = cfg.startOnBoot;
         dependencies = ["sshd-prepare" "syslog"];
         run = ''
           #!/bin/sh

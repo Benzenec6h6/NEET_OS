@@ -90,7 +90,11 @@
   '';
 in {
   options.fonts = {
-    enable = lib.mkEnableOption "Fontconfig and system fonts support";
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to enable Fontconfig and system fonts support.";
+    };
 
     packages = lib.mkOption {
       type = lib.types.listOf lib.types.package;
