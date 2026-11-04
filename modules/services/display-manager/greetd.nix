@@ -13,6 +13,7 @@ with lib; let
     "${pkgs.coreutils}/bin/env"
     "XDG_RUNTIME_DIR=/run/user/970"
     "${pkgs.tuigreet}/bin/tuigreet"
+    "--debug"
     "--time"
     "--remember"
     "--remember-session"
@@ -85,6 +86,8 @@ in {
         ["dbus"]
         ++ optional config.services.seatd.enable "seatd"
         ++ optional config.services.sessiond.enable "sessiond";
+
+      log.enable = true;
 
       run = ''
         #!/bin/execlineb -P

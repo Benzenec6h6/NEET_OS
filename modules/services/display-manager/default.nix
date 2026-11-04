@@ -8,7 +8,8 @@ with lib; let
   cfg = config.services.displayManager;
 
   userSessionRunner = pkgs.writeShellScript "neet-user-session" ''
-    set -e
+    exec > /tmp/neet-user-session.log 2>&1
+    set -ex
 
     # ★ 1. 最重要: s6, s6-rc, coreutils などの PATH を確実に通す
     export PATH="${lib.makeBinPath [
