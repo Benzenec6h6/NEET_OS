@@ -10,6 +10,14 @@ with lib; let
   userSessionRunner = pkgs.writeShellScript "neet-user-session" ''
     set -e
 
+    # ★ 1. 最重要: s6, s6-rc, coreutils などの PATH を確実に通す
+    export PATH="${lib.makeBinPath [
+      pkgs.s6
+      pkgs.s6-rc
+      pkgs.coreutils
+      pkgs.util-linux
+    ]}:/run/current-system/bin:/run/wrappers/bin:$PATH"
+
     TARGET_WM="''${1:-${cfg.defaultSession}}"
 
     USER_NAME="$(id -un)"
@@ -28,6 +36,8 @@ with lib; let
     DEFINITIONS="/etc/s6-rc/users/$USER_NAME/definitions"
 
     if [ -d "$COMPILED_DB" ]; then
+      # ★ 2. 前回の古い残骸（壊れたリンクなど）を確実にクリーンアップ
+      rm -rf "$LIVE_DIR" "$SERVICE_DIR"
       mkdir -p "$SERVICE_DIR"
 
       if [ -d "$DEFINITIONS" ]; then
@@ -36,22 +46,28 @@ with lib; let
       fi
 
       # 1. ユーザー用 s6-svscan をバックグラウンド起動
-      ${pkgs.s6}/bin/s6-svscan "$SERVICE_DIR" &
+      s6-svscan "$SERVICE_DIR" &
       SVSCAN_PID=$!
 
+      # コントロールソケットの準備ができるのを待つ
       until [ -p "$SERVICE_DIR/.s6-svscan/control" ] || [ -S "$SERVICE_DIR/.s6-svscan/control" ]; do
         sleep 0.05
       done
 
+      # ★ 3. s6-svscan が監視ループに入るのを少し確実に待つ
+      s6-svscanctl -a "$SERVICE_DIR" 2>/dev/null || true
+
       # 2. s6-rc の初期化
-      ${pkgs.s6-rc}/bin/s6-rc-init -c "$COMPILED_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
+      s6-rc-init -c "$COMPILED_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
 
-      # 3. 基本サービス (D-Bus, PipeWire 等の autoStart=true なもの) を起動
-      ${pkgs.s6-rc}/bin/s6-rc -l "$LIVE_DIR" -u change top
+      # 3. 基本サービス (D-Bus 等) を起動
+      s6-rc -l "$LIVE_DIR" -u change top
 
-      # 4. DM で選ばれた WM (sway / hyprland) を起動！
+      # 4. DM で選ばれた WM を起動！
       if [ -n "$TARGET_WM" ]; then
-        ${pkgs.s6-rc}/bin/s6-rc -l "$LIVE_DIR" -u change "$TARGET_WM"
+        # ※ TARGET_WM に .desktop のパスが渡ってきた場合の保険 (basename で "hyprland" にする)
+        WM_NAME="$(basename "$TARGET_WM" .desktop)"
+        s6-rc -l "$LIVE_DIR" -u change "$WM_NAME"
       fi
 
       # 5. セッション維持 (svscan の終了を見守る)
@@ -59,9 +75,9 @@ with lib; let
 
       # 6. ログアウト処理
       if [ -d "$LIVE_DIR" ]; then
-        ${pkgs.s6-rc}/bin/s6-rc -l "$LIVE_DIR" -da change || true
+        s6-rc -l "$LIVE_DIR" -da change || true
       fi
-      ${pkgs.s6}/bin/s6-svscanctl -t "$SERVICE_DIR" || true
+      s6-svscanctl -t "$SERVICE_DIR" || true
 
     else
       if [ -n "$1" ]; then
