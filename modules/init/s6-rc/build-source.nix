@@ -122,20 +122,44 @@ with lib; let
     )
     autoStartServices;
 
+  # ★ 追加: partOf に指定された全バンドルを収集して contents をまとめる
+  # { graphical-session = [ "fcitx5" "waybar" ... ]; } のような map を作る
+  customBundles = let
+    pairs = concatLists (mapAttrsToList (
+        name: svc: let
+          actualName =
+            if hasLog svc
+            then "${name}-pipeline"
+            else name;
+        in
+          map (bundle: {
+            inherit bundle;
+            service = actualName;
+          })
+          svc.partOf
+      )
+      services);
+  in
+    zipAttrs (map (p: {"${p.bundle}" = p.service;}) pairs);
+
+  makeBundleDir = name: contents:
+    pkgs.linkFarm "${name}-bundle-dir" [
+      {
+        name = "type";
+        path = pkgs.writeText "${name}-type" "bundle";
+      }
+      {
+        name = "contents";
+        path = pkgs.writeText "${name}-contents" (concatStringsSep "\n" contents + "\n");
+      }
+    ];
+
   serviceDirs =
     (mapAttrs makeServiceDir services)
     // (mapAttrs' (name: svc: nameValuePair "${name}-log" (makeLoggerDir name svc)) loggedServices)
+    // (mapAttrs makeBundleDir customBundles)
     // {
-      "top" = pkgs.linkFarm "top-bundle-dir" [
-        {
-          name = "type";
-          path = pkgs.writeText "top-type" "bundle";
-        }
-        {
-          name = "contents";
-          path = pkgs.writeText "top-contents" (concatStringsSep "\n" topContents + "\n");
-        }
-      ];
+      "top" = makeBundleDir "top" topContents;
     };
 in
   pkgs.linkFarm "s6-rc-source" (mapAttrsToList (name: path: {inherit name path;}) serviceDirs)

@@ -52,7 +52,30 @@ with lib; let
       s6-rc-init -c "$COMPILED_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
       s6-rc -l "$LIVE_DIR" -u change top
 
-      # ★ 登録されたセッションだけを機械的に case 文として展開！
+      # ★ ここを追加: Wayland ソケットを待って graphical-session を起こすウォッチャー
+      (
+        for i in $(seq 1 50); do
+          SOCKET=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name "wayland-[0-9]*" -type s 2>/dev/null | head -n 1)
+          if [ -n "$SOCKET" ]; then
+            # 1. 環境変数を envdir に書き出し
+            mkdir -p "$XDG_RUNTIME_DIR/env"
+            echo -n "$(basename "$SOCKET")" > "$XDG_RUNTIME_DIR/env/WAYLAND_DISPLAY"
+            echo -n "$XDG_RUNTIME_DIR"       > "$XDG_RUNTIME_DIR/env/XDG_RUNTIME_DIR"
+            echo -n "wayland"                > "$XDG_RUNTIME_DIR/env/XDG_SESSION_TYPE"
+            if [ -S "$XDG_RUNTIME_DIR/bus" ]; then
+              echo -n "unix:path=$XDG_RUNTIME_DIR/bus" > "$XDG_RUNTIME_DIR/env/DBUS_SESSION_BUS_ADDRESS"
+            fi
+
+            # 2. GUI セッションサービス群を一斉起動！
+            s6-rc -l "$LIVE_DIR" -u change graphical-session 2>/dev/null || true
+            break
+          fi
+          sleep 0.1
+        done
+      ) &
+      WATCHER_PID=$!
+
+      # WM の実行（フォアグラウンド）
       SESSION_CHOICE="''${1:-${cfg.defaultSession}}"
       WM_KEY="$(basename "$SESSION_CHOICE" .desktop)"
 
@@ -67,6 +90,10 @@ with lib; let
           ${defaultSessionCmd} || true
           ;;
       esac
+
+      # ★ WM が終了したら、PropagatesStopTo のごとく道連れ停止！
+      kill $WATCHER_PID 2>/dev/null || true
+      s6-rc -l "$LIVE_DIR" -d change graphical-session 2>/dev/null || true
 
       if [ -d "$LIVE_DIR" ]; then
         s6-rc -l "$LIVE_DIR" -da change || true

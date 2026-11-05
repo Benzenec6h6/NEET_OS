@@ -36,6 +36,11 @@ with lib;
         default = true;
         description = "ブート時/セッション開始時に自動起動する (top bundle に含める) かどうか";
       };
+      partOf = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = "このサービスを所属させるバンドル一覧 (例: graphical-session)";
+      };
 
       restartOnUpdate = mkOption {
         type = types.bool;
