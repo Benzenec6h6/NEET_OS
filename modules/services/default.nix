@@ -1,6 +1,7 @@
 {...}: {
   imports = [
     ./nix-daemon.nix
+    ./chrony.nix
     ./dbus.nix
     ./seatd.nix
     ./device-manager
