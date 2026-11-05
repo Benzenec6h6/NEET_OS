@@ -70,35 +70,6 @@ if [ "$ACTION" = "switch" ]; then
     s6-rc-update -l /run/s6-rc "$CORE/s6-rc"
   fi
 
-  # ★ (c) ログイン中の全ユーザーの s6-rc もまとめて動的リロード！
-  for USER_DIR in /run/user/*; do
-    [ -d "$USER_DIR" ] || continue
-    UID_NUM="$(basename "$USER_DIR")"
-    
-    # UID からユーザー名を取得
-    USER_NAME="$(id -nu "$UID_NUM" 2>/dev/null || true)"
-    [ -n "$USER_NAME" ] || continue
-
-    USER_LIVE="$USER_DIR/s6-rc"
-    USER_NEW_DB="/etc/s6-rc/users/$USER_NAME/compiled"
-    USER_NEW_DEFS="/etc/s6-rc/users/$USER_NAME/definitions"
-
-    # セッション（s6-rc）が走っており、新しいDBも存在する場合
-    if [ -d "$USER_LIVE" ] && [ -d "$USER_NEW_DB" ]; then
-      echo "==> [neet-rebuild] Updating user s6-rc services for $USER_NAME (UID: $UID_NUM)..."
-
-      # restartOnUpdate = false 用の definitions リンクを更新
-      if [ -d "$USER_NEW_DEFS" ]; then
-        ln -sfn "$USER_NEW_DEFS" "$USER_DIR/service-definitions"
-      fi
-
-      # 該当ユーザー権限に降格して安全に s6-rc-update を実行
-      s6-setuidgid "$USER_NAME" s6-rc-update -l "$USER_LIVE" "$USER_NEW_DB" || {
-        echo "==> [neet-rebuild] Warning: Failed to update user s6-rc for $USER_NAME" >&2
-      }
-    fi
-  done
-
   echo "==> [neet-rebuild] Successfully switched to new configuration!"
 elif [ "$ACTION" = "boot" ]; then
   echo "==> [neet-rebuild] Boot configuration updated. Will take effect on next reboot."

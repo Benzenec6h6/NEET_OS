@@ -8,6 +8,7 @@ mod firmware_setup;
 mod fs_setup;
 mod modules_setup;
 mod net_setup;
+mod s6_setup;
 mod shutdown;
 mod user_group;
 mod wrappers;
@@ -104,6 +105,11 @@ fn run_switch(core: &Core) -> io::Result<()> {
     // 7. カーネルのファームウェア参照先を新しい世代に更新
     firmware_setup::setup_firmware(&core.firmware())?;
 
+    // 8. ユーザー s6-rc の更新と稼働中セッションのリロード
+    if let Err(e) = s6_setup::setup_user_s6(true) {
+        eprintln!("neet-activate: [switch] warning: failed to update user s6: {e}");
+    }
+
     println!("neet-activate: [switch] core system updated successfully.");
     Ok(())
 }
@@ -140,6 +146,11 @@ fn run(core: &Core) -> io::Result<()> {
     firmware_setup::setup_firmware(&core.firmware())?;
     net_setup::setup_existing_network()?;
     bin_setup::setup_bin(&core.system_path())?;
+
+    // ユーザー s6-rc DB を /var/lib に事前配置
+    if let Err(e) = s6_setup::setup_user_s6(false) {
+        eprintln!("neet-activate: warning: failed to setup user s6: {e}");
+    }
 
     Ok(())
 }

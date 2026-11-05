@@ -7,19 +7,22 @@
 with lib; let
   cfg = config.services.displayManager;
 
+  # デフォルトセッションのコマンドを安全に解決
+  defaultSessionCmd =
+    if cfg.sessions ? ${cfg.defaultSession}
+    then cfg.sessions.${cfg.defaultSession}.command
+    else throw "displayManager: defaultSession '${cfg.defaultSession}' は有効化されたどのセッションとも一致しません。";
+
   userSessionRunner = pkgs.writeShellScript "neet-user-session" ''
     exec > /tmp/neet-user-session.log 2>&1
     set -ex
 
-    # ★ 1. 最重要: s6, s6-rc, coreutils などの PATH を確実に通す
     export PATH="${lib.makeBinPath [
       pkgs.s6
       pkgs.s6-rc
       pkgs.coreutils
       pkgs.util-linux
     ]}:/run/current-system/bin:/run/wrappers/bin:$PATH"
-
-    TARGET_WM="''${1:-${cfg.defaultSession}}"
 
     USER_NAME="$(id -un)"
     USER_UID="$(id -u)"
@@ -33,63 +36,43 @@ with lib; let
 
     SERVICE_DIR="$XDG_RUNTIME_DIR/service"
     LIVE_DIR="$XDG_RUNTIME_DIR/s6-rc"
-    COMPILED_DB="/etc/s6-rc/users/$USER_NAME/compiled"
-    DEFINITIONS="/etc/s6-rc/users/$USER_NAME/definitions"
-
-    # ★ 追加: RAM 上に配置する書き込み可能なコンパイル済み DB のパス
-    WRITABLE_DB="$XDG_RUNTIME_DIR/s6-rc-compiled"
+    COMPILED_DB="/var/lib/s6-rc/users/$USER_NAME/compiled"
 
     if [ -d "$COMPILED_DB" ]; then
-      # 1. 前回の残骸を掃除
-      rm -rf "$LIVE_DIR"* "$SERVICE_DIR"* "$WRITABLE_DB"
+      rm -rf "$LIVE_DIR" "$SERVICE_DIR"
       mkdir -p "$SERVICE_DIR"
 
-      # 2. ★ Nix store の Read-Only DB を RAM にコピーし、即座に書き込み権限を付与する
-      cp -r "$COMPILED_DB" "$WRITABLE_DB"
-      chmod -R u+w "$WRITABLE_DB"
-
-      if [ -d "$DEFINITIONS" ]; then
-        rm -rf "$XDG_RUNTIME_DIR/service-definitions"
-        ln -sfn "$DEFINITIONS" "$XDG_RUNTIME_DIR/service-definitions"
-      fi
-
-      # 3. ユーザー用 s6-svscan をバックグラウンド起動
       s6-svscan "$SERVICE_DIR" &
       SVSCAN_PID=$!
 
-      # コントロールソケットの準備を待つ
       until [ -p "$SERVICE_DIR/.s6-svscan/control" ] || [ -S "$SERVICE_DIR/.s6-svscan/control" ]; do
         sleep 0.05
       done
 
-      # 4. ★ コピーした書き込み可能 DB を指定して s6-rc を初期化！
-      s6-rc-init -c "$WRITABLE_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
-
-      # 5. 基本サービス (D-Bus, PipeWire 等) を起動
+      s6-rc-init -c "$COMPILED_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
       s6-rc -l "$LIVE_DIR" -u change top
 
-      # 6. DM で選ばれた WM を起動！
-      if [ -n "$TARGET_WM" ]; then
-        WM_NAME="$(basename "$TARGET_WM" .desktop)"
-        s6-rc -l "$LIVE_DIR" -u change "$WM_NAME"
-      fi
+      # ★ 登録されたセッションだけを機械的に case 文として展開！
+      SESSION_CHOICE="''${1:-${cfg.defaultSession}}"
+      WM_KEY="$(basename "$SESSION_CHOICE" .desktop)"
 
-      # 7. セッション維持
-      wait $SVSCAN_PID 2>/dev/null || true
+      case "$WM_KEY" in
+        ${concatStringsSep "\n" (mapAttrsToList (name: session: ''
+        "${name}")
+          ${session.command} || true
+          ;;
+      '')
+      cfg.sessions)}
+        *)
+          ${defaultSessionCmd} || true
+          ;;
+      esac
 
-      # 8. ログアウト処理
       if [ -d "$LIVE_DIR" ]; then
         s6-rc -l "$LIVE_DIR" -da change || true
       fi
       s6-svscanctl -t "$SERVICE_DIR" || true
-      rm -rf "$WRITABLE_DB"
-
-    else
-      if [ -n "$1" ]; then
-        exec "$@"
-      else
-        exec /bin/sh
-      fi
+      wait $SVSCAN_PID 2>/dev/null || true
     fi
   '';
 
@@ -105,6 +88,19 @@ in {
 
   options.services.displayManager = {
     enable = mkEnableOption "Display Manager";
+
+    sessions = mkOption {
+      type = types.attrsOf (types.submodule {
+        options = {
+          command = mkOption {
+            type = types.str;
+            description = "セッションの起動コマンドライン";
+          };
+        };
+      });
+      default = {};
+      description = "システムに登録された利用可能なグラフィカルセッション一覧";
+    };
 
     provider = mkOption {
       type = types.enum ["greetd" "lemurs"];

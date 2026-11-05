@@ -48,6 +48,8 @@ in {
   };
 
   config = mkIf cfg.enable {
+    services.displayManager.sessions.hyprland.command = "env DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus ${lib.getExe cfg.package}";
+
     environment.systemPackages = [
       cfg.package
       (lib.hiPrio sessionFile)
