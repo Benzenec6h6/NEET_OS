@@ -41,11 +41,7 @@ in {
 
     environment.pathsToLink = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = [
-        "/bin"
-        "/sbin"
-        "/share/vulkan"
-      ];
+      default = [];
       description = "Directories to be symlinked in system-path";
     };
 
@@ -102,6 +98,12 @@ in {
       SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
       CURL_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
     };
+
+    environment.pathsToLink = [
+      "/bin"
+      "/sbin"
+      "/share/vulkan"
+    ];
 
     system.path = pkgs.buildEnv {
       name = "system-path";
