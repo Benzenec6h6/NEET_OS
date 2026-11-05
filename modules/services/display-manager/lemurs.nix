@@ -52,12 +52,6 @@ with lib; let
 
   lemursSettings = recursiveUpdate defaultSettings lemursCfg.settings;
   configFile = format.generate "lemurs-config.toml" lemursSettings;
-
-  # lemursのセッション選択から hyprland や sway が選ばれた時に、
-  # 引数つきで userSessionRunner を呼ぶようにするセッションスクリプト（フォールバック用）
-  sessionLauncher = pkgs.writeShellScript "lemurs-session-launcher" ''
-    exec ${dmCfg.sessionWrapper} "$1"
-  '';
 in {
   options.services.displayManager.lemurs = {
     settings = mkOption {
@@ -71,15 +65,6 @@ in {
     environment.systemPackages = [pkgs.lemurs];
 
     environment.etc."lemurs/config.toml".source = configFile;
-
-    # /etc/lemurs/wayland/<defaultSession> にリンクを貼っておくと、
-    # lemurs の Wayland 環境メニューに直接デフォルトセッションが出現します
-    environment.etc."lemurs/wayland/${dmCfg.defaultSession}" = {
-      source = pkgs.writeShellScript "lemurs-${dmCfg.defaultSession}" ''
-        exec ${dmCfg.sessionWrapper} "${dmCfg.defaultSession}"
-      '';
-      mode = "0755";
-    };
 
     # キャッシュや一時作業用ディレクトリ
     system.stateDirectories = [

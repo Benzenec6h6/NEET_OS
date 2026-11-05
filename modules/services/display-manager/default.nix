@@ -7,100 +7,73 @@
 with lib; let
   cfg = config.services.displayManager;
 
-  # デフォルトセッションのコマンドを安全に解決
-  defaultSessionCmd =
-    if cfg.sessions ? ${cfg.defaultSession}
-    then cfg.sessions.${cfg.defaultSession}.command
-    else throw "displayManager: defaultSession '${cfg.defaultSession}' は有効化されたどのセッションとも一致しません。";
-
-  userSessionRunner = pkgs.writeShellScript "neet-user-session" ''
-    exec > /tmp/neet-user-session.log 2>&1
-    set -ex
-
-    export PATH="${lib.makeBinPath [
-      pkgs.s6
-      pkgs.s6-rc
-      pkgs.coreutils
-      pkgs.util-linux
-    ]}:/run/current-system/bin:/run/wrappers/bin:$PATH"
-
-    USER_NAME="$(id -un)"
-    USER_UID="$(id -u)"
-    export XDG_RUNTIME_DIR="/run/user/$USER_UID"
-    export HOME="''${HOME:-/home/$USER_NAME}"
-    export XDG_SESSION_TYPE=wayland
-
-    if [ -S /run/seatd/seatd.sock ]; then
-      export SEATD_SOCK=/run/seatd/seatd.sock
-    fi
-
-    SERVICE_DIR="$XDG_RUNTIME_DIR/service"
-    LIVE_DIR="$XDG_RUNTIME_DIR/s6-rc"
-    COMPILED_DB="/var/lib/s6-rc/users/$USER_NAME/compiled"
-
-    if [ -d "$COMPILED_DB" ]; then
-      rm -rf "$LIVE_DIR" "$SERVICE_DIR"
-      mkdir -p "$SERVICE_DIR"
-
-      s6-svscan "$SERVICE_DIR" &
-      SVSCAN_PID=$!
-
-      until [ -p "$SERVICE_DIR/.s6-svscan/control" ] || [ -S "$SERVICE_DIR/.s6-svscan/control" ]; do
-        sleep 0.05
-      done
-
-      s6-rc-init -c "$COMPILED_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
-      s6-rc -l "$LIVE_DIR" -u change top
-
-      # ★ ここを追加: Wayland ソケットを待って graphical-session を起こすウォッチャー
-      (
-        for i in $(seq 1 50); do
-          SOCKET=$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name "wayland-[0-9]*" -type s 2>/dev/null | head -n 1)
-          if [ -n "$SOCKET" ]; then
-            # 1. 環境変数を envdir に書き出し
-            mkdir -p "$XDG_RUNTIME_DIR/env"
-            echo -n "$(basename "$SOCKET")" > "$XDG_RUNTIME_DIR/env/WAYLAND_DISPLAY"
-            echo -n "$XDG_RUNTIME_DIR"       > "$XDG_RUNTIME_DIR/env/XDG_RUNTIME_DIR"
-            echo -n "wayland"                > "$XDG_RUNTIME_DIR/env/XDG_SESSION_TYPE"
-            if [ -S "$XDG_RUNTIME_DIR/bus" ]; then
-              echo -n "unix:path=$XDG_RUNTIME_DIR/bus" > "$XDG_RUNTIME_DIR/env/DBUS_SESSION_BUS_ADDRESS"
-            fi
-
-            # 2. GUI セッションサービス群を一斉起動！
-            s6-rc -l "$LIVE_DIR" -u change graphical-session 2>/dev/null || true
-            break
-          fi
-          sleep 0.1
-        done
-      ) &
-      WATCHER_PID=$!
-
-      # WM の実行（フォアグラウンド）
-      SESSION_CHOICE="''${1:-${cfg.defaultSession}}"
-      WM_KEY="$(basename "$SESSION_CHOICE" .desktop)"
-
-      case "$WM_KEY" in
-        ${concatStringsSep "\n" (mapAttrsToList (name: session: ''
-        "${name}")
-          ${session.command} || true
-          ;;
+  sessionBins = pkgs.linkFarm "neet-sessions" (
+    mapAttrs (name: s:
+      pkgs.writeShellScript "neet-session-${name}" ''
+        export XDG_CURRENT_DESKTOP=${escapeShellArg (concatStringsSep ":" s.desktopNames)}
+        exec ${s.command}
       '')
-      cfg.sessions)}
-        *)
-          ${defaultSessionCmd} || true
-          ;;
-      esac
+    cfg.sessions
+  );
 
-      # ★ WM が終了したら、PropagatesStopTo のごとく道連れ停止！
-      kill $WATCHER_PID 2>/dev/null || true
-      s6-rc -l "$LIVE_DIR" -d change graphical-session 2>/dev/null || true
+  # lemurs は Exec を直接実行するのでランナーを明示する。
+  # greetd(tuigreet) は --session-wrapper が前置されるのでセッション名だけ渡す。
+  sessionExec = name:
+    if cfg.provider == "lemurs"
+    then "${getExe cfg.sessionWrapper} ${name}"
+    else name;
 
-      if [ -d "$LIVE_DIR" ]; then
-        s6-rc -l "$LIVE_DIR" -da change || true
-      fi
-      s6-svscanctl -t "$SERVICE_DIR" || true
-      wait $SVSCAN_PID 2>/dev/null || true
-    fi
+  sessionFiles = pkgs.symlinkJoin {
+    name = "neet-wayland-sessions";
+    paths = mapAttrsToList (name: s:
+      pkgs.writeTextDir "share/wayland-sessions/${name}.desktop" ''
+        [Desktop Entry]
+        Name=${s.displayName}
+        Comment=${s.comment}
+        Exec=${sessionExec name}
+        Type=Application
+        DesktopNames=${concatStringsSep ";" s.desktopNames}
+      '')
+    cfg.sessions;
+  };
+
+  userSessionRunner = pkgs.writeShellApplication {
+    name = "neet-user-session";
+    runtimeInputs = with pkgs; [s6 s6-rc coreutils util-linux];
+    text = ''
+      export SESSIONS_DIR=${sessionBins}
+      export DEFAULT_SESSION=${escapeShellArg cfg.defaultSession}
+      ${builtins.readFile ./user-session.sh}
+    '';
+  };
+
+  # WM起動後(exec-once等)に呼ばれ、環境をenvdirへ書き出して graphical-session を起動する。
+  # WM固有の変数名は引数で受け取る (例: HYPRLAND_INSTANCE_SIGNATURE)
+  sessionReady = pkgs.writeShellApplication {
+    name = "neet-session-ready";
+    runtimeInputs = with pkgs; [s6-rc coreutils];
+    text = ''
+      envdir="''${XDG_RUNTIME_DIR:?}/env"
+      mkdir -p "$envdir"
+      for v in WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE \
+               DBUS_SESSION_BUS_ADDRESS "$@"; do
+        if [ -n "''${!v-}" ]; then
+          printf %s "''${!v}" > "$envdir/$v"
+        fi
+      done
+      exec s6-rc -l "''${S6_LIVE_DIR:?}" -u change graphical-session
+    '';
+  };
+
+  pamText = ''
+    auth      required    ${pkgs.pam}/lib/security/pam_unix.so nullok
+    account   required    ${pkgs.pam}/lib/security/pam_unix.so
+    password  required    ${pkgs.pam}/lib/security/pam_unix.so sha512 shadow nullok
+    session   required    ${pkgs.pam}/lib/security/pam_env.so
+    session   optional    ${pkgs.pam}/lib/security/pam_loginuid.so
+    session   required    ${pkgs.pam}/lib/security/pam_unix.so
+    ${optionalString config.services.sessiond.enable
+      "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"}
   '';
 
   defaultVtTty =
@@ -117,16 +90,31 @@ in {
     enable = mkEnableOption "Display Manager";
 
     sessions = mkOption {
-      type = types.attrsOf (types.submodule {
+      type = types.attrsOf (types.submodule ({name, ...}: {
         options = {
           command = mkOption {
             type = types.str;
             description = "セッションの起動コマンドライン";
           };
+          displayName = mkOption {
+            type = types.str;
+            default = name;
+            description = "DMのセッション選択に表示される名前";
+          };
+          comment = mkOption {
+            type = types.str;
+            default = "";
+            description = ".desktop の Comment";
+          };
+          desktopNames = mkOption {
+            type = types.listOf types.str;
+            default = [name];
+            description = "XDG_CURRENT_DESKTOP / DesktopNames に使う名前";
+          };
         };
-      });
+      }));
       default = {};
-      description = "システムに登録された利用可能なグラフィカルセッション一覧";
+      description = "システムに登録された利用可能なグラフィカルセッション一覧 (Waylandのみ。X11が必要ならXWaylandを使う)";
     };
 
     provider = mkOption {
@@ -151,33 +139,31 @@ in {
     sessionWrapper = mkOption {
       type = types.package;
       default = userSessionRunner;
-      description = "ユーザーログイン時に実行されるセッションランナー";
+      description = "ユーザーログイン時に実行されるセッションランナー (meta.mainProgram が必要。`getExe` で参照する)";
+    };
+
+    sessionReady = mkOption {
+      type = types.package;
+      default = sessionReady;
+      readOnly = true;
+      description = "WM起動後に呼び出し、graphical-session を起動するヘルパー。WM固有の環境変数名を引数に取る";
     };
   };
 
   config = mkIf cfg.enable {
-    neet.security.pam.services = {
-      greetd.text = mkIf (cfg.provider == "greetd") ''
-        auth      required    ${pkgs.pam}/lib/security/pam_unix.so nullok
-        account   required    ${pkgs.pam}/lib/security/pam_unix.so
-        password  required    ${pkgs.pam}/lib/security/pam_unix.so sha512 shadow nullok
-        session   required    ${pkgs.pam}/lib/security/pam_env.so
-        session   optional    ${pkgs.pam}/lib/security/pam_loginuid.so
-        session   required    ${pkgs.pam}/lib/security/pam_unix.so
-        ${optionalString config.services.sessiond.enable
-          "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"}
-      '';
+    assertions = [
+      {
+        assertion = cfg.sessions ? ${cfg.defaultSession};
+        message = "displayManager: defaultSession '${cfg.defaultSession}' は有効化されたどのセッションとも一致しません。";
+      }
+    ];
 
-      lemurs.text = mkIf (cfg.provider == "lemurs") ''
-        auth      required    ${pkgs.pam}/lib/security/pam_unix.so nullok
-        account   required    ${pkgs.pam}/lib/security/pam_unix.so
-        password  required    ${pkgs.pam}/lib/security/pam_unix.so sha512 shadow nullok
-        session   required    ${pkgs.pam}/lib/security/pam_env.so
-        session   optional    ${pkgs.pam}/lib/security/pam_loginuid.so
-        session   required    ${pkgs.pam}/lib/security/pam_unix.so
-        ${optionalString config.services.sessiond.enable
-          "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"}
-      '';
+    # パッケージ同梱の .desktop より優先させる
+    environment.systemPackages = [(hiPrio sessionFiles)];
+
+    neet.security.pam.services = {
+      greetd.text = mkIf (cfg.provider == "greetd") pamText;
+      lemurs.text = mkIf (cfg.provider == "lemurs") pamText;
     };
 
     services.dbus.enable = true;
