@@ -20,11 +20,16 @@ with lib; let
     withSystemd = udevApi == null;
   };
 
-  # ユーザー設定を source し、起動完了通知フックを足したラッパー設定。
+  # ユーザーの Lua 設定を dofile() し、起動完了通知フックを足したラッパー設定。
   # ~/.config 側が優先されないよう --config で明示的に渡す。
-  wrapperConfig = pkgs.writeText "hyprland.conf" ''
-    source = ${cfg.configFile}
-    exec-once = ${getExe config.services.displayManager.sessionReady} HYPRLAND_INSTANCE_SIGNATURE
+  wrapperConfig = pkgs.writeText "hyprland.lua" ''
+    -- 1. ユーザー設定の読み込み (Nix ストア上の lua スクリプトを実行)
+    dofile("${cfg.configFile}")
+
+    -- 2. NEET_OS: 起動完了通知フック (s6-rc の graphical-session を起動)
+    hl.exec_cmd("${getExe config.services.displayManager.sessionReady} HYPRLAND_INSTANCE_SIGNATURE")
+
+    -- 3. 追加 Lua 設定
     ${cfg.extraConfig}
   '';
 in {
@@ -34,8 +39,8 @@ in {
     configFile = mkOption {
       type = types.path;
       description = ''
-        Hyprland 設定ファイル (hyprland.conf) のパス。
-        NEET_OS が生成するラッパー設定から `source` されます。
+        Hyprland 設定ファイル (hyprland.lua) のパス。
+        NEET_OS が生成するラッパー設定から `dofile()` で読み込まれます。
         設定内で他ファイルを相対参照する場合は、flake 利用時のみ期待通り動作します。
       '';
     };
@@ -43,7 +48,7 @@ in {
     extraConfig = mkOption {
       type = types.lines;
       default = "";
-      description = "ラッパー設定の末尾に連結される追加設定";
+      description = "ラッパー設定 (hyprland.lua) の末尾に連結される追加 Lua コード";
     };
 
     package = mkOption {
@@ -74,6 +79,6 @@ in {
     };
 
     environment.systemPackages = [cfg.package];
-    environment.etc."hypr/hyprland.conf".source = wrapperConfig;
+    environment.etc."hypr/hyprland.lua".source = wrapperConfig;
   };
 }
