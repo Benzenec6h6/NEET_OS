@@ -54,8 +54,20 @@ in {
   };
 
   config = mkIf cfg.enable {
+    neet.windowManager.active = ["hyprland"];
+    xdg.portal = {
+      enable = mkDefault true;
+      portals = [
+        pkgs.xdg-desktop-portal-hyprland
+        pkgs.xdg-desktop-portal-gtk
+      ];
+      config.hyprland = {
+        default = ["hyprland" "gtk"];
+      };
+    };
+
     services.displayManager.sessions.hyprland = {
-      command = "${getExe cfg.package} --config ${wrapperConfig}";
+      command = "${cfg.package}/bin/start-hyprland --path ${getExe cfg.package} -- --config ${wrapperConfig}";
       displayName = "Hyprland";
       comment = "Dynamic tiling Wayland compositor";
       desktopNames = ["Hyprland"];

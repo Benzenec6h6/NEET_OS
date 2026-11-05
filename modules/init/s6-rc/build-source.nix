@@ -2,9 +2,6 @@
   lib,
   pkgs,
   services,
-  # ユーザーサービス用には "/run/user/<uid>/service-definitions"、
-  # システム用には "/run/s6-rc-definitions" を指定可能
-  liveDefDir ? "/run/s6-rc-definitions",
 }:
 with lib; let
   hasLog = svc: svc.type == "longrun" && (svc.log.enable || svc.logRun != null);
@@ -28,31 +25,18 @@ with lib; let
         ${pkgs.s6}/bin/s6-log ${escapeShellArgs log.args}
     '';
 
-  wrapRunScript = name: svc: let
+  # 単純明快な run スクリプトの生成 (envdirs があれば s6-envdir を前置)
+  makeRunScript = name: svc: let
     innerScript = pkgs.writeScript "${name}-run-inner" svc.run;
     envdirCmds = concatMapStrings (dir: "${pkgs.s6}/bin/s6-envdir -I ${escapeShellArg dir} ") svc.envdirs;
-
-    # 通常の run スクリプト（Nix store 直結）
-    directRun =
-      if svc.envdirs == []
-      then pkgs.writeScript "${name}-run" svc.run
-      else
-        pkgs.writeScript "${name}-run" ''
-          #!${pkgs.runtimeShell}
-          exec ${envdirCmds}${innerScript} "$@"
-        '';
-
-    # ★ restartOnUpdate = false 用の固定ラッパー
-    # s6-rc-compile に渡す中身は「固定パスを実行するだけ」なので、
-    # 世代更新されてもハッシュが変わらず s6-rc-update に無視される
-    stableWrapper = pkgs.writeScript "${name}-run-stable" ''
-      #!${pkgs.runtimeShell}
-      exec ${liveDefDir}/${name}/run "$@"
-    '';
   in
-    if svc.restartOnUpdate
-    then directRun
-    else stableWrapper;
+    if svc.envdirs == []
+    then pkgs.writeScript "${name}-run" svc.run
+    else
+      pkgs.writeScript "${name}-run" ''
+        #!${pkgs.runtimeShell}
+        exec ${envdirCmds}${innerScript} "$@"
+      '';
 
   # 本体サービス
   makeServiceDir = name: svc: let
@@ -64,7 +48,7 @@ with lib; let
         "dependencies" = pkgs.writeText "${name}-dependencies" (concatStringsSep "\n" svc.dependencies);
       }
       // optionalAttrs (svc.type == "longrun") ({
-          "run" = wrapRunScript name svc;
+          "run" = makeRunScript name svc;
         }
         // optionalAttrs (svc.notification-fd != null) {
           "notification-fd" = pkgs.writeText "${name}-notification-fd" (toString svc.notification-fd);
@@ -122,8 +106,7 @@ with lib; let
     )
     autoStartServices;
 
-  # ★ 追加: partOf に指定された全バンドルを収集して contents をまとめる
-  # { graphical-session = [ "fcitx5" "waybar" ... ]; } のような map を作る
+  # partOf に指定された全バンドルを収集して contents をまとめる
   customBundles = let
     pairs = concatLists (mapAttrsToList (
         name: svc: let

@@ -42,26 +42,17 @@ pub fn setup_user_s6(is_switch: bool) -> io::Result<()> {
         }
         copy_dir_recursive(&src_compiled, &dest_compiled)?;
 
-        // 3. ★ Nix store の 0555 を解消！所有者をユーザーにし、u+w を再帰的に付与
+        // 3. Nix store の 0555 を解消！所有者をユーザーにし、u+w を再帰的に付与
         chown_and_chmod_recursive(&dest_compiled, uid, gid)?;
 
         // 4. switch 時かつセッション稼働中なら、s6-rc-update を実行
         if is_switch {
-            // ★ PathBuf::from に変更して所有権を持たせる
             let live_dir = PathBuf::from(format!("/run/user/{uid}/s6-rc"));
-            let defs_link = PathBuf::from(format!("/run/user/{uid}/service-definitions"));
-            let new_defs = entry.path().join("definitions");
 
             if live_dir.exists() {
                 println!(
                     "neet-activate: [s6] updating live session for {user_name} (UID: {uid})..."
                 );
-
-                // definitions の更新 (restartOnUpdate = false 対策)
-                if new_defs.exists() {
-                    let _ = fs::remove_file(&defs_link);
-                    let _ = std::os::unix::fs::symlink(&new_defs, &defs_link);
-                }
 
                 // s6-setuidgid でユーザー権限に降格して s6-rc-update
                 let status = Command::new("s6-setuidgid")

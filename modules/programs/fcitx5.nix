@@ -33,7 +33,7 @@ in {
     environment.systemPackages = [fcitx5Package];
 
     # アプリ側が fcitx5 を探すための環境変数
-    environment.sessionVariables = {
+    environment.variables = {
       QT_IM_MODULE = "fcitx";
       XMODIFIERS = "@im=fcitx";
     };

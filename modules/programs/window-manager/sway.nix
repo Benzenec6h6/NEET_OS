@@ -50,6 +50,17 @@ in {
   };
 
   config = mkIf cfg.enable {
+    neet.windowManager.active = ["sway"];
+    xdg.portal = {
+      enable = mkDefault true;
+      portals = [
+        pkgs.xdg-desktop-portal-wlr
+        pkgs.xdg-desktop-portal-gtk
+      ];
+      config.sway = {
+        default = ["wlr" "gtk"];
+      };
+    };
     services.displayManager.sessions.sway = {
       command = "${getExe cfg.package} --config ${wrapperConfig}";
       displayName = "Sway";

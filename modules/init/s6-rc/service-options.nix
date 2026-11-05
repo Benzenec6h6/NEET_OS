@@ -42,15 +42,6 @@ with lib;
         description = "このサービスを所属させるバンドル一覧 (例: graphical-session)";
       };
 
-      restartOnUpdate = mkOption {
-        type = types.bool;
-        default = true;
-        description = ''
-          s6-rc-update (rebuild switch) 実行時に自動再起動を許可するか。
-          false の場合、定義が変わっても稼働中のプロセスを維持し、次回起動時まで反映を遅延します。
-        '';
-      };
-
       envdirs = mkOption {
         type = types.listOf types.str;
         default = [];
