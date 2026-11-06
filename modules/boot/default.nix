@@ -2,6 +2,7 @@
   kernel = config.boot.kernelPackages.kernel;
 in {
   imports = [
+    ./console.nix
     ./kernel.nix
     ./initrd.nix
     ./sysctl.nix

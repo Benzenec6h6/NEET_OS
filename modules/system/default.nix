@@ -78,7 +78,9 @@ in {
     ./inieet.nix
     ./users.nix
     ./environment.nix
+    ./locale.nix
     ./shells.nix
+    ./time.nix
   ];
 
   options = {

@@ -1,9 +1,9 @@
 {...}: {
   imports = [
-    ./console.nix
     ./firmware.nix
     ./graphics.nix
     ./i2c.nix
+    ./keyboard.nix
     ./uinput.nix
     ./video/nvidia.nix
     ./video/nvidia-prime.nix
