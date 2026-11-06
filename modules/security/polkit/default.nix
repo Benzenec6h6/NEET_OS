@@ -3,26 +3,36 @@
   config,
   lib,
   ...
-}: let
+}:
+with lib; let
   cfg = config.neet.security.polkit;
 in {
+  imports = [
+    ./hyprpolkitagent.nix
+    ./cmd-polkit.nix
+  ];
+
   options.neet.security.polkit = {
-    enable = lib.mkOption {
-      type = lib.types.bool;
+    enable = mkOption {
+      type = types.bool;
       default = true;
       description = "Whether to enable Polkit daemon.";
     };
+
+    agent = mkOption {
+      type = types.nullOr (types.enum ["hyprpolkitagent" "cmd-polkit"]);
+      default = "hyprpolkitagent";
+      description = "使用するグラフィカル Polkit 認証エージェント (null の場合はなし)";
+    };
   };
 
-  # ★ 自身の cfg.enable を見るように変更
-  config = lib.mkIf cfg.enable {
+  config = mkIf cfg.enable {
     services.dbus.packages = [pkgs.polkit.out];
     environment.systemPackages = [pkgs.polkit];
 
-    # 先ほど整理したユーザー・グループ・ディレクトリ等
-    neet.gids.polkituser = lib.mkDefault 999;
+    neet.gids.polkituser = mkDefault 999;
     neet.users.polkituser = {
-      uid = lib.mkDefault 999;
+      uid = mkDefault 999;
       gid = config.neet.gids.polkituser;
       description = "Polkit daemon user";
       shell = "/bin/sh";
@@ -50,7 +60,7 @@ in {
       type = "longrun";
       dependencies =
         ["dbus"]
-        ++ lib.optional config.services.syslog.enable "syslog";
+        ++ optional config.services.syslog.enable "syslog";
       run = ''
         #!/bin/execlineb -P
         ${pkgs.polkit.out}/lib/polkit-1/polkitd --no-debug

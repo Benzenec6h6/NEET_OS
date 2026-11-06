@@ -61,6 +61,10 @@ with lib; let
           printf %s "''${!v}" > "$envdir/$v"
         fi
       done
+
+      # ★ D-Bus セッションバスにも環境変数を共有しておく (portal 等の即死防止)
+      ${pkgs.dbus}/bin/dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
+
       exec s6-rc -l "''${S6_LIVE_DIR:?}" -u change graphical-session
     '';
   };
