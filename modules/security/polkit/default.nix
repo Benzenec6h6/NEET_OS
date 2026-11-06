@@ -41,6 +41,14 @@ in {
       createRuntimeDir = false;
     };
 
+    neet.security.pam.services.polkit-1.text = ''
+      auth      sufficient  ${pkgs.pam}/lib/security/pam_unix.so try_first_pass nullok
+      auth      required    ${pkgs.pam}/lib/security/pam_deny.so
+      account   required    ${pkgs.pam}/lib/security/pam_unix.so
+      password  required    ${pkgs.pam}/lib/security/pam_unix.so sha512 shadow nullok
+      session   required    ${pkgs.pam}/lib/security/pam_unix.so
+    '';
+
     system.stateDirectories = [
       {
         path = "/var/lib/polkit-1";

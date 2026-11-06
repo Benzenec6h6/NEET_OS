@@ -40,6 +40,6 @@ in {
       mapAttrs (_username: _user: {
         services.hyprpolkitagent = hyprpolkitagentService;
       })
-      config.system.s6-rc.users;
+      config.neet.sessionUsers;
   };
 }

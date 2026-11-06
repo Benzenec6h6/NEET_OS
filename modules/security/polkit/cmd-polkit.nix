@@ -54,6 +54,6 @@ in {
       mapAttrs (_username: _user: {
         services.cmd-polkit = cmdPolkitService;
       })
-      config.system.s6-rc.users;
+      config.neet.sessionUsers;
   };
 }
