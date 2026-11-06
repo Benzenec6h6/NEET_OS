@@ -78,7 +78,7 @@ in {
       desktopNames = ["Hyprland"];
     };
 
-    environment.systemPackages = [cfg.package];
+    environment.systemPackages = [cfg.package pkgs.qt6.qtwayland];
     environment.etc."hypr/hyprland.lua".source = wrapperConfig;
   };
 }
