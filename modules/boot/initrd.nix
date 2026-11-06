@@ -90,6 +90,17 @@ in {
       default = [];
       description = "initrd の先頭に連結する非圧縮 cpio イメージのリスト（マイクロコード等）";
     };
+    extraContents = lib.mkOption {
+      type = lib.types.listOf lib.types.attrs;
+      default = [];
+      example = [
+        {
+          source = "/path/to/file";
+          target = "/etc/file";
+        }
+      ];
+      description = "initrd の cpio に追加するファイル群 (source と target のペア)";
+    };
   };
 
   config = {
@@ -120,6 +131,7 @@ in {
             target = "/mount-plan.json";
           }
         ]
+        ++ config.boot.initrd.extraContents
         ++ (lib.mapAttrsToList (name: secret: {
           source = secret.file;
           target = "/etc/secrets/${name}.age";

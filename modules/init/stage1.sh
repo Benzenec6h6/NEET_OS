@@ -40,6 +40,10 @@ done
 echo "NEET OS Stage 1: Triggering coldplug..."
 mdevd-coldplug
 
+if [ -f /etc/bkeymap ] && [ -c /dev/tty0 ]; then
+    loadkmap < /etc/bkeymap 2>/dev/null || true
+fi
+
 @luksUnlockCommands@
 
 echo "NEET OS Stage 1: Mounting root filesystems..."
