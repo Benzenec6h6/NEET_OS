@@ -7,6 +7,7 @@
     ./device-manager
     ./display-manager
     ./dhcpcd.nix
+    ./fcron.nix
     ./iwd.nix
     ./getty.nix
     ./sessiond
