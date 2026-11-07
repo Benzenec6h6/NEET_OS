@@ -20,7 +20,7 @@ with lib; let
     # s6-envdir で $XDG_RUNTIME_DIR/env を取り込んでからバイナリを実行する
     run = ''
       #!${pkgs.runtimeShell}
-      exec ${pkgs.s6}/bin/s6-envdir -I "$XDG_RUNTIME_DIR/env" ${getExe cfg.package}
+      exec ${pkgs.s6}/bin/s6-envdir -I "$XDG_RUNTIME_DIR/env" ${cfg.package}/libexec/hyprpolkitagent
     '';
   };
 in {
