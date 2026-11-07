@@ -21,7 +21,7 @@ in {
 
     agent = mkOption {
       type = types.nullOr (types.enum ["hyprpolkitagent" "cmd-polkit"]);
-      default = "null";
+      default = null;
       description = "使用するグラフィカル Polkit 認証エージェント (null の場合はなし)";
     };
   };
