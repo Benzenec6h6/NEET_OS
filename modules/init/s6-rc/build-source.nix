@@ -122,8 +122,14 @@ with lib; let
           svc.partOf
       )
       services);
+
+    extractedBundles = zipAttrs (map (p: {"${p.bundle}" = p.service;}) pairs);
   in
-    zipAttrs (map (p: {"${p.bundle}" = p.service;}) pairs);
+    # ★ graphical-session は所属サービスが 0 個でも常に空バンドルとして存在を保証する
+    extractedBundles
+    // {
+      "graphical-session" = extractedBundles."graphical-session" or [];
+    };
 
   makeBundleDir = name: contents:
     pkgs.linkFarm "${name}-bundle-dir" [
