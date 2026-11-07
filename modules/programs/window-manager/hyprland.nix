@@ -29,7 +29,16 @@ with lib; let
     -- 2. NEET_OS: 起動完了通知フック (s6-rc の graphical-session を起動)
     hl.exec_cmd("${getExe config.services.displayManager.sessionReady} HYPRLAND_INSTANCE_SIGNATURE")
 
-    -- 3. 追加 Lua 設定
+    -- 3. NEET_OS: シャットダウンフック (Wayland が閉じる前に graphical-session を停止)
+    hl.on("hyprland.shutdown", function()
+      local live_dir = os.getenv("S6_LIVE_DIR")
+      if live_dir then
+        -- graphical-session をダウンさせ、ソケット切断によるクラッシュを防ぐ
+        os.execute("${pkgs.s6-rc}/bin/s6-rc -l " .. live_dir .. " -d change graphical-session")
+      end
+    end)
+
+    -- 4. 追加 Lua 設定
     ${cfg.extraConfig}
   '';
 in {
