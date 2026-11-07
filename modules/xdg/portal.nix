@@ -65,6 +65,7 @@ in {
   };
 
   config = mkIf cfg.enable {
+    boot.supportedFilesystems.fuse.enable = mkDefault true;
     services.dbus.packages = [cfg.package] ++ cfg.portals;
     environment.systemPackages = [cfg.package] ++ cfg.portals;
 
