@@ -33,7 +33,7 @@ in {
 
       packages = lib.mkOption {
         type = with lib.types; listOf package;
-        default = [pkgs.fuse3 pkgs.fuse];
+        default = [pkgs.fuse3];
         description = "システムに含める fuse 関連パッケージ";
       };
     };
@@ -52,14 +52,8 @@ in {
 
       # 3. /run/wrappers/bin に setuid(root) で配置 (inieet の wrappers.rs 連携)
       neet.security.wrappers = {
-        fusermount = {
-          source = "${pkgs.fuse}/bin/fusermount";
-          setuid = true;
-          owner = "root";
-          group = "root";
-        };
         fusermount3 = {
-          source = "${pkgs.fuse3}/bin/fusermount3";
+          source = "${lib.getBin pkgs.fuse3}/bin/fusermount3";
           setuid = true;
           owner = "root";
           group = "root";
