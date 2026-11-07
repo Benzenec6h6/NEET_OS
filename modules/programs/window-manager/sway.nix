@@ -24,6 +24,21 @@ with lib; let
     exec ${getExe config.services.displayManager.sessionReady} SWAYSOCK
     ${cfg.extraConfig}
   '';
+
+  swaySession = pkgs.writeShellScript "sway-session" ''
+    status=0
+    cleanup() {
+      trap - EXIT INT TERM
+      if [ -n "$S6_LIVE_DIR" ]; then
+        ${pkgs.s6-rc}/bin/s6-rc -l "$S6_LIVE_DIR" -d change graphical-session
+      fi
+      exit "$status"
+    }
+    trap cleanup EXIT INT TERM
+
+    ${getExe cfg.package} --config ${wrapperConfig}
+    status=$?
+  '';
 in {
   options.programs.sway = {
     enable = mkEnableOption "Sway Wayland compositor";
@@ -61,13 +76,16 @@ in {
         default = ["wlr" "gtk"];
       };
     };
+
     services.displayManager.sessions.sway = {
-      command = "${getExe cfg.package} --config ${wrapperConfig}";
+      # 作成したラッパースクリプトを指定する
+      command = "${swaySession}";
       displayName = "Sway";
       comment = "An i3-compatible Wayland compositor";
       desktopNames = ["sway" "wlroots"];
     };
 
+    # swaySession は直接パスで呼ばれるため systemPackages には含めなくて OK
     environment.systemPackages = [cfg.package];
     environment.etc."sway/config".source = wrapperConfig;
   };
