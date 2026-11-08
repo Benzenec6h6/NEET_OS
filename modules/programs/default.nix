@@ -4,6 +4,7 @@
     ./sh.nix
     ./bash.nix
     ./fcitx5.nix
+    ./quickshell.nix
     ./wireplumber.nix
     ./window-manager
     ./zzz
