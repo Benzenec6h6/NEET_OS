@@ -62,7 +62,7 @@ in {
 
       # 4. デバイスマネージャへのルール登録 (mdevd & gardendevd の双方をサポート)
       services.mdevd.rules = ''
-        -SUBSYSTEM=misc;fuse 0:0 0666
+        fuse root:root 0666
       '';
 
       services.udev.extraRules = ''
