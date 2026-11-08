@@ -7,14 +7,13 @@
 with lib; let
   cfg = config.programs.quickshell;
 
-  # Quickshell が必要とする QML モジュール群を安全に束ねる
   qtDeps = with pkgs.qt6; [
-    qtsvg # SVG アイコン描画
-    qtimageformats # WebP などの画像フォーマット
-    qtmultimedia # 音声・動画再生
-    qt5compat # 旧エフェクト互換
-    qtdeclarative # QML 基本ライブラリ
-    qtwayland # Wayland サポート
+    qtsvg
+    qtimageformats
+    qtmultimedia
+    qt5compat
+    qtdeclarative
+    qtwayland
   ];
 
   wrappedQuickshell = pkgs.symlinkJoin {
@@ -34,7 +33,6 @@ with lib; let
     '';
   };
 
-  # 起動コマンドの決定 (パス指定があれば -p を付与)
   startCmd =
     if cfg.configDir != null
     then "${wrappedQuickshell}/bin/quickshell -p ${cfg.configDir}"
@@ -57,26 +55,24 @@ in {
   };
 
   config = mkIf cfg.enable {
-    # ユーザーが直接端末からも叩けるようにパッケージ配置
     environment.systemPackages = [wrappedQuickshell];
 
-    # graphical-session にぶら下げるサービス定義 (例: 単一ユーザー構成の場合)
-    # ※ NEET_OS の s6-rc ユーザーサービスの仕組みに合わせて接続してください
-    system.s6-rc.users = genAttrs users (username: let
-      uid = toString config.neet.users.${username}.uid;
-    in {
-      services.quickshell = {
-        type = "longrun";
-        autoStart = false; # top には含めない (ログイン直後は起動しない)
-        partOf = ["graphical-session"]; # ★ WM (Sway/Hyprland) 起動時に連動！
-        envdirs = ["/run/user/${uid}/env"]; # ★ display-manager の Wayland 環境変数を注入
+    # ★ sessionUsers を直接 mapAttrs で回す
+    system.s6-rc.users =
+      mapAttrs (_username: user: {
+        services.quickshell = {
+          type = "longrun";
+          autoStart = false;
+          partOf = ["graphical-session"];
+          envdirs = ["/run/user/${toString user.uid}/env"];
 
-        run = ''
-          #!/bin/execlineb -P
-          fdmove -c 2 1
-          ${startCmd}
-        '';
-      };
-    });
+          run = ''
+            #!/bin/execlineb -P
+            fdmove -c 2 1
+            ${startCmd}
+          '';
+        };
+      })
+      config.neet.sessionUsers;
   };
 }
