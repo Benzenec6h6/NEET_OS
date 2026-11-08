@@ -97,7 +97,6 @@ in {
         '';
 
       # JSON をビルド成果物と /etc に登録
-      system.build.s6-services-json = servicesJson;
       environment.etc."s6-rc/services.json".source = servicesJson;
 
       # 配置

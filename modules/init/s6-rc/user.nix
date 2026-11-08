@@ -79,7 +79,5 @@ in {
       // {
         "s6-rc/users-services.json".source = usersServicesJson;
       };
-
-    system.build.s6-users-services-json = usersServicesJson;
   };
 }
