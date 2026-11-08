@@ -25,6 +25,8 @@ with lib; let
     )
     cfg.services;
 
+  hasLog = svc: svc.type == "longrun" && (svc.log.enable || svc.logRun != null);
+
   # ソースディレクトリの組み立て
   s6SourceDir = import ./build-source.nix {
     inherit lib pkgs;
