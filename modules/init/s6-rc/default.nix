@@ -25,13 +25,28 @@ with lib; let
     )
     cfg.services;
 
-  hasLog = svc: svc.type == "longrun" && (svc.log.enable || svc.logRun != null);
-
   # ソースディレクトリの組み立て
   s6SourceDir = import ./build-source.nix {
     inherit lib pkgs;
     services = resolvedServices;
   };
+
+  # メタデータ抽出関数
+  extractMeta = name: svc: {
+    inherit (svc) type dependencies autoStart partOf loadSecrets envdirs;
+    # スクリプト本文の変更を検知するためのハッシュ
+    scriptHash =
+      if svc.type == "longrun"
+      then builtins.hashString "sha256" svc.run
+      else if svc.type == "oneshot"
+      then builtins.hashString "sha256" "${svc.up}\n${svc.down}"
+      else null;
+  };
+
+  # 自作 CLI / 差分検知向けの JSON
+  servicesJson = pkgs.writeText "s6-services.json" (
+    builtins.toJSON (mapAttrs extractMeta resolvedServices)
+  );
 in {
   # ★ 変更点②: user.nix を読み込む
   imports = [
@@ -80,6 +95,10 @@ in {
         } ''
           s6-rc-compile $out ${s6SourceDir}
         '';
+
+      # JSON をビルド成果物と /etc に登録
+      system.build.s6-services-json = servicesJson;
+      environment.etc."s6-rc/services.json".source = servicesJson;
 
       # 配置
       environment.etc."s6-rc/compiled".source = config.system.build.s6-rc-db;

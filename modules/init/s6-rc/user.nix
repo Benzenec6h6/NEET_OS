@@ -30,6 +30,35 @@ with lib; let
       s6-rc-compile $out ${s6SourceDir}
     '';
 
+  # 各ユーザーのメタデータを集約
+  extractUserMeta = username: userCfg: let
+    userDef = config.neet.users.${username} or null;
+  in {
+    uid =
+      if userDef != null
+      then userDef.uid
+      else null;
+    gid =
+      if userDef != null
+      then userDef.gid
+      else null;
+    services =
+      mapAttrs (name: svc: {
+        inherit (svc) type dependencies autoStart partOf;
+        scriptHash =
+          if svc.type == "longrun"
+          then builtins.hashString "sha256" svc.run
+          else if svc.type == "oneshot"
+          then builtins.hashString "sha256" "${svc.up}\n${svc.down}"
+          else null;
+      })
+      userCfg.services;
+  };
+
+  usersServicesJson = pkgs.writeText "s6-users-services.json" (builtins.toJSON (
+    mapAttrs extractUserMeta activeUserServices
+  ));
+
   activeUserServices = filterAttrs (_name: u: u.services != {}) config.system.s6-rc.users;
 in {
   options.system.s6-rc.users = mkOption {
@@ -39,14 +68,18 @@ in {
   };
 
   config = mkIf (activeUserServices != {}) {
-    # コンパイル済み DB のみを配置
     environment.etc =
-      mapAttrs' (
-        name: userCfg:
-          nameValuePair "s6-rc/users/${name}/compiled" {
-            source = mkUserDb name userCfg;
-          }
-      )
-      activeUserServices;
+      (mapAttrs' (
+          name: userCfg:
+            nameValuePair "s6-rc/users/${name}/compiled" {
+              source = mkUserDb name userCfg;
+            }
+        )
+        activeUserServices)
+      // {
+        "s6-rc/users-services.json".source = usersServicesJson;
+      };
+
+    system.build.s6-users-services-json = usersServicesJson;
   };
 }
