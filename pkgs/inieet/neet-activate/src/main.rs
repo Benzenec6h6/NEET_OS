@@ -141,11 +141,11 @@ fn run(core: &Core) -> io::Result<()> {
     }
 
     // 6. その他の初期化
+    bin_setup::setup_bin(&core.system_path())?;
     modules_setup::setup_kernel_modules(&core.modules())?;
     let _ = modules_setup::load_configured_modules();
     firmware_setup::setup_firmware(&core.firmware())?;
     net_setup::setup_existing_network()?;
-    bin_setup::setup_bin(&core.system_path())?;
 
     // ユーザー s6-rc DB を /var/lib に事前配置
     if let Err(e) = s6_setup::setup_user_s6(false) {
