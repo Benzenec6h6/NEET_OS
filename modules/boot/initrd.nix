@@ -123,7 +123,7 @@ in {
             target = "/lib";
           }
           {
-            source = pkgs.writeText "mdev.conf" config.services.mdevd.rules;
+            source = pkgs.writeText "mdev.conf" config.boot.initrd.mdevd.rules;
             target = "/etc/mdev.conf";
           }
           {

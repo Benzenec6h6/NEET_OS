@@ -62,7 +62,7 @@ in {
 
       # 4. デバイスマネージャへのルール登録 (mdevd & gardendevd の双方をサポート)
       services.mdevd.rules = ''
-        fuse root:root 0666
+        fuse 0:0 0666
       '';
 
       services.udev.extraRules = ''
@@ -81,11 +81,6 @@ in {
     (lib.mkIf cfgInitrd.enable {
       boot.initrd.availableKernelModules = ["fuse"];
       boot.initrd.supportedFilesystems.fuse.packages = [pkgs.pkgsStatic.fuse3];
-
-      # initrd でも mdevd にルールを注入 (Stage 1 では mdevd 固定)
-      services.mdevd.rules = ''
-        -SUBSYSTEM=misc;fuse 0:0 0666
-      '';
     })
   ];
 }

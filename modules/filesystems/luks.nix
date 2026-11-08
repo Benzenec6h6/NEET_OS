@@ -149,6 +149,10 @@ in {
     ];
 
     # 3. mdev.conf に dm デバイス用のパーミッションを追加
+    boot.initrd.mdevd.rules = ''
+      dm-[0-9].* 0:0 660
+    '';
+
     services.mdevd.rules = ''
       dm-[0-9].* 0:0 660
     '';

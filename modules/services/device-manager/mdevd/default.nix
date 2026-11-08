@@ -30,11 +30,23 @@ with lib; let
 
   isMdevdStage2 = config.services.deviceManager == "mdevd";
 in {
-  options.services.mdevd = {
-    rules = mkOption {
-      type = types.lines;
-      default = "";
-      description = "mdev.conf の内容 (Stage 1 / Stage 2 共通)";
+  options = {
+    # Stage 1 専用（initrd 用の極小ルール）
+    boot.initrd.mdevd = {
+      rules = mkOption {
+        type = types.lines;
+        default = "";
+        description = "Stage 1 (initrd) 専用の mdev.conf。ディスクと基本ノードのみ。";
+      };
+    };
+
+    # Stage 2 専用（OS 稼働時用のフルルール）
+    services.mdevd = {
+      rules = mkOption {
+        type = types.lines;
+        default = "";
+        description = "Stage 2 専用の mdev.conf。デバイスManagerが mdevd の時のみ使用。";
+      };
     };
   };
 
@@ -48,12 +60,34 @@ in {
       system.build.mdevdDisk = mdevd-disk;
 
       # 各ハードウェア（uinput, i2c等）で追加された rules とマージされる基本ルール
-      services.mdevd.rules = ''
-        # ブロックデバイスイベント捕捉ルール (initrd/Stage2共通)
+      boot.initrd.mdevd.rules = ''
+        # ブロックデバイスの検出 (LUKS やルートマウントに必須)
         -SUBSYSTEM=block;.* 0:0 660 */bin/mdevd-disk.sh
 
         -$MODALIAS=.* 0:0 660 @modprobe --quiet "$MODALIAS"
 
+        null        0:0 666
+        zero        0:0 666
+        full        0:0 666
+        console     0:0 600
+        ptmx        0:0 666
+        tty[0-9]*   0:0 660
+
+        sd[a-z].*          0:0 660
+        vd[a-z].*          0:0 660
+        nvme[0-9]n[0-9].*  0:0 660
+        mmcblk[0-9].*      0:0 660
+      '';
+    }
+
+    # --------------------------------------------------
+    # Stage 2 (稼働時) のフルルール
+    # --------------------------------------------------
+    {
+      # 基本ルール（audio, video, input 等は Stage 2 だけが持てば良い）
+      services.mdevd.rules = ''
+        -SUBSYSTEM=block;.* 0:0 660 */bin/mdevd-disk.sh
+        -$MODALIAS=.* 0:0 660 @modprobe --quiet "$MODALIAS"
         -SUBSYSTEM=net;.* 0:0 660 @ip link set $INTERFACE up
 
         null        0:0 666
