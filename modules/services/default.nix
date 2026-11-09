@@ -9,6 +9,7 @@
     ./display-manager
     ./dhcpcd.nix
     ./fcron.nix
+    ./flatpak.nix
     ./fstrim.nix
     ./fwupd.nix
     ./iwd.nix
