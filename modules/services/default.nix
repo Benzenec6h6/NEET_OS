@@ -22,5 +22,6 @@
     ./openssh.nix
     ./sshguard.nix
     ./syslog.nix
+    ./upower.nix
   ];
 }
