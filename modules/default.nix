@@ -14,6 +14,8 @@
     ./system
     ./testing/image.nix
     ./testing/vm-runner.nix
+    ./virtualisation/docker.nix
+    ./virtualisation/kvm.nix
     ./virtualisation/virtio.nix
     ./xdg
   ];
