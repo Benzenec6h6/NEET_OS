@@ -8,8 +8,10 @@
 
 mod btrfs_reset;
 mod mount;
+pub mod overlay;
 mod plan;
 mod util;
 
 pub use mount::apply_plan;
+pub use overlay::OverlayGuard;
 pub use plan::{load_plan, MountEntry};
