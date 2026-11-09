@@ -9,6 +9,8 @@
     ./display-manager
     ./dhcpcd.nix
     ./fcron.nix
+    ./fstrim.nix
+    ./fwupd.nix
     ./iwd.nix
     ./getty.nix
     ./sessiond
