@@ -11,7 +11,7 @@ lib.evalModules {
       boot.fileSystems."/".fsType = "btrfs";
       boot.fileSystems."/".device = "/dev/dummy";
       boot.loader.limine.enable = true;
-      testing.vm.enable = true;
+      virtualisation.qemu.enable = true;
 
       disks.devices.main.partitions = [
         {

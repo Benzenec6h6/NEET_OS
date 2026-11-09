@@ -35,7 +35,7 @@
       nativeBuildInputs = [pkgs.nix pkgs.bash];
       inherit closure toplevel;
     } ''
-      bash ${../testing/populate-rootfs.sh}
+      bash ${./populate-rootfs.sh}
     '';
 
   bootloader =
@@ -155,7 +155,7 @@
         else "";
     } ''
       out="raw.img"
-      bash ${../testing/build-disk-image.sh}
+      bash ${./build-disk-image.sh}
       echo "images.zst: compressing raw.img to $out..."
       zstd -T0 -19 raw.img -o "$out"
     '';

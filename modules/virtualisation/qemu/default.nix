@@ -4,7 +4,7 @@
   pkgs,
   ...
 }: let
-  cfg = config.testing.vm;
+  cfg = config.virtualisation.qemu;
 
   netdevArgs = let
     fwdArgs =
@@ -24,7 +24,7 @@
       diskImage = "${config.system.build.diskImage}";
       memorySize = toString cfg.memorySize;
       cores = toString cfg.cores;
-      netdevArgs = netdevArgs;
+      inherit netdevArgs;
       enableGraphics =
         if cfg.graphics
         then "1"
@@ -34,7 +34,6 @@
         then "1"
         else "0";
       isPersistent =
-        # snapshotFlag を廃止し、判定フラグに変更
         if cfg.persistent
         then "1"
         else "0";
@@ -48,8 +47,8 @@
     dontPatchShebangs = true;
   };
 in {
-  options.testing.vm = {
-    enable = lib.mkEnableOption "Build this configuration as a QEMU test VM";
+  options.virtualisation.qemu = {
+    enable = lib.mkEnableOption "Build this configuration as a QEMU test VM runner";
 
     forwardPorts = lib.mkOption {
       type = lib.types.listOf (lib.types.submodule {
@@ -71,12 +70,6 @@ in {
         };
       });
       default = [];
-      example = [
-        {
-          hostPort = 2222;
-          guestPort = 22;
-        }
-      ];
       description = "ホストから VM へ転送するポートフォワードのリスト";
     };
 
@@ -119,6 +112,12 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    # ★ VM 有効化時に raw ディスクイメージビルダーを自動連動
+    images.raw = {
+      enable = lib.mkDefault true;
+      diskSize = lib.mkDefault cfg.diskSize;
+    };
+
     virtualisation.virtio.enable = lib.mkDefault true;
     boot.vt.enable = lib.mkDefault true;
     boot.serial.enable = lib.mkDefault true;
