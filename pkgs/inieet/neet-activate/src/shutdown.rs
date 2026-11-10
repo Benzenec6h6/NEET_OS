@@ -41,9 +41,7 @@ pub fn do_shutdown(action: Action) -> io::Result<()> {
     // 1. まず s6-rc で管理下の全システムサービスを依存関係順に安全停止
     // (これにより display-manager や getty も順序よく停止し、user-session.sh も正常終了する)
     log_console("neet-activate: stopping all system services via s6-rc...");
-    let _ = Command::new("s6-rc")
-        .args(&["-l", "/run/service", "-da", "change"])
-        .status();
+    let _ = Command::new("s6-rc").args(&["-da", "change"]).status();
 
     // 2. s6-rc 管理外で生き残っている一般プロセスに SIGTERM を送信
     log_console("neet-activate: sending SIGTERM to remaining processes...");
