@@ -56,8 +56,14 @@ in {
     };
   };
 
+  neetActivate = mkPackage {
+    pname = "neet-activate";
+    env = {
+      SETCAP_PATH = "${pkgs.libcap}/bin/setcap";
+    };
+  };
+
   # 通常のパッケージ（1行で書ける）
-  neetActivate = mkPackage {pname = "neet-activate";};
   limineInstall = mkPackage {pname = "limine-install";};
   efistubSync = mkPackage {pname = "efistub-sync";};
   espSync = mkPackage {pname = "esp-sync";};

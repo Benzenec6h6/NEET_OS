@@ -4,6 +4,7 @@ use std::fs;
 use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WrapperConfig {
@@ -73,7 +74,26 @@ pub fn setup_wrappers() -> io::Result<()> {
         }
         fs::set_permissions(&tmp_path, fs::Permissions::from_mode(mode))?;
 
-        // 4. アトミックに入れ替え
+        // 4. Capabilities が指定されていれば setcap を実行
+        if !config.capabilities.is_empty() {
+            let caps_arg = config.capabilities.join(",");
+            const SETCAP_BIN: &str = env!("SETCAP_PATH");
+
+            let status = Command::new(SETCAP_BIN)
+                .arg(&caps_arg)
+                .arg(&tmp_path)
+                .status();
+
+            match status {
+                Ok(s) if s.success() => {}
+                Ok(s) => eprintln!("[wrappers] warning: setcap failed with status: {s}"),
+                Err(e) => {
+                    eprintln!("[wrappers] warning: failed to execute setcap ({SETCAP_BIN}): {e}")
+                }
+            }
+        }
+
+        // 5. アトミックに入れ替え
         fs::rename(&tmp_path, target_path)?;
     }
 
