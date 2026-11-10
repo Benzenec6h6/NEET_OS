@@ -69,13 +69,17 @@ with lib; let
     '';
   };
 
+  pam_oo7 = "${config.neet.security.oo7.pamPackage}/lib/security/pam_oo7.so";
   pamText = ''
     auth      required    ${pkgs.pam}/lib/security/pam_unix.so nullok
+    ${optionalString config.neet.security.oo7.enable "auth      optional    ${pam_oo7}"}
     account   required    ${pkgs.pam}/lib/security/pam_unix.so
     password  required    ${pkgs.pam}/lib/security/pam_unix.so sha512 shadow nullok
+    ${optionalString config.neet.security.oo7.enable "password  optional    ${pam_oo7}"}
     session   required    ${pkgs.pam}/lib/security/pam_env.so
     session   optional    ${pkgs.pam}/lib/security/pam_loginuid.so
     session   required    ${pkgs.pam}/lib/security/pam_unix.so
+    ${optionalString config.neet.security.oo7.enable "session   optional    ${pam_oo7}"}
     ${optionalString config.services.sessiond.enable
       "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"}
   '';

@@ -10,6 +10,7 @@ with lib; let
   pam_unix = "${pkgs.pam}/lib/security/pam_unix.so";
   pam_deny = "${pkgs.pam}/lib/security/pam_deny.so";
   pam_rootok = "${pkgs.pam}/lib/security/pam_rootok.so";
+  pam_oo7 = "${config.neet.security.oo7.pamPackage}/lib/security/pam_oo7.so";
 
   # PAM 設定ファイルの共通ベース（Linux 標準的な unix 認証）
   defaultPamService = ''
@@ -68,9 +69,12 @@ in {
       # 一般ログイン / Console
       login.text = ''
         auth      required    ${pam_unix} nullok
+        ${optionalString config.neet.security.oo7.enable "auth      optional    ${pam_oo7}"}
         account   required    ${pam_unix}
         password  required    ${pam_unix} sha512 shadow nullok
+        ${optionalString config.neet.security.oo7.enable "password  optional    ${pam_oo7}"}
         session   required    ${pam_unix}
+        ${optionalString config.neet.security.oo7.enable "session   optional    ${pam_oo7}"}
         ${
           optionalString config.services.sessiond.enable
           "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"
