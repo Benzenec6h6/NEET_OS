@@ -18,19 +18,22 @@ pub fn do_shutdown(action: Action) -> io::Result<()> {
         Action::Reboot => println!("neet-activate: rebooting system..."),
     }
 
-    // 0. 自分自身が SIGTERM で死なないように無視を設定 (nix のみで完結)
+    // ★ 0. 親シェルや端末が死んだときの巻き添え死（SIGHUP等）を完全に防ぐ
     unsafe {
         let sa = SigAction::new(SigHandler::SigIgn, SaFlags::empty(), SigSet::empty());
+        // 端末ハングアップやシグナルを一括無視
+        let _ = sigaction(Signal::SIGHUP, &sa);
         let _ = sigaction(Signal::SIGTERM, &sa);
+        let _ = sigaction(Signal::SIGINT, &sa);
+        let _ = sigaction(Signal::SIGQUIT, &sa);
+        let _ = sigaction(Signal::SIGPIPE, &sa);
     }
 
     // 1. 全ユーザープロセスに SIGTERM を送信
-    // Pid::from_raw(-1) で自身と init 以外の全プロセスへ一斉送信
-    // これにより user-session.sh の trap cleanup EXIT が起動します
     println!("neet-activate: sending SIGTERM to all processes...");
     let _ = kill(Pid::from_raw(-1), Signal::SIGTERM);
 
-    // 2. ユーザーセッション(user-session.sh)の cleanup が完了するのを少し待機
+    // 2. ユーザーセッションの cleanup が完了するのを少し待機
     sleep(Duration::from_millis(1500));
 
     // 3. 終了しなかったプロセスに SIGKILL を送信
