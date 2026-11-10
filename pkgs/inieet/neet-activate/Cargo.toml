@@ -6,6 +6,6 @@ edition.workspace = true
 [dependencies]
 neet-core.workspace = true
 neet-mount.workspace = true
-nix = { workspace = true, features = ["fs", "user", "mount", "reboot"] }
+nix = { workspace = true, features = ["fs", "user", "mount", "reboot", "signal", "process"] }
 serde.workspace = true
 serde_json.workspace = true

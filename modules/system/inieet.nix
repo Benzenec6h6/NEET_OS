@@ -1,6 +1,6 @@
 {
   pkgs,
-  lib,
+  config,
   ...
 }: let
   inieet = pkgs.callPackage ../../pkgs/inieet {};
@@ -16,6 +16,21 @@ in {
     system.build.espSync = inieet.espSync;
     system.build.bootspecWrite = inieet.bootspecWrite;
     system.build.diskSetup = inieet.diskSetup;
+
+    neet.security.wrappers = {
+      poweroff = {
+        source = "${config.system.build.neetActivate}/bin/neet-activate";
+        setuid = true;
+        owner = "root";
+        group = "root";
+      };
+      reboot = {
+        source = "${config.system.build.neetActivate}/bin/neet-activate";
+        setuid = true;
+        owner = "root";
+        group = "root";
+      };
+    };
 
     # システムの一般 PATH に neetActivate などを登録
     environment.systemPackages = [
