@@ -61,17 +61,12 @@ in {
       type = "longrun";
       autoStart = true;
       run = ''
-        #!/bin/execlineb -P
+        #!${pkgs.execline}/bin/execlineb -P
         fdmove -c 2 1
-
-        # ★ root 側で nix-env や neet-activate が叩けるように PATH を確実に設定
         export PATH /run/wrappers/bin:/run/current-system/bin:/bin:/sbin
         export NIX_REMOTE daemon
         export HOME /root
-
-        # ソケット作成 & s6-sudod 起動
-        s6-ipcserver -a 0666 ${socketPath}
-        s6-sudod
+        s6-ipcserver -a 0666 ${socketPath} s6-sudod
       '';
     };
   };
