@@ -8,9 +8,10 @@ with lib; let
   cfg = config.programs.neet-helper;
   inieet = pkgs.callPackage ../../pkgs/inieet {};
 
-  socketPath = "/run/neet-admin.sock";
+  # 専用ディレクトリ配下にソケットを配置
+  adminDir = "/run/neet-admin";
+  socketPath = "${adminDir}/sock";
 
-  # 環境変数を注入した neet コマンド
   wrappedNeet = pkgs.symlinkJoin {
     name = "neet-wrapped";
     paths = [inieet.neetHelper];
@@ -39,21 +40,37 @@ in {
   };
 
   config = mkIf cfg.enable {
-    # 1. ラップされた CLI を一般 PATH に追加
     environment.systemPackages = [
       wrappedNeet
-      pkgs.s6 # s6-sudo コマンドを使うため
+      pkgs.s6
     ];
 
-    # 2. root 権限で動く s6-sudod サービスを定義！
-    # wheel グループのユーザーだけが /run/neet-admin.sock に接続できる
+    # 1. ソケット用ディレクトリを root:wheel (0750) で自動作成
+    #    (wheel 以外のユーザーは中に入ることすらできません)
+    system.stateDirectories = [
+      {
+        path = adminDir;
+        mode = "0750";
+        user = "root";
+        group = cfg.allowedGroup;
+      }
+    ];
+
+    # 2. s6-sudod サービス (オプションを修正)
     system.s6-rc.services.neet-admin-server = {
       type = "longrun";
       autoStart = true;
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1
-        s6-ipcserver -m 0660 -g ${cfg.allowedGroup} ${socketPath}
+
+        # ★ root 側で nix-env や neet-activate が叩けるように PATH を確実に設定
+        export PATH /run/wrappers/bin:/run/current-system/bin:/bin:/sbin
+        export NIX_REMOTE daemon
+        export HOME /root
+
+        # ソケット作成 & s6-sudod 起動
+        s6-ipcserver -a 0666 ${socketPath}
         s6-sudod
       '';
     };
