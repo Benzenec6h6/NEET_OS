@@ -24,11 +24,16 @@ enum Commands {
     },
 }
 
+fn default_flake_path() -> PathBuf {
+    std::env::var("NEET_FLAKE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/etc/neet-os"))
+}
+
 #[derive(Subcommand)]
 enum OsAction {
-    /// システムをリビルドし、差分確認後に動的切り替えを行う
     Switch {
-        #[arg(default_value = "/etc/neet-os")]
+        #[arg(default_value_os_t = default_flake_path())]
         flake_path: PathBuf,
 
         #[arg(short, long)]
@@ -40,23 +45,20 @@ enum OsAction {
         #[arg(short, long)]
         attr: Option<String>,
     },
-    /// システムをビルドし、差分のみを表示する (切り替えなし)
     Diff {
-        #[arg(default_value = "/etc/neet-os")]
+        #[arg(default_value_os_t = default_flake_path())]
         flake_path: PathBuf,
 
         #[arg(short, long)]
         attr: Option<String>,
     },
-    /// 次回起動用としてブートローダとプロファイルのみ更新する
     Boot {
-        #[arg(default_value = "/etc/neet-os")]
+        #[arg(default_value_os_t = default_flake_path())]
         flake_path: PathBuf,
 
         #[arg(short, long)]
         attr: Option<String>,
     },
-    /// 既存の世代一覧を表示する
     List,
 }
 

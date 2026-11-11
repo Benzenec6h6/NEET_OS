@@ -3,29 +3,51 @@ use neet_core::manifest::Core;
 use std::path::Path;
 use std::process::Command;
 
+/// root でなければ s6-sudo を使って管理者ソケット経由で実行する
+fn run_privileged(program: &str, args: &[&str]) -> Result<()> {
+    let is_root = nix::unistd::Uid::current().is_root();
+
+    let mut cmd = if is_root {
+        Command::new(program)
+    } else {
+        let sock =
+            std::env::var("NEET_ADMIN_SOCK").unwrap_or_else(|_| "/run/neet-admin.sock".to_string());
+
+        let mut c = Command::new("s6-sudo");
+        c.arg(sock);
+        c.arg(program);
+        c
+    };
+
+    cmd.args(args);
+
+    let status = cmd
+        .status()
+        .with_context(|| format!("Failed to execute {}", program))?;
+    if !status.success() {
+        anyhow::bail!("Command '{}' failed with exit status: {}", program, status);
+    }
+    Ok(())
+}
+
 pub fn switch(toplevel: &Path, core: &Core, force: bool) -> Result<()> {
-    // 1. プロファイル更新
+    // 1. プロファイル更新 (s6-sudo 経由で root 実行)
     println!("==> [neet] Updating system profile...");
-    let status = Command::new("nix-env")
-        .args([
+    run_privileged(
+        "nix-env",
+        &[
             "-p",
             "/nix/var/nix/profiles/system",
             "--set",
             toplevel.to_str().unwrap(),
-        ])
-        .status()?;
-    if !status.success() {
-        anyhow::bail!("Failed to update /nix/var/nix/profiles/system");
-    }
+        ],
+    )?;
 
     // 2. ブートローダ同期
     let bootloader = toplevel.join("bin/install-bootloader");
     if bootloader.exists() {
         println!("==> [neet] Updating bootloader...");
-        let status = Command::new(&bootloader).status()?;
-        if !status.success() {
-            eprintln!("==> [neet] warning: install-bootloader exited with non-zero status");
-        }
+        let _ = run_privileged(bootloader.to_str().unwrap(), &[]);
     }
 
     // 3. 再起動要否の検査
@@ -41,24 +63,19 @@ pub fn switch(toplevel: &Path, core: &Core, force: bool) -> Result<()> {
         println!("==> [neet] Forcing live switch despite reboot notice...");
     }
 
-    // 4. neet-activate switch の実行 (/etc, ラッパー, /bin の切り替え)
+    // 4. neet-activate switch の実行
     println!("==> [neet] Activating live configuration...");
-    let status = Command::new("neet-activate")
-        .args(["switch", core.path.to_str().unwrap()])
-        .status()
-        .context("Failed to execute neet-activate")?;
-    if !status.success() {
-        anyhow::bail!("neet-activate failed");
-    }
+    run_privileged("neet-activate", &["switch", core.path.to_str().unwrap()])?;
 
     // 5. システム s6-rc-update
     let live_s6 = Path::new("/run/s6-rc");
     if let Some(s6_db) = core.s6_rc() {
         if live_s6.exists() {
             println!("==> [neet] Updating system s6-rc service database...");
-            let _ = Command::new("s6-rc-update")
-                .args(["-l", "/run/s6-rc", s6_db.to_str().unwrap()])
-                .status();
+            let _ = run_privileged(
+                "s6-rc-update",
+                &["-l", "/run/s6-rc", s6_db.to_str().unwrap()],
+            );
         }
     }
 
@@ -68,19 +85,20 @@ pub fn switch(toplevel: &Path, core: &Core, force: bool) -> Result<()> {
 
 pub fn boot(toplevel: &Path) -> Result<()> {
     println!("==> [neet] Updating system profile...");
-    Command::new("nix-env")
-        .args([
+    run_privileged(
+        "nix-env",
+        &[
             "-p",
             "/nix/var/nix/profiles/system",
             "--set",
             toplevel.to_str().unwrap(),
-        ])
-        .status()?;
+        ],
+    )?;
 
     let bootloader = toplevel.join("bin/install-bootloader");
     if bootloader.exists() {
         println!("==> [neet] Updating bootloader...");
-        Command::new(bootloader).status()?;
+        let _ = run_privileged(bootloader.to_str().unwrap(), &[]);
     }
     println!("==> [neet] Boot configuration updated. Will take effect on next reboot.");
     Ok(())
