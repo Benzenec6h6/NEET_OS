@@ -16,6 +16,7 @@ in {
     system.build.espSync = inieet.espSync;
     system.build.bootspecWrite = inieet.bootspecWrite;
     system.build.diskSetup = inieet.diskSetup;
+    system.build.neetHelper = inieet.neetHelper;
 
     neet.security.wrappers = {
       poweroff = {
@@ -34,6 +35,7 @@ in {
 
     # システムの一般 PATH に neetActivate などを登録
     environment.systemPackages = [
+      inieet.neetHelper
       inieet.neetActivate
       inieet.espSync
       inieet.diskSetup

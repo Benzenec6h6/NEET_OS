@@ -69,6 +69,7 @@ in {
   espSync = mkPackage {pname = "esp-sync";};
   diskSetup = mkPackage {pname = "disk-setup";};
   neetUki = mkPackage {pname = "neet-uki";};
+  neetHelper = mkPackage {pname = "neet-helper";};
 
   # ディレクトリ名とパッケージ名が異なる例外
   bootspecWrite = mkPackage {

@@ -8,6 +8,7 @@ members = [
     "limine-install",
     "neet-activate",
     "neet-core",
+    "neet-helper",
     "neet-mount",
     "neet-secret",
     "neet-uki",
