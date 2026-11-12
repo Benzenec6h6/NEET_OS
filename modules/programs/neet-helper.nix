@@ -61,12 +61,18 @@ in {
       type = "longrun";
       autoStart = true;
       run = ''
-        #!${pkgs.execline}/bin/execlineb -P
-        fdmove -c 2 1
-        export PATH /run/wrappers/bin:/run/current-system/bin:/bin:/sbin
-        export NIX_REMOTE daemon
-        export HOME /root
-        s6-ipcserver -a 0666 ${socketPath} s6-sudod
+        #!/bin/sh
+        exec 2>&1
+
+        export PATH="/run/wrappers/bin:/run/current-system/sw/bin:/run/current-system/bin:/bin:/sbin"
+        export NIX_REMOTE="daemon"
+        export HOME="/root"
+
+        # 古いソケットが残っていたら削除
+        rm -f ${socketPath}
+
+        # s6-ipcserver で待ち受け、クライアント接続時に s6-sudod を起動
+        exec ${pkgs.s6}/bin/s6-ipcserver -a 0666 ${socketPath} ${pkgs.s6}/bin/s6-sudod
       '';
     };
   };

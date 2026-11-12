@@ -11,7 +11,7 @@ fn run_privileged(program: &str, args: &[&str]) -> Result<()> {
         Command::new(program)
     } else {
         let sock =
-            std::env::var("NEET_ADMIN_SOCK").unwrap_or_else(|_| "/run/neet-admin.sock".to_string());
+            std::env::var("NEET_ADMIN_SOCK").unwrap_or_else(|_| "/run/neet-admin/sock".to_string());
 
         let mut c = Command::new("s6-sudo");
         c.arg(sock);
