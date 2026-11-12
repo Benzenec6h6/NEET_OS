@@ -94,11 +94,7 @@ with lib; let
       }
     ];
 
-  autoStartServices =
-    filterAttrs (
-      _: svc: svc.autoStart && svc.type == "longrun"
-    )
-    services;
+  autoStartServices = filterAttrs (_: svc: svc.autoStart) services;
 
   loggedServices = filterAttrs (_: hasLog) services;
 
