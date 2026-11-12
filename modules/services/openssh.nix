@@ -298,7 +298,7 @@ in {
       "sshd-prepare" = {
         type = "oneshot";
         format = "sh";
-        autoStart = cfg.startOnBoot; # sshd と合わせる
+        autoStart = false;
         up = ''
           if ! [ -s "/var/lib/sshd/ssh_host_ed25519_key" ]; then
             ${cfg.package}/bin/ssh-keygen -t ed25519 -f "/var/lib/sshd/ssh_host_ed25519_key" -N ""
