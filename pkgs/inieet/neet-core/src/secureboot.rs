@@ -46,6 +46,7 @@ pub fn install_and_sign_efi_cached(
     // 2. 署名トークンの決定
     let is_signing_enabled = match (key, cert) {
         (Some(k), Some(c)) => k.exists() && c.exists(),
+        eprintln!("{tag_prefix}[WARNING] Secure Boot key/cert not found; installing unsigned!");
         _ => false,
     };
 
