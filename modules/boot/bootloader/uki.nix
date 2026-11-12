@@ -19,7 +19,7 @@
   stubPath = "${pkgs.systemd}/lib/systemd/boot/efi/linux${efiArch}.efi.stub";
   cmdlineText = toString config.boot.kernelParams;
 
-  inieet = pkgs.callPackage ../../pkgs/inieet {};
+  inieet = pkgs.callPackage ../../../pkgs/inieet {};
 
   osReleaseFile = pkgs.writeText "os-release" ''
     NAME="NEET OS"
