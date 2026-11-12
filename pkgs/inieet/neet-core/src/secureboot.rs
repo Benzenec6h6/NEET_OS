@@ -81,35 +81,50 @@ pub fn install_and_sign_efi_cached(
             c.display()
         );
 
+        let tmp = atomic::tmp_sibling(dest);
+        let _ = fs::remove_file(&tmp);
+
         let status = Command::new("sbsign")
             .arg("--key")
             .arg(k)
             .arg("--cert")
             .arg(c)
             .arg("--output")
-            .arg(dest)
+            .arg(&tmp)
             .arg(src)
-            .status()
-            .map_err(|e| {
-                io::Error::new(
+            .status();
+
+        let status = match status {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = fs::remove_file(&tmp);
+                return Err(io::Error::new(
                     io::ErrorKind::Other,
                     format!("failed to execute sbsign: {e}. Is 'sbsigntool' installed?"),
-                )
-            })?;
+                ));
+            }
+        };
 
         if !status.success() {
+            let _ = fs::remove_file(&tmp);
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("sbsign failed for {}", src.display()),
             ));
         }
+
+        if let Err(e) = fs::rename(&tmp, dest) {
+            let _ = fs::remove_file(&tmp);
+            return Err(e);
+        }
+        atomic::sync_parent(dest)?;
     } else {
         println!("{tag_prefix}installing un-signed {}", dest.display());
         atomic::atomic_copy_if_changed(src, dest, 0o755)?;
     }
 
     // 5. 複合キャッシュの書き込み
-    fs::write(&hash_file, expected_cache)?;
+    atomic::atomic_write(&hash_file, expected_cache.as_bytes(), 0o644)?;
     Ok(true)
 }
 

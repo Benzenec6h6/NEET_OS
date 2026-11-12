@@ -13,6 +13,10 @@
     lib.optionalString config.boot.secureBoot.enable
     "--key '${toString config.boot.secureBoot.keyPath}' --cert '${toString config.boot.secureBoot.certPath}'";
 
+  limitFlags =
+    lib.optionalString (config.boot.loader.generationLimit != null)
+    "--max-generations ${toString config.boot.loader.generationLimit}";
+
   installBootloader = pkgs.writeShellScript "install-limine" ''
     set -euo pipefail
 
@@ -27,11 +31,12 @@
     LIMINE_PKG="${liminePkg}"
 
     echo "==> [install-limine] 1/2: Synchronizing payloads to ESP..."
-    ${espSync}/bin/esp-sync ${sbFlags} "$BOOT_DIR"
+    ${espSync}/bin/esp-sync ${sbFlags} ${limitFlags} "$BOOT_DIR"
 
     echo "==> [install-limine] 2/2: Updating Limine binaries, config and NVRAM..."
     exec ${limineInstall}/bin/limine-install \
       --timeout "${toString cfg.timeout}" \
+      ${limitFlags} \
       ${sbFlags} "$BOOT_DIR" "$LIMINE_PKG"
   '';
 in {

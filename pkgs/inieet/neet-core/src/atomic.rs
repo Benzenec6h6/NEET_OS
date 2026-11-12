@@ -5,13 +5,13 @@ use std::io::{self, Read, Write};
 use std::os::unix::fs::{symlink, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 
-fn tmp_sibling(path: &Path) -> PathBuf {
+pub fn tmp_sibling(path: &Path) -> PathBuf {
     let mut name: OsString = path.file_name().unwrap_or_default().to_os_string();
     name.push(format!(".neet-tmp.{}", std::process::id()));
     path.with_file_name(name)
 }
 
-fn sync_parent(path: &Path) -> io::Result<()> {
+pub fn sync_parent(path: &Path) -> io::Result<()> {
     match path.parent() {
         Some(p) if !p.as_os_str().is_empty() => File::open(p)?.sync_all(),
         _ => Ok(()),

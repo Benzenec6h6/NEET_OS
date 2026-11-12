@@ -7,7 +7,6 @@
 
 use neet_core::{generation, uefi};
 use std::env;
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -129,17 +128,37 @@ fn generate_limine_conf(
     let mut conf = String::new();
     conf.push_str(&format!("timeout: {}\n\n", timeout));
 
-    for (idx, gen) in generations.iter().enumerate() {
+    let mut entry_count = 0usize;
+    for gen in generations {
         let Some(spec) = gen.bootspec()? else {
             continue;
         };
 
-        let is_latest = idx == 0;
+        if spec.uki.is_some() {
+            if !boot_dir.join("EFI/Linux").join(gen.uki_name()).exists() {
+                eprintln!(
+                    "limine-install: warning: EFI/Linux/{} missing on ESP, skipping generation {}",
+                    gen.uki_name(),
+                    gen.number
+                );
+                continue;
+            }
+        } else if !boot_dir.join("kernels").join(gen.kernel_name()).exists() {
+            eprintln!(
+                "limine-install: warning: kernels/{} missing on ESP, skipping generation {}",
+                gen.kernel_name(),
+                gen.number
+            );
+            continue;
+        }
+
+        let is_latest = entry_count == 0;
         let title = if is_latest {
             format!("/NEET OS (Generation {} - Current)", gen.number)
         } else {
             format!("/NEET OS (Generation {})", gen.number)
         };
+        entry_count += 1;
 
         if spec.uki.is_some() {
             let uki_path = format!("boot():/EFI/Linux/{}", gen.uki_name());
@@ -164,9 +183,7 @@ fn generate_limine_conf(
     }
 
     let conf_path = boot_dir.join("limine.conf");
-    let conf_tmp = boot_dir.join("limine.conf.tmp");
-    fs::write(&conf_tmp, conf)?;
-    fs::rename(conf_tmp, conf_path)?;
+    neet_core::atomic::atomic_write(&conf_path, conf.as_bytes(), 0o644)?;
 
     println!("limine-install: /boot/limine.conf updated successfully");
     Ok(())

@@ -105,3 +105,14 @@ pub fn list(profiles: &Path) -> io::Result<(Vec<Generation>, Vec<(u32, io::Error
     gens.sort_by(|a, b| b.number.cmp(&a.number));
     Ok((gens, skipped))
 }
+
+pub fn list_limited(
+    profiles: &Path,
+    max_generations: Option<usize>,
+) -> io::Result<(Vec<Generation>, Vec<(u32, io::Error)>)> {
+    let (mut gens, skipped) = list(profiles)?;
+    if let Some(limit) = max_generations {
+        gens.truncate(limit);
+    }
+    Ok((gens, skipped))
+}

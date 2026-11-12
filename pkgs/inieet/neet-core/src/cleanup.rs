@@ -21,6 +21,13 @@ pub fn cleanup_stale_generation_files(
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
 
+        // 中断等で残留した一時ファイルは無条件で掃除
+        if name.contains(".neet-tmp.") {
+            fs::remove_file(entry.path())?;
+            removed.push(entry.path());
+            continue;
+        }
+
         // 世代番号をパースできるかチェック
         if let Some(gen_num) = generation::parse_gen_from_filename(&name) {
             if !active_gen_numbers.contains(&gen_num) {

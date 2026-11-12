@@ -12,6 +12,10 @@
     lib.optionalString config.boot.secureBoot.enable
     "--key '${toString config.boot.secureBoot.keyPath}' --cert '${toString config.boot.secureBoot.certPath}'";
 
+  limitFlags =
+    lib.optionalString (config.boot.loader.generationLimit != null)
+    "--max-generations ${toString config.boot.loader.generationLimit}";
+
   installBootloader = pkgs.writeShellScript "install-efistub" ''
     set -euo pipefail
 
@@ -23,12 +27,11 @@
     ]}:$PATH"
 
     echo "==> [install-efistub] 1/2: Synchronizing payloads to ESP..."
-    # CLI 引数として渡す
-    ${espSync}/bin/esp-sync ${sbFlags} "${cfg.bootDir}"
+    ${espSync}/bin/esp-sync ${sbFlags} ${limitFlags} "${cfg.bootDir}"
 
     echo "==> [install-efistub] 2/2: Synchronizing UEFI NVRAM entries..."
     exec ${efistubSync}/bin/efistub-sync \
-      "${cfg.bootDir}" "${cfg.efiDisk}" "${toString cfg.efiPartition}"
+      ${limitFlags} "${cfg.bootDir}" "${cfg.efiDisk}" "${toString cfg.efiPartition}"
   '';
 in {
   options.boot.loader.efistub = {
