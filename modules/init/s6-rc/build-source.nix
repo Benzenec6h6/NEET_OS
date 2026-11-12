@@ -94,7 +94,12 @@ with lib; let
       }
     ];
 
-  autoStartServices = filterAttrs (_: svc: svc.autoStart) services;
+  autoStartServices =
+    filterAttrs (
+      _: svc: svc.autoStart && svc.type == "longrun"
+    )
+    services;
+
   loggedServices = filterAttrs (_: hasLog) services;
 
   topContents =
