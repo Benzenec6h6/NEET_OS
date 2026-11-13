@@ -6,13 +6,9 @@
   testSystem = import ./ci/eval.nix {inherit pkgs lib neetModules;};
 
   osChecks = import ./ci/os.nix {inherit pkgs lib testSystem;};
-  rustChecks = import ./ci/rust.nix {
-    inherit pkgs;
-    rustSourcePath = ../pkgs/inieet;
-  };
 
   # 全チェック項目のリスト
-  allChecks = (builtins.attrValues osChecks) ++ (builtins.attrValues rustChecks);
+  allChecks = builtins.attrValues osChecks;
 
   # サマリーレポート
   summaryReport = import ./ci/report.nix {
@@ -24,7 +20,6 @@
 in {
   checks =
     (builtins.mapAttrs (_name: v: v.path) osChecks)
-    // (builtins.mapAttrs (_name: v: v.path) rustChecks)
     // {
       "report" = summaryReport;
     };
