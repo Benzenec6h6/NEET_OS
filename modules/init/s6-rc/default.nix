@@ -6,62 +6,31 @@
 }:
 with lib; let
   cfg = config.system.s6-rc;
+  s6lib = import ./lib.nix {inherit lib pkgs;};
+  inherit (s6lib) hasLog;
 
-  # ★ 変更点①: サービスオプションを共通ファイルからインポート
-  serviceOpts = import ./service-options.nix {inherit lib pkgs;};
+  secretsEnabled = config.neet.security.secrets.enable or false;
 
+  # loadSecrets を dependencies / envdirs に展開
   resolvedServices =
     mapAttrs (
       name: svc:
         svc
         // {
-          dependencies =
-            svc.dependencies
-            ++ optional (svc.loadSecrets && (config.neet.security.secrets.enable or false)) "secrets";
-          envdirs =
-            svc.envdirs
-            ++ optional svc.loadSecrets "/run/secrets/env/${name}";
+          dependencies = svc.dependencies ++ optional (svc.loadSecrets && secretsEnabled) "secrets";
+          envdirs = svc.envdirs ++ optional svc.loadSecrets "/run/secrets/env/${name}";
         }
     )
     cfg.services;
 
-  hasLog = svc: svc.type == "longrun" && (svc.log.enable || svc.logRun != null);
-
-  # ソースディレクトリの組み立て
-  s6SourceDir = import ./build-source.nix {
-    inherit lib pkgs;
-    services = resolvedServices;
-  };
-
-  # メタデータ抽出関数
-  extractMeta = name: svc: {
-    inherit (svc) type dependencies autoStart partOf loadSecrets envdirs;
-    # スクリプト本文の変更を検知するためのハッシュ
-    scriptHash =
-      if svc.type == "longrun"
-      then builtins.hashString "sha256" svc.run
-      else if svc.type == "oneshot"
-      then builtins.hashString "sha256" "${svc.up}\n${svc.down}"
-      else null;
-  };
-
   # 自作 CLI / 差分検知向けの JSON
   servicesJson = pkgs.writeText "s6-services.json" (
-    builtins.toJSON (mapAttrs extractMeta resolvedServices)
+    builtins.toJSON (mapAttrs s6lib.extractMeta resolvedServices)
   );
 in {
-  # ★ 変更点②: user.nix を読み込む
-  imports = [
-    ./user.nix
-  ];
+  imports = [./user.nix];
 
-  options.system.s6-rc = {
-    services = mkOption {
-      type = types.attrsOf (types.submodule serviceOpts);
-      default = {};
-      description = "s6-rcサービス定義の集合";
-    };
-  };
+  options.system.s6-rc.services = s6lib.mkServicesOption "s6-rcサービス定義の集合";
 
   config = mkMerge [
     {
@@ -90,23 +59,11 @@ in {
           })
           (filterAttrs (_: hasLog) cfg.services));
 
-      # コンパイル済みDBの構築
-      system.build.s6-rc-db =
-        pkgs.runCommand "s6-rc-compiled-db" {
-          nativeBuildInputs = [pkgs.s6-rc];
-        } ''
-          s6-rc-compile $out ${s6SourceDir}
-        '';
+      system.build.s6-rc-db = s6lib.buildDb "system" resolvedServices;
 
-      # JSON をビルド成果物と /etc に登録
       environment.etc."s6-rc/services.json".source = servicesJson;
-
-      # 配置
       environment.etc."s6-rc/compiled".source = config.system.build.s6-rc-db;
-      environment.systemPackages = [
-        pkgs.s6
-        pkgs.s6-rc
-      ];
+      environment.systemPackages = [pkgs.s6 pkgs.s6-rc];
     })
   ];
 }
