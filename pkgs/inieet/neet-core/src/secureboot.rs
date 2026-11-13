@@ -43,11 +43,28 @@ pub fn install_and_sign_efi_cached(
     // 1. ソースバイナリのハッシュ計算
     let src_hash = hex_encode(&atomic::sha256_file(src)?);
 
+    // ログ用の接頭辞
+    let tag_prefix = log_tag.map(|t| format!("{t}: ")).unwrap_or_default();
+
     // 2. 署名トークンの決定
     let is_signing_enabled = match (key, cert) {
-        (Some(k), Some(c)) => k.exists() && c.exists(),
-        eprintln!("{tag_prefix}[WARNING] Secure Boot key/cert not found; installing unsigned!");
-        _ => false,
+        (Some(k), Some(c)) if k.exists() && c.exists() => true,
+        (Some(k), Some(c)) => {
+            eprintln!(
+            "{tag_prefix}[WARNING] Secure Boot key/cert not found (key: {}, cert: {}); falling back to unsigned.",
+            k.display(),
+            c.display()
+        );
+            false
+        }
+        (Some(_), None) | (None, Some(_)) => {
+            eprintln!("{tag_prefix}[WARNING] Incomplete Secure Boot key/cert pair; falling back to unsigned.");
+            false
+        }
+        (None, None) => {
+            eprintln!("{tag_prefix}[WARNING] Secure Boot key/cert not specified; falling back to unsigned.");
+            false
+        }
     };
 
     let sign_token = if is_signing_enabled {
@@ -68,9 +85,6 @@ pub fn install_and_sign_efi_cached(
             }
         }
     }
-
-    // ログ用の接頭辞
-    let tag_prefix = log_tag.map(|t| format!("{t}: ")).unwrap_or_default();
 
     // 4. 配置または署名の実行
     if is_signing_enabled {

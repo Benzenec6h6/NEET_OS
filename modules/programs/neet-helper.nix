@@ -8,9 +8,11 @@ with lib; let
   cfg = config.programs.neet-helper;
   inieet = pkgs.callPackage ../../pkgs/inieet {};
 
-  # 専用ディレクトリ配下にソケットを配置
   adminDir = "/run/neet-admin";
   socketPath = "${adminDir}/sock";
+
+  # サーバ側はラッパーなしの素のバイナリを使う
+  neetBin = "${inieet.neetHelper}/bin/neet";
 
   wrappedNeet = pkgs.symlinkJoin {
     name = "neet-wrapped";
@@ -19,6 +21,7 @@ with lib; let
     postBuild = ''
       wrapProgram $out/bin/neet \
         --set NEET_ADMIN_SOCK "${socketPath}" \
+        --set NEET_S6_SUDO "${pkgs.s6}/bin/s6-sudo" \
         ${optionalString (cfg.flake != null) "--set NEET_FLAKE \"${cfg.flake}\""}
     '';
   };
@@ -40,13 +43,9 @@ in {
   };
 
   config = mkIf cfg.enable {
-    environment.systemPackages = [
-      wrappedNeet
-      pkgs.s6
-    ];
+    environment.systemPackages = [wrappedNeet];
 
-    # 1. ソケット用ディレクトリを root:wheel (0750) で自動作成
-    #    (wheel 以外のユーザーは中に入ることすらできません)
+    # ディレクトリ権限が第一の関門 (グループ外は socket に到達できない)
     system.stateDirectories = [
       {
         path = adminDir;
@@ -56,7 +55,6 @@ in {
       }
     ];
 
-    # 2. s6-sudod サービス (オプションを修正)
     system.s6-rc.services.neet-admin-server = {
       type = "longrun";
       autoStart = true;
@@ -67,12 +65,14 @@ in {
         export PATH="/run/wrappers/bin:/run/current-system/sw/bin:/run/current-system/bin:/bin:/sbin"
         export NIX_REMOTE="daemon"
         export HOME="/root"
+        # neet priv 側の二重チェック用
+        export NEET_ALLOWED_GROUP="${cfg.allowedGroup}"
 
-        # 古いソケットが残っていたら削除
         rm -f ${socketPath}
 
-        # s6-ipcserver で待ち受け、クライアント接続時に s6-sudod を起動
-        exec ${pkgs.s6}/bin/s6-ipcserver -a 0666 ${socketPath} ${pkgs.s6}/bin/s6-sudod
+        # 接続ごとに s6-sudod が `neet priv <クライアント引数...>` を実行する
+        exec ${pkgs.s6}/bin/s6-ipcserver -a 0666 ${socketPath} \
+          ${pkgs.s6}/bin/s6-sudod ${neetBin} priv
       '';
     };
   };

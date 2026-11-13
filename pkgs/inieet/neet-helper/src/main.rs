@@ -1,10 +1,11 @@
-mod activator;
 mod builder;
 mod diff;
+mod privileged;
 
 use clap::{Parser, Subcommand};
 use colored::*;
 use neet_core::manifest::{self};
+use privileged::PrivOp;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
@@ -21,6 +22,12 @@ enum Commands {
     Os {
         #[command(subcommand)]
         action: OsAction,
+    },
+    /// 特権側ヘルパー (neet-admin-server から呼ばれる。直接は使わない)
+    #[command(hide = true)]
+    Priv {
+        #[command(subcommand)]
+        op: PrivOp,
     },
 }
 
@@ -66,6 +73,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Priv { op } => privileged::serve(op)?,
         Commands::Os { action } => match action {
             OsAction::Switch {
                 flake_path,
@@ -75,7 +83,6 @@ fn main() -> anyhow::Result<()> {
             } => {
                 let build = builder::build_system(&flake_path, attr.as_deref())?;
                 let current_core = manifest::current().ok();
-
                 diff::print_full_diff(current_core.as_ref(), &build.core)?;
 
                 if !yes {
@@ -89,8 +96,10 @@ fn main() -> anyhow::Result<()> {
                         return Ok(());
                     }
                 }
-
-                activator::switch(&build.toplevel, &build.core, force)?;
+                privileged::invoke(&PrivOp::Switch {
+                    toplevel: build.toplevel.clone(),
+                    force,
+                })?;
             }
 
             OsAction::Diff { flake_path, attr } => {
@@ -101,7 +110,9 @@ fn main() -> anyhow::Result<()> {
 
             OsAction::Boot { flake_path, attr } => {
                 let build = builder::build_system(&flake_path, attr.as_deref())?;
-                activator::boot(&build.toplevel)?;
+                privileged::invoke(&PrivOp::Boot {
+                    toplevel: build.toplevel.clone(),
+                })?;
             }
 
             OsAction::List => {
