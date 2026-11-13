@@ -145,7 +145,7 @@ in {
       run = ''
         #!/bin/sh
         # 1. DHCP に必須なカーネルモジュールを確実にロード
-        ${pkgs.kmod}/bin/modprobe af_packet 2>/dev/null || ${pkgs.kmod}/bin/modprobe packet 2>/dev/null || true
+        ${pkgs.pkgsStatic.kmod}/bin/modprobe af_packet 2>/dev/null || ${pkgs.pkgsStatic.kmod}/bin/modprobe packet 2>/dev/null || true
 
         # 2. resolvconf へのパスを通す
         export PATH="${makeBinPath (optional config.programs.resolvconf.enable config.programs.resolvconf.package)}:$PATH"

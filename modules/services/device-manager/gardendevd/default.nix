@@ -23,8 +23,16 @@ in {
   options.services.gardendevd = {
     package = lib.mkOption {
       type = lib.types.package;
-      default = pkgs.gardendevd; # 公式パッケージをそのまま利用
-      defaultText = lib.literalExpression "pkgs.gardendevd";
+      default = pkgs.gardendevd.override {
+        kmod = pkgs.pkgsStatic.kmod;
+        uaccessSupport = false;
+      };
+      defaultText = lib.literalExpression ''
+        pkgs.gardendevd.override {
+          kmod = pkgs.pkgsStatic.kmod;
+          uaccessSupport = false;
+        }
+      '';
       description = "gardendevd パッケージ";
     };
 
@@ -62,7 +70,7 @@ in {
       pkgs.coreutils
       pkgs.gnugrep
       pkgs.gnused
-      pkgs.kmod
+      pkgs.pkgsStatic.kmod
       pkgs.util-linux
     ];
 
@@ -124,7 +132,7 @@ in {
 
         for i in "$out"/*.rules; do
           substituteInPlace "$i" \
-            --replace-quiet \"/sbin/modprobe \"${lib.getExe' pkgs.kmod "modprobe"} \
+            --replace-quiet \"/sbin/modprobe \"${lib.getExe' pkgs.pkgsStatic.kmod "modprobe"} \
             --replace-quiet \"/sbin/mdadm \"${pkgs.mdadm}/sbin/mdadm \
             --replace-quiet \"/sbin/blkid \"${pkgs.util-linux}/sbin/blkid \
             --replace-quiet \"/bin/mount \"${pkgs.util-linux}/bin/mount \
