@@ -33,8 +33,10 @@ jobs:
             echo "failed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # 2. Rust の重複コード検査（閾値で落とさずレポートだけ Summary に追記）
+      # 2. Rust の重複コード検査
       - name: Check Rust Duplications (jscpd)
+        env:
+          NO_COLOR: "1"
         run: |
           {
             echo ""
@@ -47,10 +49,12 @@ jobs:
               --min-tokens 60 || true
             echo '```'
             echo "</details>"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | sed 's/\x1b\[[0-9;]*m//g' >> "$GITHUB_STEP_SUMMARY"
 
-      # 3. statix / deadnix も同様に折りたたみで Summary に追記
+      # 3. statix & deadnix
       - name: statix & deadnix
+        env:
+          NO_COLOR: "1"
         run: |
           {
             echo "<details><summary><b>statix</b></summary>"
@@ -66,7 +70,7 @@ jobs:
             nix run nixpkgs#deadnix -- --fail . || true
             echo '```'
             echo "</details>"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | sed 's/\x1b\[[0-9;]*m//g' >> "$GITHUB_STEP_SUMMARY"
 
       # 4. すべての報告が出終わった最後に、Nix 側の失敗フラグで CI を判定する
       - name: Finalize CI Status
