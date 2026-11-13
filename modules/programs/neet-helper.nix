@@ -22,6 +22,7 @@ with lib; let
       wrapProgram $out/bin/neet \
         --set NEET_ADMIN_SOCK "${socketPath}" \
         --set NEET_S6_SUDO "${pkgs.s6}/bin/s6-sudo" \
+        --set NEET_ROM "${pkgs.rom}/bin/rom" \
         ${optionalString (cfg.flake != null) "--set NEET_FLAKE \"${cfg.flake}\""}
     '';
   };
