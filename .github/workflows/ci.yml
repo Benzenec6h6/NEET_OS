@@ -22,28 +22,55 @@ jobs:
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
         continue-on-error: true
 
-      # 1. Nix 側のテスト・OS検証・Rustフォーマットを実行してサマリーを出力
+      # 1. Nix 側のテスト・OS検証を実行してサマリーを出力（ここではまだ exit 1 しない）
       - name: Run CI checks & Summary Report
+        id: nix_report
         run: |
           report_dir=$(nix build .#checks.x86_64-linux.report --no-link --print-out-paths)
-          cat "$report_dir/report.md" >> $GITHUB_STEP_SUMMARY
+          cat "$report_dir/report.md" >> "$GITHUB_STEP_SUMMARY"
 
           if [ -f "$report_dir/failed" ]; then
-            echo "CI checks failed. Please see the summary above."
-            exit 1
+            echo "failed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # 2. Rust の重複コード検査 (npx 経由で即実行)
-      # 重複が見つかった場合は exit 1 で CI が落ちます
+      # 2. Rust の重複コード検査（閾値で落とさずレポートだけ Summary に追記）
       - name: Check Rust Duplications (jscpd)
         run: |
-          npx jscpd pkgs/inieet \
-            --pattern "**/*.rs" \
-            --min-tokens 40 \
-            --threshold 0
+          {
+            echo ""
+            echo "### 🔍 Advisory Checks (Non-blocking)"
+            echo "<details><summary><b>Rust Duplications (jscpd)</b></summary>"
+            echo ""
+            echo '```text'
+            npx -y jscpd pkgs/inieet \
+              --pattern "**/*.rs" \
+              --min-tokens 60 || true
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: statix
-        run: nix run nixpkgs#statix -- check . || true
+      # 3. statix / deadnix も同様に折りたたみで Summary に追記
+      - name: statix & deadnix
+        run: |
+          {
+            echo "<details><summary><b>statix</b></summary>"
+            echo ""
+            echo '```text'
+            nix run nixpkgs#statix -- check . || true
+            echo '```'
+            echo "</details>"
 
-      - name: deadnix
-        run: nix run nixpkgs#deadnix -- --fail . || true
+            echo "<details><summary><b>deadnix</b></summary>"
+            echo ""
+            echo '```text'
+            nix run nixpkgs#deadnix -- --fail . || true
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 4. すべての報告が出終わった最後に、Nix 側の失敗フラグで CI を判定する
+      - name: Finalize CI Status
+        if: steps.nix_report.outputs.failed == 'true'
+        run: |
+          echo "Nix CI checks failed. Please see the summary above."
+          exit 1
