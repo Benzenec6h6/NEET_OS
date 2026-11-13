@@ -8,6 +8,39 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 
+/// 署名用の鍵・証明書ペアを検証し、利用可能なら `Some((key, cert))` を返す。
+///
+/// * `(Some(k), Some(c))` で両方実在する → `Some((k, c))`
+/// * `(Some(k), Some(c))` で片方または両方存在しない → 警告を出して `None`
+/// * 片方だけ `Some` → 警告を出して `None`
+/// * `(None, None)` → 意図的な署名無効とみなし、警告なしで `None`
+pub fn resolve_signing_pair<'a>(
+    key: Option<&'a Path>,
+    cert: Option<&'a Path>,
+    log_tag: Option<&str>,
+) -> Option<(&'a Path, &'a Path)> {
+    let tag_prefix = log_tag.map(|t| format!("{t}: ")).unwrap_or_default();
+
+    match (key, cert) {
+        (Some(k), Some(c)) if k.exists() && c.exists() => Some((k, c)),
+        (Some(k), Some(c)) => {
+            eprintln!(
+                "{tag_prefix}[WARNING] Secure Boot key/cert not found (key: {}, cert: {}); falling back to unsigned.",
+                k.display(),
+                c.display()
+            );
+            None
+        }
+        (Some(_), None) | (None, Some(_)) => {
+            eprintln!(
+                "{tag_prefix}[WARNING] Incomplete Secure Boot key/cert pair; falling back to unsigned."
+            );
+            None
+        }
+        (None, None) => None,
+    }
+}
+
 /// EFI バイナリをキャッシュ検証付きでインストール＆署名する。
 ///
 /// * ソースバイナリのハッシュ
@@ -43,32 +76,10 @@ pub fn install_and_sign_efi_cached(
     // 1. ソースバイナリのハッシュ計算
     let src_hash = hex_encode(&atomic::sha256_file(src)?);
 
-    // ログ用の接頭辞
-    let tag_prefix = log_tag.map(|t| format!("{t}: ")).unwrap_or_default();
-
     // 2. 署名トークンの決定
-    let is_signing_enabled = match (key, cert) {
-        (Some(k), Some(c)) if k.exists() && c.exists() => true,
-        (Some(k), Some(c)) => {
-            eprintln!(
-            "{tag_prefix}[WARNING] Secure Boot key/cert not found (key: {}, cert: {}); falling back to unsigned.",
-            k.display(),
-            c.display()
-        );
-            false
-        }
-        (Some(_), None) | (None, Some(_)) => {
-            eprintln!("{tag_prefix}[WARNING] Incomplete Secure Boot key/cert pair; falling back to unsigned.");
-            false
-        }
-        (None, None) => {
-            eprintln!("{tag_prefix}[WARNING] Secure Boot key/cert not specified; falling back to unsigned.");
-            false
-        }
-    };
+    let signing_pair = resolve_signing_pair(key, cert, log_tag);
 
-    let sign_token = if is_signing_enabled {
-        let cert_path = cert.unwrap();
+    let sign_token = if let Some((_, cert_path)) = signing_pair {
         let cert_hash = hex_encode(&atomic::sha256_file(cert_path)?);
         format!("signed:{cert_hash}")
     } else {
@@ -86,10 +97,11 @@ pub fn install_and_sign_efi_cached(
         }
     }
 
+    // ログ用の接頭辞
+    let tag_prefix = log_tag.map(|t| format!("{t}: ")).unwrap_or_default();
+
     // 4. 配置または署名の実行
-    if is_signing_enabled {
-        let k = key.unwrap();
-        let c = cert.unwrap();
+    if let Some((k, c)) = signing_pair {
         println!(
             "{tag_prefix}signing and installing {} (cert: {})",
             dest.display(),
@@ -134,7 +146,7 @@ pub fn install_and_sign_efi_cached(
         }
         atomic::sync_parent(dest)?;
     } else {
-        println!("{tag_prefix}installing un-signed {}", dest.display());
+        println!("{tag_prefix}installing unsigned {}", dest.display());
         atomic::atomic_copy_if_changed(src, dest, 0o755)?;
     }
 

@@ -224,6 +224,13 @@ fn main() -> io::Result<()> {
     }
 
     // 5. 各世代の boot.json を読み取り、新しい順で ESP へ配置
+    let (resolved_key, resolved_cert) = neet_core::secureboot::resolve_signing_pair(
+        opts.key.as_deref(),
+        opts.cert.as_deref(),
+        Some("esp-sync"),
+    )
+    .unzip();
+
     for gen in &generations {
         let Some(spec) = gen.bootspec()? else {
             eprintln!(
@@ -241,8 +248,8 @@ fn main() -> io::Result<()> {
             neet_core::secureboot::install_and_sign_efi_cached(
                 Path::new(uki_src),
                 &dest,
-                opts.key.as_deref(),
-                opts.cert.as_deref(),
+                resolved_key,
+                resolved_cert,
                 Some("esp-sync"),
             )?;
         } else {
