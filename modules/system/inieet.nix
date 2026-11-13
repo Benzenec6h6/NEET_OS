@@ -35,7 +35,6 @@ in {
 
     # システムの一般 PATH に neetActivate などを登録
     environment.systemPackages = [
-      inieet.neetHelper
       inieet.neetActivate
       inieet.espSync
       inieet.diskSetup
