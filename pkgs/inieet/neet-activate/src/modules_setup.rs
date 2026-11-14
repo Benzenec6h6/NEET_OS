@@ -52,7 +52,11 @@ pub fn load_configured_modules() -> io::Result<()> {
         }
 
         println!("neet-activate: loading kernel module: {module}");
-        let _ = Command::new("/bin/modprobe").arg(module).status();
+        match Command::new("/bin/modprobe").arg(module).status() {
+            Ok(s) if s.success() => {}
+            Ok(s) => eprintln!("neet-activate: warning: modprobe {module} failed: {s}"),
+            Err(e) => eprintln!("neet-activate: warning: cannot run /bin/modprobe: {e}"),
+        }
     }
 
     Ok(())

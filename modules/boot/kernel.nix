@@ -43,6 +43,8 @@
       ++ config.boot.extraModulePackages
     );
 
+    environment.systemPackages = [pkgs.pkgsStatic.kmod];
+
     environment.etc."modules.conf".text =
       (lib.concatStringsSep "\n" config.boot.kernelModules) + "\n";
 
