@@ -39,7 +39,7 @@ in {
 
     system.s6-rc.services.seatd = {
       type = "longrun";
-      dependencies = optional config.services.deviceManagerEnable "devd";
+      dependencies = optional config.services.deviceManagerEnable "device-manager";
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1

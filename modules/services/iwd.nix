@@ -73,7 +73,7 @@ in {
       type = "longrun";
       dependencies =
         optional config.services.dbus.enable "dbus"
-        ++ optional config.services.deviceManagerEnable "devd-coldplug"
+        ++ optional config.services.deviceManagerEnable "device-manager"
         ++ optional (config.system.s6-rc.services ? sysctl) "sysctl"
         ++ optional (config.system.s6-rc.services ? resolvconf) "resolvconf";
 

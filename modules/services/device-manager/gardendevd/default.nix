@@ -145,8 +145,8 @@ in {
       '';
 
     system.s6-rc.services = {
-      # 1. デーモン本体 (共通名 devd)
-      devd = {
+      # 1. デーモン本体
+      gardendevd = {
         type = "longrun";
         notification-fd = 3;
         log.enable = true;
@@ -159,10 +159,10 @@ in {
         '';
       };
 
-      # 2. コールドプラグ (共通名 devd-coldplug)
-      devd-coldplug = {
+      # 2. コールドプラグ
+      gardendevd-coldplug = {
         type = "oneshot";
-        dependencies = ["devd"];
+        dependencies = ["gardendevd"];
         up = ''
           #!/bin/execlineb -P
           foreground { ${cfg.package}/bin/gardendevctl trigger -c add -t all }

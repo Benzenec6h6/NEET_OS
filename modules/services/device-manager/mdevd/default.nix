@@ -126,9 +126,9 @@ in {
       # Stage 2 用の /etc/mdev.conf を配置
       environment.etc."mdev.conf".text = cfg.rules;
 
-      # Stage 2 用 s6-rc サービス (共通名 devd で登録)
+      # Stage 2 用 s6-rc サービス
       system.s6-rc.services = {
-        devd = {
+        mdevd = {
           type = "longrun";
           notification-fd = 3;
           log.enable = true;
@@ -139,9 +139,9 @@ in {
           '';
         };
 
-        devd-coldplug = {
+        mdevd-coldplug = {
           type = "oneshot";
-          dependencies = ["devd"];
+          dependencies = ["mdevd"];
           up = ''
             #!/bin/execlineb -P
             ${pkgs.pkgsStatic.mdevd}/bin/mdevd-coldplug -O 4

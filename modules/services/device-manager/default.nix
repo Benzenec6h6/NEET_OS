@@ -50,4 +50,18 @@ in {
       else pkgs.libinput;
     description = "デバイスマネージャに適合させた libinput";
   };
+
+  config = {
+    system.s6-rc.services.device-manager = {
+      type = "bundle";
+      contents =
+        {
+          mdevd = ["mdevd" "mdevd-coldplug"];
+          gardendevd = ["gardendevd" "gardendevd-coldplug"];
+          none = [];
+        }.${
+          cfg
+        };
+    };
+  };
 }
