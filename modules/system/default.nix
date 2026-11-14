@@ -21,7 +21,8 @@
         "${config.hardware.firmware}"
         kernelParamsStr
       ]
-      ++ lib.optional gfx "${config.system.build.graphicsDrivers}");
+      ++ lib.optional gfx "${config.system.build.graphicsDrivers}"
+      ++ lib.optional gfx32 "${config.system.build.graphicsDrivers32}");
   });
 
   # stage2 / initrd / UKI に依存してはいけない(循環するため)
