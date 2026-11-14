@@ -5,7 +5,7 @@
 with lib;
   {name, ...}: {
     options = {
-      type = mkOption {type = types.enum ["longrun" "oneshot"];};
+      type = mkOption {type = types.enum ["longrun" "oneshot" "bundle"];};
       run = mkOption {
         type = types.lines;
         default = "";
@@ -36,10 +36,18 @@ with lib;
         default = true;
         description = "ブート時/セッション開始時に自動起動する (top bundle に含める) かどうか";
       };
+      contents = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = ''
+          type = "bundle" のときのメンバー(サービス名。ログ付きなら元の名前でよい)。
+          バンドル側がメンバーを決める場合に使う。メンバー側から参加させたい場合は partOf を使う。
+        '';
+      };
       partOf = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "このサービスを所属させるバンドル一覧 (例: graphical-session)";
+        description = "このサービスを所属させるバンドル一覧。メンバーが分散するもの (例: graphical-session) 向け。";
       };
 
       envdirs = mkOption {

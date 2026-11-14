@@ -28,6 +28,37 @@ with lib; let
       then self.pipelineName name
       else name;
 
+    # ---- バリデーション (default.nix / user.nix 共用) ----
+    mkAssertions = label: services:
+      (mapAttrsToList (n: s: {
+          assertion = !(s.log.enable && s.type != "longrun");
+          message = "${label} service '${n}': log.enable は longrun でのみ使えます";
+        })
+        services)
+      ++ (mapAttrsToList (n: _: {
+          assertion = !(services ? "${n}-log");
+          message = "${label} service '${n}-log' は '${n}' のロガー名と衝突します";
+        })
+        (filterAttrs (_: self.hasLog) services))
+      ++ (mapAttrsToList (n: s: {
+          assertion = s.type != "bundle" || (s.run == "" && s.up == "" && s.down == "" && s.dependencies == []);
+          message = "${label} service '${n}': bundle には run/up/down/dependencies を書けません";
+        })
+        services)
+      ++ (mapAttrsToList (n: s: {
+          assertion = s.type == "bundle" || s.contents == [];
+          message = "${label} service '${n}': contents は type = \"bundle\" でのみ使えます";
+        })
+        services)
+      ++ (let
+        bundleNames = unique (concatLists (mapAttrsToList (_: s: s.partOf) services));
+      in
+        map (b: {
+          assertion = !(services ? ${b}) || services.${b}.type == "bundle";
+          message = "${label}: partOf のバンドル '${b}' が、バンドル以外のサービスと同名です";
+        })
+        bundleNames);
+
     # ---- 差分検知用メタデータ ----
     scriptHash = svc:
       if svc.type == "longrun"

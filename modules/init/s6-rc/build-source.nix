@@ -91,26 +91,40 @@ with lib; let
   mkBundleDir = name: contents:
     mkFarm "${name}-bundle-dir" {
       type = txt name "type" "bundle";
-      contents = txt name "contents" (concatStringsSep "\n" contents + "\n");
+      contents = txt name "contents" (
+        concatStringsSep "\n" contents + optionalString (contents != []) "\n"
+      );
     };
 
   # ---- バンドル ----
-  # partOf に指定された全バンドルの contents を集約。
-  # graphical-session は所属 0 でも常に空バンドルとして存在させる。
-  customBundles = let
-    pairs = concatLists (mapAttrsToList (
-        name: svc: map (bundle: {${bundle} = entryName name svc;}) svc.partOf
-      )
-      services);
-  in
-    {graphical-session = [];} // zipAttrs pairs;
+  # type = "bundle" で宣言された contents と、各サービスの partOf を統合して全バンドルを作る。
+  resolveEntry = n:
+    if services ? ${n}
+    then entryName n services.${n}
+    else n;
+
+  realServices = filterAttrs (_: s: s.type != "bundle") services;
+
+  declaredBundles =
+    mapAttrs (_: svc: map resolveEntry svc.contents)
+    (filterAttrs (_: s: s.type == "bundle") services);
+
+  partOfPairs = concatLists (mapAttrsToList (
+      name: svc: map (bundle: {${bundle} = entryName name svc;}) svc.partOf
+    )
+    services);
+
+  bundles = zipAttrsWith (_: xs: unique (concatLists xs)) [
+    declaredBundles
+    (zipAttrs partOfPairs)
+  ];
 
   topContents = mapAttrsToList entryName (filterAttrs (_: svc: svc.autoStart) services);
 
   serviceDirs =
-    mapAttrs mkServiceDir services
-    // mapAttrs' (name: svc: nameValuePair (loggerName name) (mkLoggerDir name svc)) (filterAttrs (_: hasLog) services)
-    // mapAttrs mkBundleDir customBundles
+    mapAttrs mkServiceDir realServices
+    // mapAttrs' (name: svc: nameValuePair (loggerName name) (mkLoggerDir name svc)) (filterAttrs (_: hasLog) realServices)
+    // mapAttrs mkBundleDir bundles
     // {top = mkBundleDir "top" topContents;};
 in
   mkFarm "s6-rc-source" serviceDirs

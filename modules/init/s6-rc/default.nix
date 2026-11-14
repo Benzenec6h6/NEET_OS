@@ -7,7 +7,6 @@
 with lib; let
   cfg = config.system.s6-rc;
   s6lib = import ./lib.nix {inherit lib pkgs;};
-  inherit (s6lib) hasLog;
 
   secretsEnabled = config.neet.security.secrets.enable or false;
 
@@ -47,17 +46,7 @@ in {
 
     (mkIf (cfg.services != {}) {
       # NOTE: 既存の assertions.nix が NixOS 互換の `assertions` を持つ前提
-      assertions =
-        (mapAttrsToList (n: s: {
-            assertion = !(s.log.enable && s.type != "longrun");
-            message = "s6-rc service '${n}': log.enable は longrun でのみ使えます";
-          })
-          cfg.services)
-        ++ (mapAttrsToList (n: _: {
-            assertion = !(cfg.services ? "${n}-log");
-            message = "s6-rc service '${n}-log' は '${n}' のロガー名と衝突します";
-          })
-          (filterAttrs (_: hasLog) cfg.services));
+      assertions = s6lib.mkAssertions "s6-rc" cfg.services;
 
       system.build.s6-rc-db = s6lib.buildDb "system" resolvedServices;
 
