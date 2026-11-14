@@ -58,11 +58,13 @@ in {
 
     services.gardendevd.extraArgs = [
       "-K"
+      "-D"
+      "3"
       "-v"
       (
         if cfg.debug
         then "debug"
-        else "warn"
+        else "warning"
       )
     ];
 
@@ -146,6 +148,7 @@ in {
       # 1. デーモン本体 (共通名 devd)
       devd = {
         type = "longrun";
+        notification-fd = 3;
         log.enable = true;
         run = ''
           #!/bin/sh
