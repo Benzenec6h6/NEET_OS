@@ -85,7 +85,8 @@ in {
       dependencies =
         ["dbus"]
         ++ optional config.services.seatd.enable "seatd"
-        ++ optional config.services.sessiond.enable "sessiond";
+        ++ optional config.services.sessiond.enable "sessiond"
+        ++ optional config.services.sessiond-uaccess.enable "sessiond-uaccess";
 
       log.enable = true;
 

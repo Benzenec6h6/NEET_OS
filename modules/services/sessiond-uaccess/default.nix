@@ -50,7 +50,10 @@ in {
     # s6-rc サービス定義
     system.s6-rc.services.sessiond-uaccess = {
       type = "longrun";
-      dependencies = ["sessiond"];
+      dependencies =
+        ["sessiond"]
+        ++ lib.optional config.services.deviceManagerEnable "device-manager";
+      log.enable = true;
       run = ''
         #!/bin/sh
         export LOG_LEVEL="${

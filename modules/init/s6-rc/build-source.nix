@@ -24,9 +24,9 @@ with lib; let
     then txt name key "${pkgs.writeShellScript "${name}-${key}.sh" body}"
     else txt name key body;
 
-  # envdirs があれば s6-envdir を前置した run
+  # envdirs や log がある場合はラッパー経由で run を実行
   mkRunScript = name: svc:
-    if svc.envdirs == []
+    if svc.envdirs == [] && !(hasLog svc)
     then pkgs.writeScript "${name}-run" svc.run
     else let
       inner = pkgs.writeScript "${name}-run-inner" svc.run;
@@ -34,6 +34,7 @@ with lib; let
     in
       pkgs.writeScript "${name}-run" ''
         #!${pkgs.runtimeShell}
+        ${optionalString (hasLog svc) "exec 2>&1"}
         exec ${envdirCmds}${inner} "$@"
       '';
 
