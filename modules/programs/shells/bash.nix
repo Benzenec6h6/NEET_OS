@@ -23,8 +23,8 @@ in {
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [cfg.package];
+    environment.shells = [cfg.package];
 
-    # /etc/profile.d/bash.sh を配置
     environment.etc."profile.d/bash.sh".text = ''
       if [ -n "''${BASH_VERSION:-}" ] && [ -r /etc/bashrc ]; then
         . /etc/bashrc
