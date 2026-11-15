@@ -19,6 +19,12 @@ in {
       defaultText = lib.literalExpression "pkgs.zsh";
       description = "The package to use for zsh.";
     };
+
+    interactiveShellInit = lib.mkOption {
+      type = lib.types.lines;
+      default = "";
+      description = "Shell script code called during interactive zsh initialisation.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -54,6 +60,8 @@ in {
 
       eval "$(${pkgs.coreutils}/bin/dircolors -b)"
       alias ls='ls --color=auto'
+
+      ${cfg.interactiveShellInit}
     '';
   };
 }

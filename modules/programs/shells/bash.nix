@@ -19,6 +19,12 @@ in {
       defaultText = lib.literalExpression "pkgs.bashInteractive";
       description = "The package to use for bash.";
     };
+
+    interactiveShellInit = lib.mkOption {
+      type = lib.types.lines;
+      default = "";
+      description = "Shell script code called during interactive bash initialisation.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -53,6 +59,8 @@ in {
         eval "$(${pkgs.coreutils}/bin/dircolors -b)"
         alias ls='ls --color=auto'
       fi
+
+      ${cfg.interactiveShellInit}
     '';
   };
 }
