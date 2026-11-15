@@ -10,8 +10,6 @@ with lib; let
 
   adminDir = "/run/neet-admin";
   socketPath = "${adminDir}/sock";
-
-  # サーバ側はラッパーなしの素のバイナリを使う
   neetBin = "${inieet.neetHelper}/bin/neet";
 
   wrappedNeet = pkgs.symlinkJoin {
@@ -23,6 +21,7 @@ with lib; let
         --set NEET_ADMIN_SOCK "${socketPath}" \
         --set NEET_S6_SUDO "${pkgs.s6}/bin/s6-sudo" \
         --set NEET_ROM "${pkgs.rom}/bin/rom" \
+        --set NEET_KEEP_DIRENV "${boolToString cfg.gc.keepDirenv}" \
         ${optionalString (cfg.flake != null) "--set NEET_FLAKE \"${cfg.flake}\""}
     '';
   };
@@ -41,12 +40,28 @@ in {
       default = "wheel";
       description = "neet-helper によるシステム切り替えを許可するグループ名";
     };
+
+    gc = {
+      keepDirenv = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Whether to preserve nix-direnv environment caches during garbage collection.
+          When false, stale/all direnv gcroots may be cleared before running GC.
+        '';
+      };
+
+      keepGenerations = mkOption {
+        type = types.nullOr types.int;
+        default = 5;
+        description = "GC 時に残す最新のシステム世代数 (null の場合は日数指定や全削除に従う)";
+      };
+    };
   };
 
   config = mkIf cfg.enable {
     environment.systemPackages = [wrappedNeet];
 
-    # ディレクトリ権限が第一の関門 (グループ外は socket に到達できない)
     system.stateDirectories = [
       {
         path = adminDir;
@@ -66,12 +81,10 @@ in {
         export PATH="/run/wrappers/bin:/run/current-system/sw/bin:/run/current-system/bin:/bin:/sbin"
         export NIX_REMOTE="daemon"
         export HOME="/root"
-        # neet priv 側の二重チェック用
         export NEET_ALLOWED_GROUP="${cfg.allowedGroup}"
 
         rm -f ${socketPath}
 
-        # 接続ごとに s6-sudod が `neet priv <クライアント引数...>` を実行する
         exec ${pkgs.s6}/bin/s6-ipcserver -a 0666 ${socketPath} \
           ${pkgs.s6}/bin/s6-sudod ${neetBin} priv
       '';

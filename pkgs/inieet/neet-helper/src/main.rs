@@ -67,6 +67,21 @@ enum OsAction {
         attr: Option<String>,
     },
     List,
+    Gc {
+        /// 残す世代数、日数、または削除する世代番号 (デフォルト: "+5")
+        #[arg(default_value = "+5")]
+        generations: String,
+
+        /// nix-direnv の開発環境キャッシュを保護する (NEET_KEEP_DIRENV がデフォルト)
+        #[arg(long, default_value_t = default_keep_direnv())]
+        keep_direnv: bool,
+    },
+}
+
+fn default_keep_direnv() -> bool {
+    std::env::var("NEET_KEEP_DIRENV")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(true)
 }
 
 fn main() -> anyhow::Result<()> {
@@ -126,6 +141,16 @@ fn main() -> anyhow::Result<()> {
                 for (num, err) in skipped {
                     eprintln!("  Generation {:>3}: (error: {})", num, err);
                 }
+            }
+
+            OsAction::Gc {
+                generations,
+                keep_direnv,
+            } => {
+                privileged::invoke(&PrivOp::Gc {
+                    generations,
+                    keep_direnv,
+                })?;
             }
         },
     }

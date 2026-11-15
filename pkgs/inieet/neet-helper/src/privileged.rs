@@ -20,6 +20,13 @@ pub enum PrivOp {
     },
     /// profile 更新 → bootloader のみ
     Boot { toplevel: PathBuf },
+    /// システムプロファイルの削除 → (direnv 制御) → Store GC → bootloader 同期
+    Gc {
+        /// 例: "+5" (最新5世代維持), "30d", "12 13"
+        generations: String,
+        #[arg(long)]
+        keep_direnv: bool,
+    },
 }
 
 impl PrivOp {
@@ -34,6 +41,16 @@ impl PrivOp {
             }
             PrivOp::Boot { toplevel } => {
                 vec!["boot".into(), toplevel.clone().into_os_string()]
+            }
+            PrivOp::Gc {
+                generations,
+                keep_direnv,
+            } => {
+                let mut v = vec!["gc".into(), generations.clone().into()];
+                if *keep_direnv {
+                    v.push("--keep-direnv".into());
+                }
+                v
             }
         }
     }
@@ -192,6 +209,51 @@ fn execute(op: &PrivOp) -> Result<()> {
             }
 
             println!("==> [neet] Successfully switched to new configuration!");
+            Ok(())
+        }
+
+        PrivOp::Gc {
+            generations,
+            keep_direnv,
+        } => {
+            println!("==================================================");
+            println!(" [neet] Cleaning up old system generations");
+            println!("==================================================");
+
+            // 1. 指定世代の削除
+            println!(
+                "==> [neet] Removing system profile generation(s): {}...",
+                generations
+            );
+            let mut c = Command::new("nix-env");
+            c.args(["-p", PROFILE, "--delete-generations", generations]);
+            run(c).context("failed to delete system profile generations")?;
+
+            // 2. direnv 環境の保護 / 破棄コントロール
+            if !*keep_direnv {
+                println!("==> [neet] Purging nix-direnv gcroots (clearing dev environments)...");
+                // /nix/var/nix/gcroots/auto/ にある direnv 由来のリンクや壊れたリンクを掃除
+                let _ = Command::new("find")
+                    .args(["/nix/var/nix/gcroots/auto/", "-xtype", "l", "-delete"])
+                    .status();
+                // ※ 全ユーザーの ~/.local/share/direnv/gcroots を消す場合はここに追加可能
+            } else {
+                println!("==> [neet] Preserving nix-direnv environments (gcroots kept intact).");
+            }
+
+            // 3. Nix Store のガベージコレクション
+            println!("==> [neet] Collecting garbage from Nix Store...");
+            let mut c = Command::new("nix-store");
+            c.arg("--gc");
+            run(c).context("nix-store --gc failed")?;
+
+            // 4. ブートローダー環境の同期 (esp-sync, efistub-sync, limine conf 更新)
+            println!("==> [neet] Synchronizing bootloader environment...");
+            install_bootloader(Path::new(PROFILE))?;
+
+            println!("==================================================");
+            println!(" [neet] System cleanup completed successfully!");
+            println!("==================================================");
             Ok(())
         }
     }
