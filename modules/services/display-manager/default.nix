@@ -169,6 +169,10 @@ in {
     # パッケージ同梱の .desktop より優先させる
     environment.systemPackages = [(hiPrio sessionFiles)];
 
+    environment.pathsToLink = [
+      "/share/wayland-sessions"
+    ];
+
     neet.security.pam.services = {
       greetd.text = mkIf (cfg.provider == "greetd") pamText;
       lemurs.text = mkIf (cfg.provider == "lemurs") pamText;
