@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use colored::*;
 use serde::Deserialize;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::fs;
 use std::path::Path;
 
@@ -34,27 +34,13 @@ pub struct UserMeta {
     pub services: HashMap<String, S6ServiceMeta>,
 }
 
-struct TreeNode {
-    label: String,
-    children: Vec<TreeNode>,
-}
-
-impl TreeNode {
-    fn leaf(label: impl Into<String>) -> Self {
-        Self {
-            label: label.into(),
-            children: Vec::new(),
-        }
-    }
-}
-
 pub fn diff_system_s6(old_etc: &Path, new_etc: &Path) -> Result<bool> {
     println!("{}", "[s6-rc System Services]".bold());
     let old_map: HashMap<String, S6ServiceMeta> =
         read_json_or_empty(&old_etc.join("s6-rc/services.json"))?;
     let new_map: HashMap<String, S6ServiceMeta> =
         read_json_or_empty(&new_etc.join("s6-rc/services.json"))?;
-    diff_service_tree(&old_map, &new_map, "  ")
+    diff_service_flat(&old_map, &new_map, "  ")
 }
 
 pub fn diff_user_s6(old_etc: &Path, new_etc: &Path) -> Result<bool> {
@@ -89,255 +75,144 @@ pub fn diff_user_s6(old_etc: &Path, new_etc: &Path) -> Result<bool> {
             .map(|u| &u.services)
             .unwrap_or(&empty_services);
 
-        if diff_service_tree(old_svcs, new_svcs, "  ")? {
+        if diff_service_flat(old_svcs, new_svcs, "  ")? {
             changed = true;
         }
     }
     Ok(changed)
 }
 
-fn diff_service_tree(
+fn diff_service_flat(
     old_map: &HashMap<String, S6ServiceMeta>,
     new_map: &HashMap<String, S6ServiceMeta>,
     indent: &str,
 ) -> Result<bool> {
-    let all_names: BTreeSet<&String> = old_map.keys().chain(new_map.keys()).collect();
+    let mut added = BTreeSet::new();
+    let mut removed = BTreeSet::new();
+    let mut directly_changed = BTreeSet::new();
 
-    // 逆依存マップ（このサービスに依存しているサービス一覧）を作成
-    let mut dependents: HashMap<&str, BTreeSet<&str>> = HashMap::new();
-    for (svc_name, meta) in new_map {
+    // 1. 追加・削除・直接変更の検出 (仮想グループの bundle はプロセスを持たないため除外)
+    for (name, new_meta) in new_map {
+        if new_meta.r#type == "bundle" {
+            continue;
+        }
+        match old_map.get(name) {
+            None => {
+                added.insert(name.clone());
+            }
+            Some(old_meta) => {
+                if is_directly_changed(old_meta, new_meta) {
+                    directly_changed.insert(name.clone());
+                }
+            }
+        }
+    }
+
+    for (name, old_meta) in old_map {
+        if old_meta.r#type == "bundle" {
+            continue;
+        }
+        if !new_map.contains_key(name) {
+            removed.insert(name.clone());
+        }
+    }
+
+    // 2. 逆依存マップの構築 (dep -> このサービスに依存しているサービスのリスト)
+    let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
+    for (name, meta) in new_map {
         for dep in &meta.dependencies {
             dependents
-                .entry(dep.as_str())
+                .entry(dep.clone())
                 .or_default()
-                .insert(svc_name.as_str());
+                .push(name.clone());
         }
     }
 
-    // バンドル名 -> 変更があったサービスノード一覧
-    // BTreeMap を使うことで出力順を安定させる
-    let mut bundles: BTreeMap<String, Vec<TreeNode>> = BTreeMap::new();
+    // 3. BFS で波及した再起動サービスとその原因 (via) を特定
+    // service -> Option<cause> (None = 直接変更, Some(cause) = 波及元)
+    let mut restarted: BTreeMap<String, Option<String>> = BTreeMap::new();
+    let mut queue = VecDeque::new();
 
-    for name in all_names {
-        let old = old_map.get(name);
-        let new = new_map.get(name);
+    for direct in &directly_changed {
+        restarted.insert(direct.clone(), None);
+        queue.push_back((direct.clone(), direct.clone()));
+    }
 
-        let Some(node) = build_service_node(name, old, new, &dependents) else {
-            continue;
-        };
+    while let Some((curr, root_cause)) = queue.pop_front() {
+        if let Some(children) = dependents.get(&curr) {
+            for child in children {
+                // bundle は除外
+                if let Some(child_meta) = new_map.get(child) {
+                    if child_meta.r#type == "bundle" {
+                        continue;
+                    }
+                }
 
-        // 所属バンドルを決定（変更前・後のいずれかに属していれば表示）
-        let target_bundles = collect_bundles(old, new);
-        for b in target_bundles {
-            bundles.entry(b).or_default().push(clone_node(&node));
+                // まだ未登録なら、原因 (root_cause) を付けて追加
+                if !restarted.contains_key(child) {
+                    restarted.insert(child.clone(), Some(root_cause.clone()));
+                    queue.push_back((child.clone(), root_cause.clone()));
+                }
+            }
         }
     }
 
-    if bundles.is_empty() {
+    // 4. 差分が一切なければ (no changes)
+    if added.is_empty() && removed.is_empty() && restarted.is_empty() {
         println!("{}(no changes)", indent);
         return Ok(false);
     }
 
-    // 表示優先度: top -> graphical-session -> その他 -> (manual)
-    let mut ordered: Vec<(String, Vec<TreeNode>)> = Vec::new();
-    for priority in ["top", "graphical-session"] {
-        if let Some(nodes) = bundles.remove(priority) {
-            ordered.push((format_bundle_header(priority), nodes));
-        }
-    }
-    let manual = bundles.remove("(manual)");
-    for (b, nodes) in bundles {
-        ordered.push((format_bundle_header(&b), nodes));
-    }
-    if let Some(nodes) = manual {
-        ordered.push((format_bundle_header("(manual)"), nodes));
+    // 5. フラットな集合として出力
+    if !restarted.is_empty() {
+        let items: Vec<String> = restarted
+            .into_iter()
+            .map(|(svc, via)| match via {
+                Some(cause) => format!("{} {}", svc, format!("(via {})", cause).dimmed()),
+                None => svc.bold().to_string(),
+            })
+            .collect();
+        println!(
+            "{}{}: {}",
+            indent,
+            format!("Restarted ({})", items.len()).yellow().bold(),
+            items.join(", ")
+        );
     }
 
-    let root_nodes: Vec<TreeNode> = ordered
-        .into_iter()
-        .map(|(label, children)| TreeNode { label, children })
-        .collect();
+    if !added.is_empty() {
+        let items: Vec<String> = added.into_iter().map(|s| s.green().to_string()).collect();
+        println!(
+            "{}{}: {}",
+            indent,
+            format!("Added ({})", items.len()).green().bold(),
+            items.join(", ")
+        );
+    }
 
-    render_tree(&root_nodes, indent);
+    if !removed.is_empty() {
+        let items: Vec<String> = removed.into_iter().map(|s| s.red().to_string()).collect();
+        println!(
+            "{}{}: {}",
+            indent,
+            format!("Removed ({})", items.len()).red().bold(),
+            items.join(", ")
+        );
+    }
+
     Ok(true)
 }
 
-fn build_service_node(
-    name: &str,
-    old: Option<&S6ServiceMeta>,
-    new: Option<&S6ServiceMeta>,
-    dependents: &HashMap<&str, BTreeSet<&str>>,
-) -> Option<TreeNode> {
-    match (old, new) {
-        (None, Some(n)) => {
-            let mut children = Vec::new();
-            if !n.dependencies.is_empty() {
-                children.push(TreeNode::leaf(format!(
-                    "{}: {}",
-                    "deps".dimmed(),
-                    n.dependencies.join(", ")
-                )));
-            }
-            if !n.envdirs.is_empty() {
-                children.push(TreeNode::leaf(format!(
-                    "{}: {}",
-                    "envdirs".dimmed(),
-                    n.envdirs.join(", ")
-                )));
-            }
-            if n.logger_hash.is_some() {
-                children.push(TreeNode::leaf(format!("{}: enabled", "logger".dimmed())));
-            }
-            Some(TreeNode {
-                label: format!("{} {} ({})", "[+]".green().bold(), name.bold(), n.r#type),
-                children,
-            })
-        }
-        (Some(o), None) => {
-            let mut children = Vec::new();
-            if let Some(deps) = dependents.get(name) {
-                let list: Vec<_> = deps.iter().copied().collect();
-                children.push(TreeNode::leaf(format!(
-                    "{}: {}",
-                    "was depended by".red(),
-                    list.join(", ")
-                )));
-            }
-            Some(TreeNode {
-                label: format!("{} {} ({})", "[-]".red().bold(), name, o.r#type),
-                children,
-            })
-        }
-        (Some(o), Some(n)) => {
-            let mut children = Vec::new();
-
-            if o.r#type != n.r#type {
-                children.push(TreeNode::leaf(format!(
-                    "type: {} -> {}",
-                    o.r#type.red(),
-                    n.r#type.green()
-                )));
-            }
-            if o.script_hash != n.script_hash {
-                children.push(TreeNode::leaf("script: modified".yellow().to_string()));
-            }
-            if o.logger_hash != n.logger_hash {
-                let msg = match (&o.logger_hash, &n.logger_hash) {
-                    (None, Some(_)) => "logger: enabled".green().to_string(),
-                    (Some(_), None) => "logger: disabled".red().to_string(),
-                    _ => "logger: modified".yellow().to_string(),
-                };
-                children.push(TreeNode::leaf(msg));
-            }
-            if o.auto_start != n.auto_start {
-                let msg = if n.auto_start {
-                    "autoStart: false -> true (added to top)".green()
-                } else {
-                    "autoStart: true -> false (removed from top)".yellow()
-                };
-                children.push(TreeNode::leaf(msg.to_string()));
-            }
-            if o.notification_fd != n.notification_fd {
-                children.push(TreeNode::leaf(format!(
-                    "notification-fd: {:?} -> {:?}",
-                    o.notification_fd, n.notification_fd
-                )));
-            }
-            if o.format != n.format {
-                children.push(TreeNode::leaf(format!(
-                    "format: {} -> {}",
-                    o.format.as_deref().unwrap_or("?"),
-                    n.format.as_deref().unwrap_or("?")
-                )));
-            }
-
-            push_set_diff(&mut children, "deps", &o.dependencies, &n.dependencies);
-            push_set_diff(&mut children, "envdirs", &o.envdirs, &n.envdirs);
-            push_set_diff(&mut children, "partOf", &o.part_of, &n.part_of);
-
-            if children.is_empty() {
-                return None;
-            }
-
-            // 変更があるときだけ逆依存（影響範囲）を添える
-            if let Some(deps) = dependents.get(name) {
-                let list: Vec<_> = deps.iter().copied().collect();
-                children.push(TreeNode::leaf(format!(
-                    "{}: {}",
-                    "affects".cyan(),
-                    list.join(", ")
-                )));
-            }
-
-            Some(TreeNode {
-                label: format!("{} {} ({})", "[~]".yellow().bold(), name.bold(), n.r#type),
-                children,
-            })
-        }
-        (None, None) => None,
-    }
-}
-
-fn push_set_diff(children: &mut Vec<TreeNode>, label: &str, old: &[String], new: &[String]) {
-    let old_set: BTreeSet<&str> = old.iter().map(|s| s.as_str()).collect();
-    let new_set: BTreeSet<&str> = new.iter().map(|s| s.as_str()).collect();
-
-    let mut parts = Vec::new();
-    for added in new_set.difference(&old_set) {
-        parts.push(format!("+{}", added).green().to_string());
-    }
-    for removed in old_set.difference(&new_set) {
-        parts.push(format!("-{}", removed).red().to_string());
-    }
-
-    if !parts.is_empty() {
-        children.push(TreeNode::leaf(format!("{}: {}", label, parts.join(", "))));
-    }
-}
-
-fn collect_bundles(old: Option<&S6ServiceMeta>, new: Option<&S6ServiceMeta>) -> BTreeSet<String> {
-    let mut set = BTreeSet::new();
-    for meta in [old, new].into_iter().flatten() {
-        if meta.auto_start {
-            set.insert("top".to_string());
-        }
-        for b in &meta.part_of {
-            set.insert(b.clone());
-        }
-    }
-    if set.is_empty() {
-        set.insert("(manual)".to_string());
-    }
-    set
-}
-
-fn format_bundle_header(name: &str) -> String {
-    match name {
-        "top" => format!("{} {}", "top".bold().blue(), "(boot)".dimmed()),
-        "graphical-session" => format!("{}", "graphical-session".bold().magenta()),
-        "(manual)" => format!("{}", "(manual / unbundled)".dimmed()),
-        other => format!("{}", other.bold()),
-    }
-}
-
-fn render_tree(nodes: &[TreeNode], prefix: &str) {
-    for (idx, node) in nodes.iter().enumerate() {
-        let is_last = idx + 1 == nodes.len();
-        let branch = if is_last { "└── " } else { "├── " };
-        println!("{}{}{}", prefix, branch, node.label);
-
-        if !node.children.is_empty() {
-            let next_prefix = format!("{}{}", prefix, if is_last { "    " } else { "│   " });
-            render_tree(&node.children, &next_prefix);
-        }
-    }
-}
-
-fn clone_node(node: &TreeNode) -> TreeNode {
-    TreeNode {
-        label: node.label.clone(),
-        children: node.children.iter().map(clone_node).collect(),
-    }
+/// サービス定義が直接書き換えられたかどうかの判定
+fn is_directly_changed(old: &S6ServiceMeta, new: &S6ServiceMeta) -> bool {
+    old.r#type != new.r#type
+        || old.script_hash != new.script_hash
+        || old.logger_hash != new.logger_hash
+        || old.envdirs != new.envdirs
+        || old.dependencies != new.dependencies
+        || old.notification_fd != new.notification_fd
+        || old.format != new.format
+        || old.auto_start != new.auto_start
 }
 
 fn read_json_or_empty<T: for<'de> Deserialize<'de> + Default>(path: &Path) -> Result<T> {
