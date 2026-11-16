@@ -6,17 +6,10 @@
 }: let
   kernel = config.boot.kernelPackages.kernel;
 
-  # coreutils のパッケージから env バイナリを確定する
-  # （uutils の場合は uu-env になる可能性があるためフォールバックを考慮）
-  coreutilsPkg = config.programs.coreutils.package;
-  envBin =
-    if lib.pathExists "${coreutilsPkg}/bin/env"
-    then "${coreutilsPkg}/bin/env"
-    else if lib.pathExists "${coreutilsPkg}/bin/uu-env"
-    then "${coreutilsPkg}/bin/uu-env"
-    else "${pkgs.coreutils}/bin/env";
+  # Stage 2 のための /usr/bin/env（通常の coreutils 固定でOK）
+  envBin = "${pkgs.coreutils}/bin/env";
 
-  # sh バイナリの確定（sh.nix で指定されたパッケージから取得）
+  # Stage 2 のための /bin/sh（sh.nix で指定された通常シェル: 例 dash）
   shBin = "${config.system.path}/bin/sh";
 
   stage1Script = pkgs.replaceVarsWith {
@@ -31,7 +24,7 @@
         else "tty${toString (builtins.head config.boot.vt.consoles)}";
       luksUnlockCommands = config.system.build.luksUnlockCommands or "";
 
-      # ★ 依存を明示的に注入
+      # Stage 2 側の /mnt/bin/sh, /mnt/usr/bin/env のリンク先
       shBin = shBin;
       envBin = envBin;
     };
