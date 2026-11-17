@@ -17,7 +17,7 @@ with lib; let
     "--time"
     "--remember"
     "--remember-session"
-    "--sessions /etc/wayland-sessions"
+    "--sessions ${dmCfg.sessionDir}"
     "--session-wrapper ${getExe dmCfg.sessionWrapper}"
     (optionalString (dmCfg.defaultSession != "") "--cmd ${dmCfg.defaultSession}")
   ];

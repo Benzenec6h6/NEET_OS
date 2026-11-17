@@ -156,6 +156,13 @@ in {
       readOnly = true;
       description = "WM起動後に呼び出し、graphical-session を起動するヘルパー。WM固有の環境変数名を引数に取る";
     };
+
+    sessionDir = mkOption {
+      type = types.str;
+      default = "/run/current-system/system-path/share/wayland-sessions";
+      internal = true;
+      description = "Wayland セッション (.desktop) が集約されるシステムパス";
+    };
   };
 
   config = mkIf cfg.enable {

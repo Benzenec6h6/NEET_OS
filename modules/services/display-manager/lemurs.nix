@@ -20,7 +20,7 @@ with lib; let
 
     # 既存の /etc/wayland-sessions (*.desktop) を検索させる
     wayland = {
-      wayland_sessions_path = "/etc/wayland-sessions";
+      wayland_sessions_path = dmCfg.sessionDir;
     };
 
     # もしLemurs上から直接セッションラッパーを叩くシェルスクリプト形式にしたい場合のディレクトリ
