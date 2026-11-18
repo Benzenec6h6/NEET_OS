@@ -24,8 +24,8 @@
     schema = 1;
     kernelParams = config.boot.kernelParams;
     # 再起動でしか反映できないものだけ。initrd / stage2 / UKI は入れない
-    bootFingerprint =
-      lib.concatStringsSep "\n" [
+    bootFingerprint = lib.concatStringsSep "\n" (
+      [
         "${config.system.build.kernel}"
         "${config.system.modulesTree}"
         "${config.hardware.firmware}"
@@ -35,7 +35,8 @@
       ++ lib.optional gfx "${config.system.build.graphicsDrivers}"
       ++ lib.optional gfx32 "${config.system.build.graphicsDrivers32}"
       ++ lib.optional (stage1Plan != null) "${stage1Plan}"
-      ++ lib.optional (modprobeConf != null) "${modprobeConf}";
+      ++ lib.optional (modprobeConf != null) "${modprobeConf}"
+    );
   });
 
   # stage2 / initrd / UKI に依存してはいけない(循環するため)
