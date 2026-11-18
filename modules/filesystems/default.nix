@@ -20,6 +20,13 @@
     })
     computedStage1
   ));
+  # Stage 2 用の mount-plan.json も独立した derivation として生成
+  stage2MountPlan = pkgs.writeText "mount-plan.json" (builtins.toJSON (
+    lib.mapAttrs (n: fs: {
+      inherit (fs) device mountPoint fsType options alreadyMounted dump pass;
+    })
+    computedStage2
+  ));
 in {
   imports = [
     ./efivarfs.nix
@@ -40,6 +47,7 @@ in {
   config = {
     # 成果物として system.build に持たせる
     system.build.stage1MountPlan = stage1MountPlan;
+    system.build.stage2MountPlan = stage2MountPlan;
 
     boot.virtualFileSystems = {
       "/proc" = {

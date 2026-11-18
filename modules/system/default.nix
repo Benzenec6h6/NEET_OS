@@ -19,6 +19,7 @@
     ++ lib.optional cpu.intel.updateMicrocode cpu.intel.microcodePackage;
 
   stage1Plan = config.system.build.stage1MountPlan or null;
+  stage2Plan = config.system.build.stage2MountPlan or null;
 
   coreJson = pkgs.writeText "neet.json" (builtins.toJSON {
     schema = 1;
@@ -35,6 +36,7 @@
       ++ lib.optional gfx "${config.system.build.graphicsDrivers}"
       ++ lib.optional gfx32 "${config.system.build.graphicsDrivers32}"
       ++ lib.optional (stage1Plan != null) "${stage1Plan}"
+      ++ lib.optional (stage2Plan != null) "${stage2Plan}"
       ++ lib.optional (modprobeConf != null) "${modprobeConf}"
     );
   });
