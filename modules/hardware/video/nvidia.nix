@@ -197,33 +197,25 @@ in {
     ];
 
     environment.etc = {
-      # Don't add `nvidia-uvm` to `kernelModules`, because we want
-      # `nvidia-uvm` be loaded only after the GPU device is available, i.e. after `udev` rules
-      # for `nvidia` kernel module are applied.
-      # This matters on Azure GPU instances: https://github.com/NixOS/nixpkgs/pull/267335
-      #
-      # Instead, we use `softdep` to lazily load `nvidia-uvm` kernel module
-      # after `nvidia` kernel module is loaded and `udev` rules are applied.
-      "modprobe.d/nvidia-uvm.conf".text = ''
-        softdep nvidia post: nvidia_uvm
-      '';
-
-      "modprobe.d/nvidia-blacklists.conf".text = ''
-        blacklist nouveau
-        options nouveau modeset=0
-        blacklist nvidiafb
-        blacklist nova_core
-      '';
-
       "nvidia/nvidia-application-profiles-rc" = lib.mkIf cfg.package.useProfiles {
         source = "${cfg.package.bin}/share/nvidia/nvidia-application-profiles-rc";
       };
-
-      # 'cfg.package' installs it's files to /run/opengl-driver/...
       "egl/egl_external_platform.d".source = "/run/opengl-driver/share/egl/egl_external_platform.d/";
     };
 
     boot = {
+      modprobe = {
+        blacklist = [
+          "nouveau"
+          "nvidiafb"
+          "nova_core"
+        ];
+        extraConfig = ''
+          softdep nvidia post: nvidia_uvm
+          options nouveau modeset=0
+        '';
+      };
+
       extraModulePackages =
         if cfg.kernelModule == "open"
         then [cfg.package.open]
@@ -245,7 +237,11 @@ in {
         ++ lib.optionals (cfg.kernelModule == "open") ["nvidia_uvm"];
 
       kernelParams =
-        lib.optionals (cfg.kernelModule == "open") ["nvidia.NVreg_OpenRmEnableUnsupportedGpus=1"]
+        [
+          "module_blacklist=nouveau,nvidiafb,nova_core"
+          "nouveau.modeset=0"
+        ]
+        ++ lib.optionals (cfg.kernelModule == "open") ["nvidia.NVreg_OpenRmEnableUnsupportedGpus=1"]
         ++ lib.optionals (cfg.power.suspend.enable && cfg.power.suspend.notifier == "kernel") [
           "nvidia.NVreg_UseKernelSuspendNotifiers=1"
         ]

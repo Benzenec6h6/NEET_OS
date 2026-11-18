@@ -5,6 +5,7 @@ in {
     ./console.nix
     ./kernel.nix
     ./initrd.nix
+    ./modprobe.nix
     ./sysctl.nix
     ./bootloader
   ];
