@@ -11,18 +11,31 @@
   gfx32 = config.hardware.graphics.enable32Bit or false;
   hasS6 = config.system.build ? s6-rc-db;
 
+  modprobeConf = config.system.build.modprobeConfigFile or null;
+  cpu = config.hardware.cpu;
+
+  ucodePackages =
+    lib.optional cpu.amd.updateMicrocode cpu.amd.microcodePackage
+    ++ lib.optional cpu.intel.updateMicrocode cpu.intel.microcodePackage;
+
+  stage1Plan = config.system.build.stage1MountPlan or null;
+
   coreJson = pkgs.writeText "neet.json" (builtins.toJSON {
     schema = 1;
     kernelParams = config.boot.kernelParams;
     # 再起動でしか反映できないものだけ。initrd / stage2 / UKI は入れない
-    bootFingerprint = lib.concatStringsSep "\n" ([
+    bootFingerprint =
+      lib.concatStringsSep "\n" [
         "${config.system.build.kernel}"
         "${config.system.modulesTree}"
         "${config.hardware.firmware}"
         kernelParamsStr
       ]
+      ++ map toString ucodePackages
       ++ lib.optional gfx "${config.system.build.graphicsDrivers}"
-      ++ lib.optional gfx32 "${config.system.build.graphicsDrivers32}");
+      ++ lib.optional gfx32 "${config.system.build.graphicsDrivers32}"
+      ++ lib.optional (stage1Plan != null) "${stage1Plan}"
+      ++ lib.optional (modprobeConf != null) "${modprobeConf}";
   });
 
   # stage2 / initrd / UKI に依存してはいけない(循環するため)

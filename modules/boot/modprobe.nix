@@ -72,5 +72,7 @@ in {
     boot.kernel.sysctl = {
       "kernel.modprobe" = mkDefault "/bin/modprobe";
     };
+
+    system.build.modprobeConfigFile = modprobeConfigFile;
   };
 }
