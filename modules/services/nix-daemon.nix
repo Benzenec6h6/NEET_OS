@@ -6,6 +6,9 @@
 }: let
   cfg = config.services.nix-daemon;
 
+  # パッケージ名から Lix かどうかを判定 (lix または lix-xxx)
+  isLix = lib.hasPrefix "lix" (cfg.package.pname or cfg.package.name);
+
   # nix.conf の生成
   nixConf = pkgs.writeText "nix.conf" ''
     # 新CLI & Flakes を有効化
@@ -29,13 +32,13 @@ in {
     enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Whether to enable the Nix daemon service for NEET OS.";
+      description = "Whether to enable the Nix / Lix daemon service for NEET OS.";
     };
 
     package = lib.mkOption {
       type = lib.types.package;
       default = pkgs.nix;
-      description = "Nix package to use.";
+      description = "Nix or Lix package to use.";
     };
 
     nrBuildUsers = lib.mkOption {
@@ -52,7 +55,7 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    # 1. nix コマンドをシステムパッケージに追加
+    # 1. nix / lix コマンドをシステムパッケージに追加
     environment.systemPackages = [cfg.package];
 
     # 2. 設定ファイルの配置
@@ -111,10 +114,25 @@ in {
       }
     ];
 
+    # --- Lix 固有の要件 (Pasta によるネットワークサンドボックス用) ---
+    # 1. カーネルモジュール tun の自動ロード
+    boot.kernelModules = lib.mkIf isLix ["tun"];
+
+    # 2-A. mdevd が選ばれている場合: デフォルトの 660 より前に 666 ルールを差し込む
+    services.mdevd.rules = lib.mkIf (isLix && config.services.deviceManager == "mdevd") (
+      lib.mkBefore ''
+        tun 0:0 666 =net/
+      ''
+    );
+
+    # 2-B. gardendevd が選ばれている場合: udev ルールで 0666 を指定
+    services.udev.extraRules = lib.mkIf (isLix && config.services.deviceManager == "gardendevd") ''
+      KERNEL=="tun", MODE="0666", OPTIONS+="static_node=net/tun"
+    '';
+
     # 6. s6-rc サービス定義
     system.s6-rc.services.nix-daemon = {
       type = "longrun";
-      # programs.resolvconf に修正
       dependencies = lib.optional config.programs.resolvconf.enable "resolvconf";
       log.enable = true;
       run = ''
