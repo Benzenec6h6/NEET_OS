@@ -182,6 +182,10 @@ in {
         path = "/run/sessiond";
         mode = "0755";
       }
+      {
+        path = "/etc/neet-os";
+        mode = "0755";
+      }
     ];
 
     # 2. JSON として /etc 配下にエクスポート

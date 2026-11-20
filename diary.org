@@ -1,0 +1,251 @@
+#+TITLE: NEET_OS 開発日誌: 非systemd・独自NixOS構築におけるトラップと設計の軌跡
+#+AUTHOR: NEET_OS Developer
+#+DATE: 2026-11-05
+
+* はじめに
+本ドキュメントは、非systemd環境かつ独自アーキテクチャでNixOS派生ディストリビューション（NEET_OS）を構築する過程で遭遇した技術的ハマりポイント（トラップ）と、その分析・解決に至るプロセスの記録である。
+
+* 1. Linuxカーネルモジュールのマルチ出力トラップ
+** 現象
+initrd（Stage-1）のビルド自体はエラーなく正常に完了するにもかかわらず、起動時に ~kmod~ (~modprobe~) がカーネルドライバを見つけられず、デバイスの認識やマウントに失敗する。
+
+** 原因
+Nixpkgsにおけるカーネルパッケージ（~pkgs/os-specific/linux/kernel/generic.nix~）はマルチ出力（Multiple Outputs）構成となっている。
+単純に ~config.boot.kernelPackages.kernel~ を参照した場合、標準出力（~$out~）であるカーネルバイナリ（~vmlinuz~）のパスが引き渡されてしまい、モジュール群（~/lib/modules/...~）が含まれる出力（~modules~）が参照されない。
+
+** 対策
+ドライバやカーネルモジュールを要するビルドステップでは、明示的に ~lib.getOutput~ を用いて ~modules~ 出力を抽出して指定する必要がある。
+
+#+BEGIN_SRC nix
+# 誤り: カーネル本体の出力のみを参照してしまう
+# config.boot.kernelPackages.kernel
+
+# 正しい指定: modules出力を明示的に取得
+lib.getOutput "modules" config.boot.kernelPackages.kernel
+#+END_SRC
+
+* 2. D-Bus 導入における罠と依存性の制約
+** XML設定生成処理（makeDBusConf）の必要性
+D-Busには標準のパーサーと、~suid helper~ で使用される軽量（trivial）パーサーの2種類が存在する。
+後者は ~<include>~ ディレクティブに対応していないため、単純に ~*-local.conf~ へ設定を配置するだけでは動作しない。
+そのため、NixOS環境下では ~xsltproc~ を用いて ~system.conf~ や ~session.conf~ のXMLを動的に結合・生成する ~makeDBusConf~ パッケージ（~make-system-conf.xsl~ 等）を経由して設定ファイルを組む必要が生じる。
+
+** dbus-broker と systemd 強制依存問題（2026年9月現在）
+高速なD-Bus実装である ~dbus-broker~ の採用を検討したが、Nixpkgsの定義（~pkgs/by-name/db/dbus-broker/package.nix~）を確認したところ、以下の依存関係が判明した：
+- ~buildInputs~ に ~systemd~ が直接含まれている。
+- ~postInstall~ にて ~systemd~ 配下の ~busctl~ バイナリへの直接パス置き換え（~ExecReload=${systemd}/bin/busctl~）が行われている。
+- ~mesonFlags~ や環境変数で systemd のユニットディレクトリ配置が前提となっている。
+
+非systemd環境（脱systemd）を目指す本プロジェクトにおいて、~dbus-broker~ の導入は不要な ~systemd~ パッケージをクロージャに強制引き入れ（汚染）することになるため、現時点での使用は不適切（推奨されない）と結論付けた。
+
+** Polkit における実行ユーザー名の固定化トラップ (polkitd vs polkituser)
+*** 現象
+独自NixOS環境下でPolkitデーモンを稼働させる際、権限分離用のシステムユーザーとして一般的な ~polkitd~ を作成・指定しても、デーモンの起動失敗や権限エラーが発生する。
+
+*** 原因
+NixpkgsにおけるPolkitのパッケージ定義（~pkgs/by-name/po/polkit/package.nix~）を確認したところ、Mesonのビルドオプションにて実行ユーザー名がハードコード指定されていた：
+
+#+BEGIN_SRC nix
+mesonFlags = [
+  ...
+  "-Dpolkitd_user=polkituser" # TODO? <nixos> config.ids.uids.polkituser
+  ...
+];
+#+END_SRC
+
+一般名詞的な ~polkitd~ ではなく、NixOS特有の ~polkituser~ が強制的に組み込まれてビルドされているため、OS（NEET_OS）側のユーザー空間設計においても ~polkituser~ アカウントを用意するか、パッケージ定義側で override / overrideAttrs を行い指定を書き換える必要がある。
+
+*** 対策
+NEET_OSのベース権限設計において ~polkituser~ (UID/GID) を正しく定義・生成するか、~polkit.overrideAttrs~ を用いて ~mesonFlags~ 内の ~-Dpolkitd_user~ を任意のユーザー名（~polkitd~ 等）へ差し替える。
+
+* 3. Stage-1 (sh) の限界と各プロジェクトのイニット統合アプローチ
+** シェルスクリプトによる Stage-1 の抽象化限界
+当初は Stage-1 をシンプルな ~sh~ スクリプトで記述していたが、ファイルシステム（ext4, btrfs, zfs等）の選択に汎用性を持たせようとした際、コードの維持が困難になった。
+例えば、ext4からbtrfsへ変更するだけで ~mkdir -p /mnt/nix/store~ のような事前ディレクトリ作成処理のコメントアウト・条件分岐修正が必要となり、「スクリプト側が上位の抽象化を保持できていない」という違和感（設計の破綻）に直面した。
+
+** 先人プロジェクト（SixOS, Finix）の解析とInitの役割
+なぜ先人たちが initrd（Stage-1）の段階にわざわざイニットシステムを含めているのか再調査を行った結果、これが「ファイルシステムや暗号化、動的マウントの差分を吸収し、汎用性を持たせるため」であると判明した。
+
+しかし、そのアプローチには大きな違いが存在する：
+
+*** SixOS (s6 採用)
+- s6をinitrd内で動かそうとするが、s6が要求する「FIFO（名前付きパイプ）や特殊パーミッション構造」が、読み取り専用かつアトミックな Nix Store の制約と正面衝突する。
+- SixOSはこれを回避するため、ビルド時に ~fakeroot~ や ~cpio~ 解凍・再アーカイブを駆使して ~/run~ 配下に強引に構造を展開するという、非常に泥臭く無理のあるアプローチ（強行手段）を取っていた。
+
+*** Finix (finit 採用)
+- finitはC言語で書かれた単一バイナリ構造であり、プラグイン形式で機能を拡張できる。
+- Nix Storeの制約に引っかかる要素が少なく、s6のような強引なワークアラウンドを必要とせずにスマートかつ軽量に解決していた。
+
+* 4. ネットワークスタック構築における暗黙のudev依存トラップ (dhcpcd)
+** 現象
+~mdevd~ を採用した非systemd・非udev環境下において、~dhcpcd~ をデーモン（~s6-rc~ の longrun サービス等）として自動起動させた際、プロセス自体は正常生存（~[manager] [ip4] [ip6]~）しているにもかかわらず、ネットワークインターフェース（~eth0~）の自動検出が行われず、IPv4アドレスの取得および ~resolvconf~ へのDNS登録がサイレントに停止（待機）状態となる。
+
+奇妙なことに、CLIから手動で対象インターフェースを名指し（~dhcpcd -d -4 eth0~）して実行した場合には即座にDHCPリースが成功し、通信可能となる。また、デーモン停止時に ~dev: unloaded udev~ というログが出力されていた。
+
+** 原因
+Nixpkgsにおける ~dhcpcd~ のパッケージ定義（~pkgs/by-name/dh/dhcpcd/package.nix~）を確認したところ、以下のデフォルトフラグが設定されていた：
+
+#+BEGIN_SRC nix
+withUdev ? stdenv.hostPlatform.isLinux && !stdenv.hostPlatform.isStatic,
+#+END_SRC
+
+Linux環境下ではデフォルトで ~withUdev = true~ と評価されるため、動的プラグインとして ~$out/lib/dhcpcd/dev/udev.so~ が強制的にビルド・同梱される。
+
+この ~udev.so~ プラグインがロードされると、~dhcpcd~ はLinuxカーネルからの直接的なインターフェース検出（netlink / sysfs）を行わず、**「~systemd-udevd~ からネットワークデバイスの初期化完了イベントが通知されるのを待機する」** 挙動へと切り替わる。
+
+しかし、NEET_OSのような ~mdevd~ 採用環境では ~systemd-udevd~ が存在しないため、イベントが一切発行されず、結果として ~dhcpcd~ は「udevからの合図を永遠に待ちぼうけ」となり、インターフェースを一切捕捉できないハング状態に陥っていた。
+（※ 手動実行時にインターフェース名を直接指定した場合は、udevのイベント待機キューをバイパスして直接デバイスをオープンしたため動作していた）
+
+先行プロジェクト（Finix）のコードを精査したところ、同様の事象を回避するために以下のオーバーライドが施されていたことが判明した：
+
+#+BEGIN_SRC nix
+package = lib.mkOption {
+  type = lib.types.package;
+  default = pkgs.dhcpcd.override {
+    withUdev = config.services.udev.enable; # udevが無効な場合は false
+  };
+  ...
+};
+#+END_SRC
+
+** 対策
+パッケージの参照時に明示的に ~withUdev = false~ を渡し、~udev.so~ プラグインのビルドを除外する。
+
+#+BEGIN_SRC nix
+package = mkOption {
+  type = types.package;
+  default = pkgs.dhcpcd.override {
+    withUdev = false; # mdevd環境のため udev プラグインを無効化
+  };
+  description = "使用する dhcpcd パッケージ";
+};
+#+END_SRC
+
+これにより、~dhcpcd~ はLinuxカーネルと直接対話（netlink経由）してインターフェースを自己検出する本来のフォールバック動作に戻り、~mdevd~ 環境下でも起動直後にサイレント待機することなくIPv4アドレスとDNS情報を正常に取得可能となった。
+
+* 5. Wayland/WM 構築における非systemd・デバイスマネージャの壁
+** 現象
+greetd（tuigreet）から Hyprland や Sway を起動しようとしても、即座にクラッシュしてログイン画面へ押し戻される。手動起動時も GPU デバイス（DRM）やキーボード・マウス（libinput）が認識されず起動に失敗する。
+
+** 原因
+*** ① デバイス検出ライブラリ（libudev）の暗黙の systemd 依存
+Hyprland の描画バックエンド（~aquamarine~）や Sway のバックエンド（~wlroots~）、および入力受付を担う ~libinput~ は、ハードウェア検出に ~libudev~ を利用している。
+Nixpkgs 標準のパッケージ群は ~systemd-udevd~ 由来の ~libudev~ とリンクされており、デーモンとの通信ソケット（~/run/udev/control~ 等）が存在しない ~mdevd~ や ~gardendevd~ 環境ではデバイス列挙が完全に無力化される。
+
+*** ② D-Bus セッションバスの分断・多重起動トラップ
+先行プロジェクト（Finix等）では、ログイン時に ~dbus-run-session~ を使って一時的な D-Bus セッションをフォークしていた。
+しかし、NEET_OS ではすでに ~$XDG_RUNTIME_DIR/bus~ に常駐するユーザー D-Bus（User Bus）を s6-rc で管理している。
+ここで安易に先人の真似をして ~dbus-run-session~ を被せると、**「s6-rc 側が管理する常駐バス」と「WM が接続する一時バス」の 2 つが同時に乱立する「バスの分裂」** が発生し、ポータル（xdg-desktop-portal）や通知デーモンが正しく機能しなくなる。
+
+** 対策
+*** ① libudev スタブの共通抽象化
+デバイスマネージャ（~mdevd~ / ~gardendevd~）の選択に応じて、カーネル netlink/sysfs を直接参照するスタブ（~libudev-zero~ / ~libudev-garden~）へ ~libinput~ を override する仕組みを ~modules/services/device-manager/~ 配下に集約・カプセル化した。
+
+#+BEGIN_SRC nix
+# modules/services/device-manager/default.nix
+options.services.deviceManagerUdevApi = lib.mkOption {
+  type = lib.types.nullOr lib.types.package;
+  readOnly = true;
+  default =
+    if cfg == "gardendevd" then pkgs.libudev-garden
+    else if cfg == "mdevd" then pkgs.libudev-zero
+    else null;
+};
+
+options.services.deviceManagerLibinput = lib.mkOption {
+  type = lib.types.package;
+  readOnly = true;
+  default =
+    if config.services.deviceManagerUdevApi != null then
+      pkgs.libinput.override {
+        udev = config.services.deviceManagerUdevApi;
+        wacomSupport = false;
+      }
+    else
+      pkgs.libinput;
+};
+#+END_SRC
+
+各コンポジタ（Hyprland, Sway 等）は、この共通オプション経由でオーバーライド済み ~libinput~ を参照し、併せて ~withSystemd = false~ を指定する。
+
+*** ② 常駐 D-Bus への正しい合流
+~dbus-run-session~ による使い捨て D-Bus の起動を廃止し、セッション起動時に常駐ソケット環境変数（~DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus~）を渡すことで、s6-rc ユーザーサービス群と単一のバス上で完全に結合させた。
+
+* 6. s6-rc ユーザーセッション管理と Nix Store の権限（DAC）トラップ
+** 現象
+greetd ログイン時にユーザーセッション用の ~s6-svscan~ および ~s6-rc-init~ を起動した際、以下の致命的エラーで停止し、セッションがクラッシュする。
+
+#+BEGIN_SRC text
+s6-rc-init: warning: directory /run/user/1000/s6-rc:s6-rc-init:XXXXXX looks like a live directory but has no supervisors running
+s6-rc-init: fatal: unable to supervise service directories in /run/user/1000/s6-rc/servicedirs: Permission denied
+#+END_SRC
+
+** 原因
+*** ① s6-rc-init の動作仕様
+~s6-rc-init~ は、コンパイル済み DB（~compiled/servicedirs~）内のメタデータをそのまま live ディレクトリ（~/run/user/1000/s6-rc/servicedirs~）へ verbatim copy（属性維持コピー）し、その各サービス配下に ~s6-supervise~ が監視用ディレクトリ（~supervise/~）や FIFO を生成する。
+
+*** ② Nix Store の不変性と Linux DAC（任意アクセス制御）の衝突
+- Nix Store（~/nix/store/...~）内の全オブジェクトは、セキュリティと再現性の担保のため強制的に Read-Only（~0555~ / ~0444~、書き込み権限 ~w~ なし）でコミットされる。
+- これをコピーした live ディレクトリ側も ~dr-xr-xr-x~（書き込み禁止）のまま生成される。
+- **root（UID 0）の場合:** ~CAP_DAC_OVERRIDE~ 特権を保持しているため、~dr-xr-xr-x~ ディレクトリであっても内部へのファイル/ソケット作成が許可される（ゆえにシステム用 s6-rc は正常動作していた）。
+- **一般ユーザー（UID 1000）の場合:** 特権がないため、ディレクトリに ~w~ 権限が存在しない場合、カーネルから即座に ~EACCES (Permission denied)~ が返される。
+
+結果として、一般ユーザー権限の ~s6-svscan~ は各サービスの ~supervise/~ ディレクトリを作成できず、スーパーバイザの起動に全滅して ~s6-rc-init~ が爆死していた。
+
+** 対策：ログインセッションランナー（RAM）による書き込み権限の動的付与
+Nix Store の不変ルールを汚さず、かつ一般ユーザーの DAC 制約をクリアするため、セッションランナー（~neet-user-session~）の初期化ルーチンにて、ログイン時に **RAM（~$XDG_RUNTIME_DIR~ / tmpfs）上にコンパイル済み DB を複製し、書き込み権限（~chmod -R u+w~）を付与してから ~s6-rc-init~ に渡す** 設計へと変更した。
+
+#+BEGIN_SRC bash
+# display-manager/default.nix (neet-user-session)
+SERVICE_DIR="$XDG_RUNTIME_DIR/service"
+LIVE_DIR="$XDG_RUNTIME_DIR/s6-rc"
+COMPILED_DB="/etc/s6-rc/users/$USER_NAME/compiled"
+WRITABLE_DB="$XDG_RUNTIME_DIR/s6-rc-compiled"
+
+if [ -d "$COMPILED_DB" ]; then
+  # 前回のゴミを掃除
+  rm -rf "$LIVE_DIR"* "$SERVICE_DIR"* "$WRITABLE_DB"
+  mkdir -p "$SERVICE_DIR"
+
+  # Nix store の Read-Only DB を RAM にコピーし、即座に書き込み権限を付与
+  cp -r "$COMPILED_DB" "$WRITABLE_DB"
+  chmod -R u+w "$WRITABLE_DB"
+
+  # ユーザー用 s6-svscan をバックグラウンド起動
+  s6-svscan "$SERVICE_DIR" &
+  SVSCAN_PID=$!
+
+  until [ -p "$SERVICE_DIR/.s6-svscan/control" ]; do
+    sleep 0.05
+  done
+
+  # 書き込み可能にした RAM 上の DB を渡して初期化（Exit Code 0 で成功！）
+  s6-rc-init -c "$WRITABLE_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
+
+  # 基本サービス群（D-Bus, PipeWire 等）を一括起動
+  s6-rc -l "$LIVE_DIR" -u change top
+
+  # DM で選ばれた WM（Hyprland / Sway）をセッション内で起動
+  if [ -n "$TARGET_WM" ]; then
+    WM_NAME="$(basename "$TARGET_WM" .desktop)"
+    s6-rc -l "$LIVE_DIR" -u change "$WM_NAME"
+  fi
+
+  wait $SVSCAN_PID 2>/dev/null || true
+  rm -rf "$WRITABLE_DB"
+fi
+#+END_SRC
+
+ファイルサイズは数十KB〜数MBに過ぎないため、コピー処理は1ミリ秒未満で完了する。これにより、Nix の宣言的ビルドと s6-rc による安全なユーザーセッション管理が完全に調和した。
+
+* 7. 結語：NEET_OSにおける到達点
+度重なるトラップの踏破と設計の洗練を経て、NEET_OSは以下の強固なアーキテクチャへと着地した：
+
+1. **Stage-1 の完全独立化 (Rust化):**
+   initrd 段階の初期化・ファイルシステム準備・~switch_root~ は、シェルの限界や各Initの都合に振り回されず、「依存ゼロの自作Rust単一バイナリ（~pkgs/inieet/~）」で完結させる。
+2. **Stage-2 における s6 / s6-rc の徹底掌握:**
+   Unix哲学（プロセス監視と状態遷移の明確な分離）を体現する ~s6~ および ~s6-rc~ を主軸として一本化。
+   Nix Store の Read-Only 制約と一般ユーザー権限（DAC）の摩擦を RAM 上の動的展開で吸収し、~systemd --user~ に依存しない完全自律型のユーザーセッション監視基盤を確立した。
+3. **暗黙の systemd / udev 結合の解きほぐし（Decoupling）と抽象化:**
+   D-Bus、dhcpcd、Waylandコンポジタ（Hyprland/Sway）、libinput に至るまで、Nixpkgs標準のパッケージ群が前提としている「暗黙の依存関係やイベント待機」を精査・解消。
+mdevd や gardendevd のような最小限のデバイスマネージャ環境でも自己完結して動作するよう、スタブやオーバーライドをモジュール境界で綺麗にカプセル化し、構成要素の自律性と高いポータビリティを実現した。
