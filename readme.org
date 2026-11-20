@@ -5,7 +5,7 @@ A minimal, declaration-driven, systemd-free Linux operating system powered by Ni
 
 #+begin_quote
 [!NOTE]
-For historical development logs, thoughts, and past diaries, please refer to [[file:diary.org][diary.org]] and [[file:memo.org][memo.org]].
+For historical development logs, thoughts, and past diaries, please refer to [[file:diary.org][diary.org]].
 #+end_quote
 
 * Overview
