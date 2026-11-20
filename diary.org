@@ -195,29 +195,34 @@ s6-rc-init: fatal: unable to supervise service directories in /run/user/1000/s6-
 ** 対策：ログインセッションランナー（RAM）による書き込み権限の動的付与
 Nix Store の不変ルールを汚さず、かつ一般ユーザーの DAC 制約をクリアするため、セッションランナー（~neet-user-session~）の初期化ルーチンにて、ログイン時に **RAM（~$XDG_RUNTIME_DIR~ / tmpfs）上にコンパイル済み DB を複製し、書き込み権限（~chmod -R u+w~）を付与してから ~s6-rc-init~ に渡す** 設計へと変更した。
 
+あわせて、~s6-svscan~ の準備完了待ちについても ~sleep~ によるポーリングを廃止し、~-d~ オプションと FIFO を用いたディスクリプタ（fd）通知による完全同期に変更している。
+
 #+BEGIN_SRC bash
 # display-manager/default.nix (neet-user-session)
 SERVICE_DIR="$XDG_RUNTIME_DIR/service"
 LIVE_DIR="$XDG_RUNTIME_DIR/s6-rc"
 COMPILED_DB="/etc/s6-rc/users/$USER_NAME/compiled"
 WRITABLE_DB="$XDG_RUNTIME_DIR/s6-rc-compiled"
+FIFO="$XDG_RUNTIME_DIR/svscan.ready"
 
 if [ -d "$COMPILED_DB" ]; then
   # 前回のゴミを掃除
-  rm -rf "$LIVE_DIR"* "$SERVICE_DIR"* "$WRITABLE_DB"
+  rm -rf "$LIVE_DIR"* "$SERVICE_DIR"* "$WRITABLE_DB" "$FIFO"
   mkdir -p "$SERVICE_DIR"
 
   # Nix store の Read-Only DB を RAM にコピーし、即座に書き込み権限を付与
   cp -r "$COMPILED_DB" "$WRITABLE_DB"
   chmod -R u+w "$WRITABLE_DB"
 
-  # ユーザー用 s6-svscan をバックグラウンド起動
-  s6-svscan "$SERVICE_DIR" &
+  # svscan の準備完了を fd 通知で待つ (polling なし)
+  mkfifo "$FIFO"
+  s6-svscan -d3 "$SERVICE_DIR" 3>"$FIFO" &
   SVSCAN_PID=$!
-
-  until [ -p "$SERVICE_DIR/.s6-svscan/control" ]; do
-    sleep 0.05
-  done
+  read -r _ < "$FIFO" || true
+  rm -f "$FIFO"
+  
+  # 起動直後にクラッシュしていないか確認
+  kill -0 "$SVSCAN_PID"
 
   # 書き込み可能にした RAM 上の DB を渡して初期化（Exit Code 0 で成功！）
   s6-rc-init -c "$WRITABLE_DB" -l "$LIVE_DIR" "$SERVICE_DIR"
@@ -236,7 +241,7 @@ if [ -d "$COMPILED_DB" ]; then
 fi
 #+END_SRC
 
-ファイルサイズは数十KB〜数MBに過ぎないため、コピー処理は1ミリ秒未満で完了する。これにより、Nix の宣言的ビルドと s6-rc による安全なユーザーセッション管理が完全に調和した。
+ファイルサイズは数十KB〜数MBに過ぎないため、コピー処理は1ミリ秒未満で完了する。さらにポーリング（sleep）のオーバーヘッドも排除されたことで、Nix の宣言的ビルドと s6-rc による高速かつ安全なユーザーセッション管理が実現できた。
 
 * 7. 結語：NEET_OSにおける到達点
 度重なるトラップの踏破と設計の洗練を経て、NEET_OSは以下の強固なアーキテクチャへと着地した：
