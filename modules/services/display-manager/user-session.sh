@@ -16,8 +16,9 @@ fi
 
 SERVICE_DIR="$XDG_RUNTIME_DIR/service"
 LIVE_DIR="$XDG_RUNTIME_DIR/s6-rc"
-COMPILED_DB="/var/lib/s6-rc/users/$USER_NAME/compiled"
-export S6_LIVE_DIR="$LIVE_DIR" # WM -> neet-session-ready に継承される
+export S6_LIVE_DIR="$LIVE_DIR"
+
+COMPILED_DB="$(neet-user-s6-sync sync)" || { echo "user s6 db sync failed" >&2; exit 1; }
 
 if [ ! -d "$COMPILED_DB" ]; then
   echo "compiled s6-rc db not found: $COMPILED_DB" >&2
