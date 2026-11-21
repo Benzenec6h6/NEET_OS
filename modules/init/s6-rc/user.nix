@@ -59,13 +59,13 @@ in {
       )
       activeUserServices
       // {"s6-rc/users-services.json".source = usersServicesJson;};
-  };
 
-  environment.systemPackages = [
-    (pkgs.writeShellApplication {
-      name = "neet-user-s6-sync";
-      runtimeInputs = [pkgs.coreutils pkgs.s6-rc];
-      text = builtins.readFile ./neet-user-s6-sync.sh;
-    })
-  ];
+    environment.systemPackages = [
+      (pkgs.writeShellApplication {
+        name = "neet-user-s6-sync";
+        runtimeInputs = [pkgs.coreutils pkgs.s6-rc];
+        text = builtins.readFile ./neet-user-s6-sync.sh;
+      })
+    ];
+  };
 }
