@@ -33,7 +33,7 @@ pub fn setup_user_s6(is_switch: bool) -> io::Result<()> {
         println!("neet-activate: [s6] updating live session for {user_name} (UID: {uid})...");
         let status = Command::new("s6-setuidgid")
             .arg(&user_name)
-            .arg("/run/current-system/bin/neet-user-s6-sync")
+            .arg("/bin/neet-user-s6-sync")
             .arg("update")
             .env("XDG_RUNTIME_DIR", &runtime)
             .status();
