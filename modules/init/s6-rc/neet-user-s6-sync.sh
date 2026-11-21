@@ -20,7 +20,7 @@ mkdir -p "$root"
 
 if [ ! -d "$gen" ]; then
   tmp="$(mktemp -d "$root/.tmp.XXXXXX")"
-  cp -r --no-preserve=mode,ownership "$src/." "$tmp/"
+  cp -r --no-preserve=ownership "$src/." "$tmp/"
   chmod -R u+w "$tmp"
   mv -T "$tmp" "$gen" || { rm -rf "$tmp"; [ -d "$gen" ]; }  # 競合時は相手の勝ち
 fi
