@@ -104,7 +104,7 @@ in {
         snd/.*      0:${gidOf "audio"} 660
         video[0-9]+ 0:${gidOf "video"} 660
 
-        tun         0:0 660 =net/
+        tun         0:0 666 =net/
         sd[a-z].*   0:0 660
         vd[a-z].*   0:0 660
         nvme[0-9]n[0-9].*  0:0 660

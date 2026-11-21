@@ -118,18 +118,6 @@ in {
     # 1. カーネルモジュール tun の自動ロード
     boot.kernelModules = lib.mkIf isLix ["tun"];
 
-    # 2-A. mdevd が選ばれている場合: デフォルトの 660 より前に 666 ルールを差し込む
-    services.mdevd.rules = lib.mkIf (isLix && config.services.deviceManager == "mdevd") (
-      lib.mkBefore ''
-        tun 0:0 666 =net/
-      ''
-    );
-
-    # 2-B. gardendevd が選ばれている場合: udev ルールで 0666 を指定
-    services.udev.extraRules = lib.mkIf (isLix && config.services.deviceManager == "gardendevd") ''
-      KERNEL=="tun", MODE="0666", OPTIONS+="static_node=net/tun"
-    '';
-
     # 6. s6-rc サービス定義
     system.s6-rc.services.nix-daemon = {
       type = "longrun";
