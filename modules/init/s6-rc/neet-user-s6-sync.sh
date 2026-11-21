@@ -44,5 +44,6 @@ fi
 keep_live="$(readlink -f "$live/compiled" 2>/dev/null || true)"
 for d in "$root"/*/; do
   d="${d%/}"
+  [ -L "$d" ] && continue
   [ "$d" = "$gen" ] || [ "$d" = "$keep_live" ] || rm -rf "$d"
 done
