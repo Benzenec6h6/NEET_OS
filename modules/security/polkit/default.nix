@@ -22,8 +22,26 @@ in {
     agent = mkOption {
       type = types.nullOr (types.enum ["hyprpolkitagent" "cmd-polkit"]);
       default = null;
-      description = "使用するグラフィカル Polkit 認証エージェント (null の場合はなし)";
+      description = "セッションユーザー向けのデフォルト Polkit 認証エージェント (null の場合はデフォルトなし)";
     };
+  };
+
+  # ─── ユーザーごとの二重起動防止アサーション ───
+  options.neet.users = mkOption {
+    type = types.attrsOf (types.submodule ({
+      name,
+      config,
+      ...
+    }: {
+      config = {
+        assertions = [
+          {
+            assertion = !(config.security.polkit.hyprpolkitagent.enable && config.security.polkit.cmdPolkit.enable);
+            message = "neet.users.${name}: `hyprpolkitagent` と `cmdPolkit` を同時に有効にすることはできません。どちらか一方を選択してください。";
+          }
+        ];
+      };
+    }));
   };
 
   config = mkIf cfg.enable {

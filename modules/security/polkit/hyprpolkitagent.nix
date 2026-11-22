@@ -5,41 +5,63 @@
   ...
 }:
 with lib; let
-  polkitCfg = config.neet.security.polkit;
-  cfg = config.neet.security.polkit.hyprpolkitagent;
-  enableAgent = polkitCfg.enable && (polkitCfg.agent == "hyprpolkitagent");
+  sysPolkitCfg = config.neet.security.polkit;
+  sysAgentCfg = config.neet.security.polkit.hyprpolkitagent;
 
-  # s6-rc サービス定義
-  hyprpolkitagentService = {
-    type = "longrun";
-    # top バンドル (ログイン直後) には入れず、graphical-session に所属させる
-    autoStart = false;
-    partOf = ["graphical-session"];
-
-    # 起動スクリプト: sessionReady が書き出した環境変数を読み込んで起動
-    # s6-envdir で $XDG_RUNTIME_DIR/env を取り込んでからバイナリを実行する
-    run = ''
-      #!${pkgs.runtimeShell}
-      exec ${pkgs.s6}/bin/s6-envdir -I "$XDG_RUNTIME_DIR/env" ${cfg.package}/libexec/hyprpolkitagent
-    '';
-  };
+  anyUserEnabled = any (u: u.security.polkit.hyprpolkitagent.enable) (attrValues config.neet.users);
 in {
-  options.neet.security.polkit.hyprpolkitagent = {
-    package = mkOption {
-      type = types.package;
-      default = pkgs.hyprpolkitagent;
-      description = "使用する hyprpolkitagent パッケージ";
+  options = {
+    # ─── システム共通設定 ───
+    neet.security.polkit.hyprpolkitagent = {
+      package = mkOption {
+        type = types.package;
+        default = pkgs.hyprpolkitagent;
+        description = "使用する hyprpolkitagent パッケージ";
+      };
+    };
+
+    # ─── ユーザーごとの設定・s6 サービス ───
+    neet.users = mkOption {
+      type = types.attrsOf (types.submodule ({
+        name,
+        config,
+        ...
+      }: let
+        userCfg = config.security.polkit.hyprpolkitagent;
+      in {
+        options.security.polkit.hyprpolkitagent = {
+          enable = mkOption {
+            type = types.bool;
+            # システムで Polkit が有効 かつ デフォルトが hyprpolkitagent かつ セッションユーザーなら true
+            default = sysPolkitCfg.enable && (sysPolkitCfg.agent == "hyprpolkitagent") && config.isSessionUser;
+            description = "ユーザー '${name}' で hyprpolkitagent 認証エージェントを有効にするか";
+          };
+
+          package = mkOption {
+            type = types.package;
+            default = sysAgentCfg.package;
+            description = "ユーザー '${name}' が使用する hyprpolkitagent パッケージ";
+          };
+        };
+
+        config = mkIf userCfg.enable {
+          # ★ 方針A: s6.services.hyprpolkitagent に登録
+          s6.services.hyprpolkitagent = {
+            type = "longrun";
+            autoStart = false;
+            partOf = ["graphical-session"];
+
+            run = ''
+              #!${pkgs.runtimeShell}
+              exec ${pkgs.s6}/bin/s6-envdir -I "$XDG_RUNTIME_DIR/env" ${userCfg.package}/libexec/hyprpolkitagent
+            '';
+          };
+        };
+      }));
     };
   };
 
-  config = mkIf enableAgent {
-    environment.systemPackages = [cfg.package];
-
-    # 定義されている全ユーザーの s6-rc に hyprpolkitagent を注入する
-    system.s6-rc.users =
-      mapAttrs (_username: _user: {
-        services.hyprpolkitagent = hyprpolkitagentService;
-      })
-      config.neet.sessionUsers;
+  config = mkIf (sysPolkitCfg.enable && anyUserEnabled) {
+    environment.systemPackages = [sysAgentCfg.package];
   };
 }

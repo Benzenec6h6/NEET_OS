@@ -5,55 +5,67 @@
   ...
 }:
 with lib; let
-  polkitCfg = config.neet.security.polkit;
-  cfg = config.neet.security.polkit.cmdPolkit;
-  enableAgent = polkitCfg.enable && (polkitCfg.agent == "cmd-polkit");
+  sysPolkitCfg = config.neet.security.polkit;
 
-  # extraPackages からこのサービス専用のローカル PATH を構築
-  servicePath = makeBinPath cfg.extraPackages;
-
-  cmdPolkitService = {
-    type = "longrun";
-    autoStart = false;
-    partOf = ["graphical-session"];
-
-    run = ''
-      #!${pkgs.runtimeShell}
-      ${optionalString (cfg.extraPackages != []) ''
-        export PATH="${servicePath}:$PATH"
-      ''}
-      exec ${pkgs.s6}/bin/s6-envdir -I "$XDG_RUNTIME_DIR/env" \
-        ${getExe pkgs.cmd-polkit} -s -c ${escapeShellArg cfg.command}
-    '';
-  };
+  anyUserEnabled = any (u: u.security.polkit.cmdPolkit.enable) (attrValues config.neet.users);
 in {
-  options.neet.security.polkit.cmdPolkit = {
-    command = mkOption {
-      type = types.str;
-      example = "fuzzel --dmenu --password";
-      description = "cmd-polkit がパスワードを尋ねる際に実行するコマンドライン";
-    };
+  options = {
+    # ─── ユーザーごとの設定・s6 サービス ───
+    neet.users = mkOption {
+      type = types.attrsOf (types.submodule ({
+        name,
+        config,
+        ...
+      }: let
+        userCfg = config.security.polkit.cmdPolkit;
+        servicePath = makeBinPath userCfg.extraPackages;
+      in {
+        options.security.polkit.cmdPolkit = {
+          enable = mkOption {
+            type = types.bool;
+            # システムで Polkit が有効 かつ デフォルトが cmd-polkit かつ セッションユーザーなら true
+            default = sysPolkitCfg.enable && (sysPolkitCfg.agent == "cmd-polkit") && config.isSessionUser;
+            description = "ユーザー '${name}' で cmd-polkit 認証エージェントを有効にするか";
+          };
 
-    extraPackages = mkOption {
-      type = types.listOf types.package;
-      default = [];
-      example = literalExpression "[ pkgs.fuzzel ]";
-      description = ''
-        command の実行に必要なパッケージ一覧。
-        システム全体 (systemPackages) を汚染せず、この認証エージェントの
-        プロセス内でのみ有効な PATH として安全に注入されます。
-      '';
+          command = mkOption {
+            type = types.str;
+            default = "fuzzel --dmenu --password";
+            example = "fuzzel --dmenu --password";
+            description = "ユーザー '${name}' がパスワードを尋ねる際に実行するコマンドライン";
+          };
+
+          extraPackages = mkOption {
+            type = types.listOf types.package;
+            default = [];
+            example = literalExpression "[ pkgs.fuzzel ]";
+            description = "command の実行に必要なパッケージ一覧（このサービスの PATH にのみ安全に注入）";
+          };
+        };
+
+        config = mkIf userCfg.enable {
+          # ★ 方針A: s6.services.cmd-polkit に登録
+          s6.services.cmd-polkit = {
+            type = "longrun";
+            autoStart = false;
+            partOf = ["graphical-session"];
+
+            run = ''
+              #!${pkgs.runtimeShell}
+              ${optionalString (userCfg.extraPackages != []) ''
+                export PATH="${servicePath}:$PATH"
+              ''}
+              exec ${pkgs.s6}/bin/s6-envdir -I "$XDG_RUNTIME_DIR/env" \
+                ${getExe pkgs.cmd-polkit} -s -c ${escapeShellArg userCfg.command}
+            '';
+          };
+        };
+      }));
     };
   };
 
-  config = mkIf enableAgent {
-    # cmd-polkit 本体のみ（extraPackages は s6 スクリプトのローカル PATH に閉じる）
+  config = mkIf (sysPolkitCfg.enable && anyUserEnabled) {
+    # 誰か1人でも使っていればシステムにパッケージをインストール
     environment.systemPackages = [pkgs.cmd-polkit];
-
-    system.s6-rc.users =
-      mapAttrs (_username: _user: {
-        services.cmd-polkit = cmdPolkitService;
-      })
-      config.neet.sessionUsers;
   };
 }
