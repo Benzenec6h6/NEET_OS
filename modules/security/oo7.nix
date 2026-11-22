@@ -7,43 +7,75 @@
 with lib; let
   cfg = config.neet.security.oo7;
 
-  # wrapper を使う場合は /run/wrappers/bin/oo7-daemon、使わない場合は libexec 直
   daemonBin =
     if cfg.useWrapper
     then "/run/wrappers/bin/oo7-daemon"
     else "${cfg.serverPackage}/libexec/oo7-daemon";
 in {
-  options.neet.security.oo7 = {
-    enable = mkEnableOption "oo7 Secret Service provider and PAM integration";
+  options = {
+    neet.security.oo7 = {
+      enable = mkEnableOption "oo7 Secret Service provider and PAM integration";
 
-    serverPackage = mkOption {
-      type = types.package;
-      default = pkgs.oo7-server;
-      description = "The package providing oo7-daemon.";
+      serverPackage = mkOption {
+        type = types.package;
+        default = pkgs.oo7-server;
+        description = "The package providing oo7-daemon.";
+      };
+
+      pamPackage = mkOption {
+        type = types.package;
+        default = pkgs.oo7-pam;
+        description = "The package providing pam_oo7.so.";
+      };
+
+      portalPackage = mkOption {
+        type = types.package;
+        default = pkgs.oo7-portal;
+        description = "The package providing oo7-portal.";
+      };
+
+      enablePortal = mkOption {
+        type = types.bool;
+        default = config.xdg.portal.enable;
+        description = "Whether to register oo7-portal with xdg-desktop-portal.";
+      };
+
+      useWrapper = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Whether to run oo7-daemon with security wrappers (cap_ipc_lock).";
+      };
     };
 
-    pamPackage = mkOption {
-      type = types.package;
-      default = pkgs.oo7-pam;
-      description = "The package providing pam_oo7.so.";
-    };
+    # ─── ユーザーごとの設定・s6 サービス ───
+    neet.users = mkOption {
+      type = types.attrsOf (types.submodule ({
+        name,
+        config,
+        ...
+      }: {
+        options.security.oo7 = {
+          enable = mkOption {
+            type = types.bool;
+            # ★ config.isSessionUser で判定を一元化
+            default = cfg.enable && config.isSessionUser;
+            description = "ユーザー '${name}' で oo7 キーリングデーモンを起動するかどうか";
+          };
+        };
 
-    portalPackage = mkOption {
-      type = types.package;
-      default = pkgs.oo7-portal;
-      description = "The package providing oo7-portal.";
-    };
-
-    enablePortal = mkOption {
-      type = types.bool;
-      default = config.xdg.portal.enable;
-      description = "Whether to register oo7-portal with xdg-desktop-portal.";
-    };
-
-    useWrapper = mkOption {
-      type = types.bool;
-      default = true;
-      description = "Whether to run oo7-daemon with security wrappers (cap_ipc_lock).";
+        config = mkIf config.security.oo7.enable {
+          # ★ 方針Aに従い、s6.services.oo7 に登録
+          s6.services.oo7 = {
+            type = "longrun";
+            dependencies = ["dbus"];
+            autoStart = true;
+            run = ''
+              #!/bin/sh
+              exec ${daemonBin}
+            '';
+          };
+        };
+      }));
     };
   };
 
@@ -53,7 +85,7 @@ in {
       [
         cfg.serverPackage
         cfg.pamPackage
-        pkgs.libsecret # 動作検証用の secret-tool
+        pkgs.libsecret
       ]
       ++ optional (pkgs ? oo7-cli) pkgs.oo7-cli;
 
@@ -80,20 +112,5 @@ in {
         };
       };
     };
-
-    # 4. s6-rc ユーザーサービス（libexec または wrapper 経由で起動）
-    system.s6-rc.users =
-      mapAttrs (_name: _u: {
-        services.oo7 = {
-          type = "longrun";
-          dependencies = ["dbus"];
-          autoStart = true;
-          run = ''
-            #!/bin/sh
-            exec ${daemonBin}
-          '';
-        };
-      })
-      config.neet.sessionUsers;
   };
 }

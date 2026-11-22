@@ -1,13 +1,55 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 with lib; let
   cfg = config.neet.users;
 
-  userOpts = types.submodule {
+  # etc.nix と同様の汎用ファイル配置オプション
+  fileOpts = {
+    name,
+    config,
+    ...
+  }: {
     options = {
+      text = mkOption {
+        type = types.nullOr types.lines;
+        default = null;
+      };
+      source = mkOption {
+        type = types.path;
+      };
+      target = mkOption {
+        type = types.str;
+        default = name;
+        description = "ユーザーホーム ($HOME) からの相対パス";
+      };
+    };
+    config.source = mkIf (config.text != null) (pkgs.writeText "user-file-${name}" config.text);
+  };
+
+  # ユーザーの基底オプション
+  userOpts = {
+    name,
+    config,
+    options,
+    ...
+  }: {
+    options = {
+      assertions = mkOption {
+        type = types.listOf types.unspecified;
+        default = [];
+        internal = true;
+        description = "ユーザー '${name}' 設定のアサーション一覧";
+      };
+      warnings = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        internal = true;
+        description = "ユーザー '${name}' 設定の警告一覧";
+      };
       uid = mkOption {
         type = types.int;
         description = "User ID";
@@ -19,47 +61,92 @@ with lib; let
       shell = mkOption {
         type = types.str;
         default = "/bin/sh";
-        description = "Default shell";
       };
       home = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "Home directory";
       };
       createHome = mkOption {
         type = types.bool;
         default = true;
-        description = "起動時にホームディレクトリを自動作成するかどうか";
       };
       createRuntimeDir = mkOption {
         type = types.bool;
         default = true;
-        description = "起動時に /run/user/<uid> (XDG_RUNTIME_DIR) を自動作成するかどうか";
       };
+
+      # このユーザーがログインセッション・ランタイムサービスを持つか
+      isSessionUser = mkOption {
+        type = types.bool;
+        default = config.createRuntimeDir && (options.uid.isDefined && config.uid >= 1000);
+        defaultText = literalExpression "config.createRuntimeDir && config.uid >= 1000";
+        description = "ログインしてユーザーセッション・s6サービスを実行する人間ユーザーかどうか";
+      };
+
       description = mkOption {
         type = types.str;
         default = "";
-        description = "GECOS description";
       };
       extraGroups = mkOption {
         type = types.listOf types.str;
         default = [];
-        description = "The user's auxiliary groups.";
       };
       initialHashedPassword = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "パスワードハッシュ";
       };
       hashedPasswordSecret = mkOption {
         type = types.nullOr types.str;
         default = null;
-        description = "パスワードハッシュを供給する neet.secrets の名前（例: 'user-neet-hash'）";
       };
+
+      # ★ 汎用: ユーザー固有 s6-rc サービス定義 (s6.services に配置)
+      s6.services = mkOption {
+        type = types.attrsOf types.attrs;
+        default = {};
+        description = "ユーザー '${name}' の s6-rc サービス定義";
+      };
+
+      # 汎用: ホームディレクトリ直下のファイル配置
+      files = mkOption {
+        type = types.attrsOf (types.submodule fileOpts);
+        default = {};
+        description = "ユーザーホーム直下に配置するファイル群";
+      };
+
+      # 汎用: ~/.config 配下のファイル配置ショートカット
+      xdg.configFile = mkOption {
+        type = types.attrsOf (types.submodule fileOpts);
+        default = {};
+        description = "~/.config 配下に配置するファイル群";
+      };
+    };
+
+    config = {
+      files =
+        mapAttrs' (
+          k: v:
+            nameValuePair ".config/${k}" {
+              source = v.source;
+              target = ".config/${v.target}";
+            }
+        )
+        config.xdg.configFile;
     };
   };
 
-  # /etc/passwd と /etc/group の生成ロジック（既存のまま）
+  # ストア上に各ユーザーの配置ファイルツリーを構築
+  mkUserStaticFiles = name: u:
+    pkgs.runCommand "user-${name}-static-files" {} ''
+      mkdir -p $out
+      ${concatStringsSep "\n" (mapAttrsToList (_: f: ''
+          mkdir -p "$out/$(dirname "${f.target}")"
+          ln -s "${f.source}" "$out/${f.target}"
+        '')
+        u.files)}
+    '';
+
+  # /etc/passwd, /etc/group 生成
   mkPasswdLine = name: u: let
     homeDir =
       if u.home != null
@@ -71,23 +158,17 @@ with lib; let
   userGroups = filterAttrs (_name: gid: !elem gid sharedGids) (mapAttrs (_name: u: u.gid) cfg);
   allGroups = config.neet.gids // userGroups;
 
-  getUsersInGroup = groupName: gid: let
-    matchingUsers =
-      filterAttrs (
+  getUsersInGroup = groupName: gid:
+    attrNames (filterAttrs (
         username: userCfg:
-          elem groupName userCfg.extraGroups
-          || (hasAttr groupName config.neet.gids && userCfg.gid == gid)
+          elem groupName userCfg.extraGroups || (hasAttr groupName config.neet.gids && userCfg.gid == gid)
       )
-      cfg;
-  in
-    attrNames matchingUsers;
+      cfg);
 
   mkGroupLine = groupName: gid: let
     members = getUsersInGroup groupName gid;
-    memberStr = concatStringsSep "," members;
-  in "${groupName}:x:${toString gid}:${memberStr}";
+  in "${groupName}:x:${toString gid}:${concatStringsSep "," members}";
 
-  # ★ ここでユーザー用のディレクトリを system.stateDirectories の形式に変換
   userDirectories = concatLists (mapAttrsToList (
       name: u: let
         homePath =
@@ -95,16 +176,13 @@ with lib; let
           then u.home
           else "/home/${name}";
       in
-        # 1. ホームディレクトリ (/home/<user>)
         optional u.createHome {
           path = homePath;
           mode = "0755";
           user = name;
           group = toString u.gid;
         }
-        # 2. ランタイムディレクトリ (/run/user/<uid>)
-        # UID >= 1000 の通常ユーザーのみ
-        ++ optional (u.createRuntimeDir && u.uid >= 1000) {
+        ++ optional u.isSessionUser {
           path = "/run/user/${toString u.uid}";
           mode = "0700";
           user = name;
@@ -115,7 +193,7 @@ with lib; let
 in {
   options.neet = {
     users = mkOption {
-      type = types.attrsOf userOpts;
+      type = types.attrsOf (types.submodule userOpts);
       default = {};
       description = "User definitions for NEET_OS";
     };
@@ -123,19 +201,20 @@ in {
     gids = mkOption {
       type = types.attrsOf types.int;
       default = {};
-      description = "System Shared Group IDs";
     };
 
     sessionUsers = mkOption {
-      type = types.attrsOf userOpts;
+      type = types.attrsOf types.attrs;
       internal = true;
       readOnly = true;
-      default = filterAttrs (_name: u: u.createRuntimeDir && u.uid >= 1000) cfg;
-      description = "デスクトップセッションやユーザーサービスを配備する対象のユーザー一覧";
+      default = filterAttrs (_name: u: u.isSessionUser) cfg;
     };
   };
 
   config = {
+    assertions = concatMap (u: u.assertions) (attrValues cfg);
+    warnings = concatMap (u: u.warnings) (attrValues cfg);
+
     neet.gids = {
       root = lib.mkDefault 0;
       tty = lib.mkDefault 5;
@@ -145,13 +224,24 @@ in {
       audio = lib.mkDefault 29;
     };
 
-    environment.etc."passwd".text =
-      concatStringsSep "\n" (mapAttrsToList mkPasswdLine cfg) + "\n";
-
-    environment.etc."group".text =
-      concatStringsSep "\n" (mapAttrsToList mkGroupLine allGroups) + "\n";
-
-    # ★ ユーザー用のディレクトリを全体の stateDirectories に合流させる
+    environment.etc =
+      {
+        "passwd".text = concatStringsSep "\n" (mapAttrsToList mkPasswdLine cfg) + "\n";
+        "group".text = concatStringsSep "\n" (mapAttrsToList mkGroupLine allGroups) + "\n";
+      }
+      // mapAttrs' (
+        name: u:
+          nameValuePair "users/${name}/files" {
+            source = mkUserStaticFiles name u;
+          }
+      ) (filterAttrs (_: u: u.files != {}) cfg);
     system.stateDirectories = userDirectories;
+
+    # ★ 各ユーザーの s6.services を s6-rc に接続
+    system.s6-rc.users =
+      mapAttrs (_: u: {
+        services = u.s6.services;
+      })
+      cfg;
   };
 }

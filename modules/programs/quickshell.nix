@@ -33,46 +33,69 @@ with lib; let
     '';
   };
 
-  startCmd =
-    if cfg.configDir != null
-    then "${wrappedQuickshell}/bin/quickshell -p ${cfg.configDir}"
-    else "${wrappedQuickshell}/bin/quickshell";
+  anyUserEnabled = cfg.enable || any (u: u.programs.quickshell.enable) (attrValues config.neet.users);
 in {
-  options.programs.quickshell = {
-    enable = mkEnableOption "Quickshell desktop shell under graphical-session";
+  options = {
+    programs.quickshell = {
+      enable = mkEnableOption "Quickshell desktop shell under graphical-session";
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.quickshell;
-      description = "Quickshell package to use";
+      package = mkOption {
+        type = types.package;
+        default = pkgs.quickshell;
+        description = "使用する Quickshell パッケージ";
+      };
+
+      configDir = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = "システム共通の Quickshell 設定ディレクトリ。null の場合は ~/.config/quickshell を参照";
+      };
     };
 
-    configDir = mkOption {
-      type = types.nullOr types.path;
-      default = null;
-      description = "Quickshell 設定ディレクトリ。null の場合は ~/.config/quickshell を参照します";
+    neet.users = mkOption {
+      type = types.attrsOf (types.submodule ({
+        name,
+        config,
+        ...
+      }: let
+        userCfg = config.programs.quickshell;
+
+        startCmd =
+          if userCfg.configDir != null
+          then "${wrappedQuickshell}/bin/quickshell -p ${userCfg.configDir}"
+          else "${wrappedQuickshell}/bin/quickshell";
+      in {
+        options.programs.quickshell = {
+          enable = mkOption {
+            type = types.bool;
+            default = cfg.enable && config.isSessionUser;
+            description = "ユーザー '${name}' で Quickshell を起動するかどうか";
+          };
+
+          configDir = mkOption {
+            type = types.nullOr types.path;
+            default = cfg.configDir;
+            description = "ユーザー固有の Quickshell 設定ディレクトリ。null の場合は ~/.config/quickshell を参照";
+          };
+        };
+
+        config = mkIf userCfg.enable {
+          # ★ s6.services に定義
+          s6.services.quickshell = {
+            type = "longrun";
+            autoStart = false;
+            partOf = ["graphical-session"];
+            run = ''
+              #!/bin/sh
+              exec ${startCmd}
+            '';
+          };
+        };
+      }));
     };
   };
 
-  config = mkIf cfg.enable {
+  config = mkIf anyUserEnabled {
     environment.systemPackages = [wrappedQuickshell];
-
-    # ★ sessionUsers を直接 mapAttrs で回す
-    system.s6-rc.users =
-      mapAttrs (_username: user: {
-        services.quickshell = {
-          type = "longrun";
-          autoStart = false;
-          partOf = ["graphical-session"];
-          envdirs = ["/run/user/${toString user.uid}/env"];
-
-          run = ''
-            #!/bin/execlineb -P
-            fdmove -c 2 1
-            ${startCmd}
-          '';
-        };
-      })
-      config.neet.sessionUsers;
   };
 }

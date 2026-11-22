@@ -220,6 +220,30 @@ in {
     };
   };
 
+  options.neet.users = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule ({
+      name,
+      config,
+      ...
+    }: {
+      options.openssh.authorizedKeys = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... user@host"
+        ];
+        description = "ユーザー '${name}' への SSH ログインを許可する公開鍵のリスト";
+      };
+
+      config = lib.mkIf (config.openssh.authorizedKeys != []) {
+        # users.nix が提供する files 機構を使い、~/.ssh/authorized_keys を生成する
+        files.".ssh/authorized_keys" = {
+          text = lib.concatStringsSep "\n" config.openssh.authorizedKeys + "\n";
+        };
+      };
+    }));
+  };
+
   config = lib.mkIf cfg.enable {
     services.openssh.sftp.executable = lib.mkDefault "${cfg.package}/libexec/sftp-server";
     services.openssh.settings = {
@@ -298,7 +322,7 @@ in {
       "sshd-prepare" = {
         type = "oneshot";
         format = "sh";
-        autoStart = false;
+        autoStart = cfg.startOnBoot;
         up = ''
           if ! [ -s "/var/lib/sshd/ssh_host_ed25519_key" ]; then
             ${cfg.package}/bin/ssh-keygen -t ed25519 -f "/var/lib/sshd/ssh_host_ed25519_key" -N ""

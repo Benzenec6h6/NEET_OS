@@ -3,39 +3,58 @@
   lib,
   pkgs,
   ...
-}: let
+}:
+with lib; let
   cfg = config.programs.wireplumber;
   format = pkgs.formats.json {};
 in {
   options.programs.wireplumber = {
-    enable = lib.mkEnableOption "WirePlumber session manager";
+    enable = mkEnableOption "WirePlumber session manager";
 
-    package = lib.mkOption {
-      type = lib.types.package;
+    package = mkOption {
+      type = types.package;
       default = pkgs.wireplumber;
       description = "The package to use for wireplumber.";
     };
 
-    settings = lib.mkOption {
+    settings = mkOption {
       type = format.type;
       default = {};
-      description = "WirePlumber configuration options.";
+      description = "システム共通の WirePlumber 設定 (SPA-JSON)";
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    services.pipewire.enable = lib.mkDefault true;
+  # ─── ユーザーごとの設定・s6 サービス ───
+  options.neet.users = mkOption {
+    type = types.attrsOf (types.submodule ({
+      name,
+      config,
+      ...
+    }: let
+      userCfg = config.services.wireplumber;
+    in {
+      # ユーザー側は自然に services.wireplumber として宣言可能
+      options.services.wireplumber = {
+        enable = mkOption {
+          type = types.bool;
+          default = cfg.enable && config.isSessionUser;
+          description = "ユーザー '${name}' で WirePlumber を起動するか";
+        };
 
-    environment.systemPackages = [cfg.package];
+        settings = mkOption {
+          type = format.type;
+          default = {};
+          description = "ユーザー固有の WirePlumber 設定 (~/.config/wireplumber/wireplumber.conf.d/99-user.conf)";
+        };
+      };
 
-    environment.etc."wireplumber/wireplumber.conf.d/99-neet.conf" = lib.mkIf (cfg.settings != {}) {
-      source = format.generate "99-neet.conf" cfg.settings;
-    };
+      config = mkIf userCfg.enable {
+        xdg.configFile."wireplumber/wireplumber.conf.d/99-user.conf" = mkIf (userCfg.settings != {}) {
+          source = format.generate "99-user.conf" userCfg.settings;
+        };
 
-    # ★ ユーザー s6-rc 側に純粋な "wireplumber" として登録！
-    system.s6-rc.users =
-      lib.mapAttrs (name: u: {
-        services.wireplumber = {
+        # ★ s6.services に定義
+        s6.services.wireplumber = {
           type = "longrun";
           dependencies = ["pipewire"];
           run = ''
@@ -44,7 +63,17 @@ in {
             exec ${cfg.package}/bin/wireplumber
           '';
         };
-      })
-      config.neet.sessionUsers;
+      };
+    }));
+  };
+
+  config = mkIf cfg.enable {
+    services.pipewire.enable = mkDefault true;
+
+    environment.systemPackages = [cfg.package];
+
+    environment.etc."wireplumber/wireplumber.conf.d/99-neet.conf" = mkIf (cfg.settings != {}) {
+      source = format.generate "99-neet.conf" cfg.settings;
+    };
   };
 }

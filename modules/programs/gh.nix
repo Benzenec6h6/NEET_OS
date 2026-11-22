@@ -3,19 +3,9 @@
   lib,
   pkgs,
   ...
-}: let
-  inherit
-    (lib)
-    literalExpression
-    mkEnableOption
-    mkIf
-    mkOption
-    mkPackageOption
-    types
-    ;
-
+}:
+with lib; let
   cfg = config.programs.gh;
-
   yamlFormat = pkgs.formats.yaml {};
 
   settingsType = types.submodule {
@@ -31,7 +21,6 @@
     cfg.extensions
   );
 
-  # extensions が指定されている場合、起動時に ~/.local/share/gh/extensions にリンクを張るラッパー
   finalPackage =
     if cfg.extensions == []
     then cfg.package
@@ -53,74 +42,99 @@
             '
         '';
       };
+
+  anyUserEnabled = cfg.enable || any (u: u.programs.gh.enable) (attrValues config.neet.users);
 in {
-  options.programs.gh = {
-    enable = mkEnableOption "GitHub CLI tool";
+  options = {
+    # ─── システム共通設定 ───
+    programs.gh = {
+      enable = mkEnableOption "GitHub CLI tool";
 
-    package = mkPackageOption pkgs "gh" {};
+      package = mkPackageOption pkgs "gh" {};
 
-    settings = mkOption {
-      type = settingsType;
-      default = {};
-      description = ''
-        Global configuration for gh.
-        Written to /etc/xdg/gh/config.yml (as default template) or user config.
-      '';
-      example = literalExpression ''
-        {
-          git_protocol = "ssh";
-          prompt = "enabled";
-          aliases = {
-            co = "pr checkout";
-            pv = "pr view";
-          };
-        }
-      '';
-    };
-
-    gitCredentialHelper = {
-      enable =
-        mkEnableOption "the gh git credential helper"
-        // {
-          default = true;
-        };
-
-      hosts = mkOption {
-        type = types.listOf types.str;
-        default = [
-          "https://github.com"
-          "https://gist.github.com"
-        ];
-        description = "GitHub hosts to enable the gh git credential helper for.";
+      settings = mkOption {
+        type = settingsType;
+        default = {};
+        description = "システム共通の gh デフォルト設定 (/etc/xdg/gh/config.yml)";
         example = literalExpression ''
-          [ "https://github.com" "https://github.example.com" ]
+          {
+            git_protocol = "ssh";
+            prompt = "enabled";
+            aliases = {
+              co = "pr checkout";
+              pv = "pr view";
+            };
+          }
         '';
+      };
+
+      gitCredentialHelper = {
+        enable =
+          mkEnableOption "the gh git credential helper"
+          // {
+            default = true;
+          };
+
+        hosts = mkOption {
+          type = types.listOf types.str;
+          default = [
+            "https://github.com"
+            "https://gist.github.com"
+          ];
+          description = "gh git credential helper を有効にするホスト一覧";
+        };
+      };
+
+      extensions = mkOption {
+        type = types.listOf types.package;
+        default = [];
+        description = "システム全体に導入する gh 拡張機能一覧";
       };
     };
 
-    extensions = mkOption {
-      type = types.listOf types.package;
-      default = [];
-      description = ''
-        List of gh extensions to install globally (e.g. pkgs.gh-dash, pkgs.gh-eco).
-      '';
-      example = literalExpression "[ pkgs.gh-dash ]";
+    # ─── ユーザーごとの設定 ───
+    neet.users = mkOption {
+      type = types.attrsOf (types.submodule ({
+        name,
+        config,
+        ...
+      }: let
+        userCfg = config.programs.gh;
+      in {
+        options.programs.gh = {
+          enable = mkOption {
+            type = types.bool;
+            default = cfg.enable && config.isSessionUser;
+            description = "ユーザー '${name}' で gh を有効にするか";
+          };
+
+          settings = mkOption {
+            type = settingsType;
+            default = {};
+            description = "ユーザー固有の gh 設定 (~/.config/gh/config.yml)";
+          };
+        };
+
+        config = mkIf userCfg.enable {
+          xdg.configFile."gh/config.yml" = mkIf (userCfg.settings != {}) {
+            source = yamlFormat.generate "gh-user-config.yml" ({version = "1";} // userCfg.settings);
+          };
+        };
+      }));
     };
   };
 
-  config = mkIf cfg.enable {
-    # ラップされた gh パッケージをシステムにインストール
+  config = mkIf anyUserEnabled {
     environment.systemPackages = [finalPackage];
 
-    # システム共通のデフォルト設定テンプレート (/etc/xdg/gh/config.yml)
+    # システム全体のデフォルト設定フォールバック
     environment.etc."xdg/gh/config.yml" = mkIf (cfg.settings != {}) {
       source = yamlFormat.generate "gh-config.yml" ({version = "1";} // cfg.settings);
     };
 
-    # Git のシステム全体設定 (/etc/gitconfig) に Credential Helper を登録
-    # ※ NEET_OS に programs.git がある場合はそちらに渡す形に変更可能
+    # Git Credential Helper の登録
     environment.etc."gitconfig" = mkIf cfg.gitCredentialHelper.enable {
-      text = lib.concatStringsSep "\n" (
+      text = concatStringsSep "\n" (
         map (host: ''
           [credential "${host}"]
           	helper =

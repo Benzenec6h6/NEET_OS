@@ -8,29 +8,6 @@
   inherit (lib) mkOption mkEnableOption mkIf types;
 
   hasUdev = config.services.deviceManager == "gardendevd";
-
-  # ユーザー用 s6-rc サービス定義
-  mkUserPipewireServices = name: u: {
-    # 1. PipeWire コア
-    pipewire = {
-      type = "longrun";
-      dependencies = ["dbus"]; # ユーザーバスの dbus に依存
-      run = ''
-        #!/bin/sh
-        exec ${cfg.package}/bin/pipewire
-      '';
-    };
-
-    # 2. PulseAudio 互換レイヤー
-    pipewire-pulse = mkIf cfg.pulse.enable {
-      type = "longrun";
-      dependencies = ["pipewire"];
-      run = ''
-        #!/bin/sh
-        exec ${cfg.package}/bin/pipewire -c pipewire-pulse.conf
-      '';
-    };
-  };
 in {
   options.services.pipewire = {
     enable = mkEnableOption "PipeWire multimedia service";
@@ -66,6 +43,52 @@ in {
         udev が存在しない環境で、ALSA デバイス (hw:0,0) を直接静的ノードとして登録するかどうか。
       '';
     };
+  };
+
+  # ─── ユーザーごとの設定・s6 サービス ───
+  options.neet.users = mkOption {
+    type = types.attrsOf (types.submodule ({
+      name,
+      config,
+      ...
+    }: {
+      options.services.pipewire = {
+        enable = mkOption {
+          type = types.bool;
+          default = cfg.enable && config.isSessionUser;
+          description = "ユーザー '${name}' で PipeWire s6 サービスを起動するか";
+        };
+
+        pulse = {
+          enable = mkOption {
+            type = types.bool;
+            default = cfg.pulse.enable;
+            description = "PulseAudio 互換レイヤーを起動するか";
+          };
+        };
+      };
+
+      config = mkIf config.services.pipewire.enable {
+        # ★ s6.services に定義
+        s6.services.pipewire = {
+          type = "longrun";
+          dependencies = ["dbus"];
+          run = ''
+            #!/bin/sh
+            exec ${cfg.package}/bin/pipewire
+          '';
+        };
+
+        s6.services.pipewire-pulse = mkIf config.services.pipewire.pulse.enable {
+          type = "longrun";
+          dependencies = ["pipewire"];
+          run = ''
+            #!/bin/sh
+            exec ${cfg.package}/bin/pipewire -c pipewire-pulse.conf
+          '';
+        };
+      };
+    }));
   };
 
   config = mkIf cfg.enable {
@@ -114,12 +137,5 @@ in {
 
     environment.etc."alsa/conf.d/50-pipewire.conf".source = "${cfg.package}/share/alsa/alsa.conf.d/50-pipewire.conf";
     environment.etc."alsa/conf.d/99-pipewire-default.conf".source = "${cfg.package}/share/alsa/alsa.conf.d/99-pipewire-default.conf";
-
-    # ★ システム s6-rc ではなく、ユーザー s6-rc に登録！
-    system.s6-rc.users =
-      lib.mapAttrs (name: u: {
-        services = mkUserPipewireServices name u;
-      })
-      config.neet.sessionUsers;
   };
 }

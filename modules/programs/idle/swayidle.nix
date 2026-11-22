@@ -5,52 +5,63 @@
   ...
 }:
 with lib; let
-  cfg = config.neet.programs.idle.swayidle;
-in {
-  options.neet.programs.idle.swayidle = {
-    enable = lib.mkEnableOption "swayidle (Wayland idle daemon)";
+  sysCfg = config.neet.programs.idle.swayidle;
 
-    package = lib.mkOption {
-      type = lib.types.package;
-      default = pkgs.swayidle;
-      description = "使用する swayidle パッケージ";
+  anyUserEnabled = any (u: u.programs.idle.swayidle.enable) (attrValues config.neet.users);
+in {
+  options = {
+    # ─── システム共通設定 ───
+    neet.programs.idle.swayidle = {
+      package = mkOption {
+        type = types.package;
+        default = pkgs.swayidle;
+        description = "使用する swayidle パッケージ";
+      };
     };
 
-    args = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = ["-w"];
-      example = [
-        "-w"
-        "timeout"
-        "300"
-        "swaylock -f"
-        "timeout"
-        "600"
-        "hyprctl dispatch dpms off"
-        "resume"
-        "hyprctl dispatch dpms on"
-        "before-sleep"
-        "swaylock -f"
-      ];
-      description = "swayidle に渡すコマンドライン引数のリスト";
+    # ─── ユーザーごとの設定・s6 サービス ───
+    neet.users = mkOption {
+      type = types.attrsOf (types.submodule ({
+        name,
+        config,
+        ...
+      }: let
+        userCfg = config.programs.idle.swayidle;
+      in {
+        options.programs.idle.swayidle = {
+          enable = mkEnableOption "swayidle for user '${name}'";
+
+          args = mkOption {
+            type = types.listOf types.str;
+            default = ["-w"];
+            example = [
+              "-w"
+              "timeout"
+              "300"
+              "swaylock -f"
+              "before-sleep"
+              "swaylock -f"
+            ];
+            description = "swayidle に渡すユーザー固有のコマンドライン引数リスト";
+          };
+        };
+
+        config = mkIf userCfg.enable {
+          # ★ s6.services.swayidle に変更
+          s6.services.swayidle = {
+            type = "longrun";
+            partOf = ["graphical-session"];
+            run = ''
+              #!/bin/sh
+              exec ${sysCfg.package}/bin/swayidle ${escapeShellArgs userCfg.args}
+            '';
+          };
+        };
+      }));
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    environment.systemPackages = [cfg.package];
-
-    # s6-rc ユーザーサービス登録
-    system.s6-rc.users =
-      lib.mapAttrs (name: u: {
-        services.swayidle = {
-          type = "longrun";
-          partOf = ["graphical-session"];
-          run = ''
-            #!/bin/sh
-            exec ${cfg.package}/bin/swayidle ${lib.escapeShellArgs cfg.args}
-          '';
-        };
-      })
-      config.neet.sessionUsers;
+  config = mkIf anyUserEnabled {
+    environment.systemPackages = [sysCfg.package];
   };
 }

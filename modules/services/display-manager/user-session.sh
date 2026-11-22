@@ -1,12 +1,13 @@
-exec > /tmp/neet-user-session.log 2>&1
-set -x
-
-export PATH="/run/wrappers/bin:/run/current-system/bin:$PATH"
-
 USER_NAME="$(id -un)"
 USER_UID="$(id -u)"
 export XDG_RUNTIME_DIR="/run/user/$USER_UID"
 export HOME="${HOME:-/home/$USER_NAME}"
+
+# ★ 安全なユーザー専用ランタイム領域へログを出力
+exec > "$XDG_RUNTIME_DIR/user-session.log" 2>&1
+set -x
+
+export PATH="/run/wrappers/bin:/run/current-system/bin:$PATH"
 export XDG_SESSION_TYPE=wayland
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
@@ -36,7 +37,6 @@ s6-svscan -d3 "$SERVICE_DIR" 3>"$fifo" &
 SVSCAN_PID=$!
 read -r _ < "$fifo" || true
 rm -f "$fifo"
-# -d 非対応などで即死していたらここで止める
 kill -0 "$SVSCAN_PID"
 
 cleanup() {
