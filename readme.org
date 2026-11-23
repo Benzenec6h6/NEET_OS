@@ -18,6 +18,19 @@ For historical development logs, thoughts, and past diaries, please refer to [[f
 - **Display Protocol:** Pure Wayland (Hyprland / Sway).
 - **Storage & Boot:** Modern UEFI-first architecture (Limine / EFISTUB / UKI, Secure Boot, TPM2, LUKS, and Btrfs with impermanence reset).
 
+* Motivation & Philosophy (Why NEET_OS?)
+
+NEET_OS was born out of practical frustrations with modern NixOS and its surrounding ecosystem:
+
+- **First-Class Storage & Impermanence (No Boilerplate):**
+  In NixOS, declarative disk partitioning (=disko=) and ephemeral root rollback (=impermanence=) are external flakes, often requiring users to manually copy-paste Btrfs subvolume wiping scripts. NEET_OS treats declarative storage and automated ephemeral root wiping (~neet-mount~) as first-class, built-in primitives.
+- **Unified Configuration (No Home-Manager Schism):**
+  Managing system options and Home Manager options separately causes cognitive overload, redundant boilerplate, and ambiguous boundaries. NEET_OS strives for a cohesive, single-tier module system.
+- **Eradication of "Broken Switches":**
+  Standard =nixos-rebuild switch= often results in half-broken states when graphic drivers, running sessions, or kernel modules mismatch. NEET_OS focuses heavily on deterministic generational transitions—inspecting diffs and blocking unsafe live switches when reboots or session restarts are strictly required.
+- **Pragmatic Scope on Evaluation Performance:**
+  Unlike projects (such as finix or sixos) that limit module options to optimize Nix evaluation speeds, NEET_OS does not pursue micro-optimizations in Nix language evaluation. We consider evaluation performance an upstream concern that will naturally be addressed by next-generation Nix evaluators (e.g., Lix, Tvix, Snix). Our focus remains entirely on OS ergonomics and system-level reliability.
+
 * Crucial Rules & Constraints
 
 Please keep these architectural principles in mind when configuring NEET_OS:
