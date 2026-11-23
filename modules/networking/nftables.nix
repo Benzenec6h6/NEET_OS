@@ -7,7 +7,27 @@
 with lib; let
   cfg = config.networking.nftables;
 
-  # テーブルごとの設定サブモジュール
+  # --- 1. デフォルトルールセットの生成 (Stage 1 と同じパターン) ---
+  tcpRule = optionalString (cfg.allowedTCPPorts != []) (
+    "tcp dport { " + concatMapStringsSep ", " toString cfg.allowedTCPPorts + " } accept"
+  );
+
+  udpRule = optionalString (cfg.allowedUDPPorts != []) (
+    "udp dport { " + concatMapStringsSep ", " toString cfg.allowedUDPPorts + " } accept"
+  );
+
+  # TCP と UDP のルールを結合（空行にならないよう調整）
+  openPorts = concatStringsSep "\n  " (filter (s: s != "") [tcpRule udpRule]);
+
+  defaultFilterFile = pkgs.replaceVarsWith {
+    src = ./default-filter.nft;
+    replacements = {
+      inherit openPorts;
+      extraInputRules = cfg.extraInputRules;
+    };
+  };
+
+  # --- 2. テーブルごとの設定サブモジュール (既存の設計を維持) ---
   tableSubmodule = {name, ...}: {
     options = {
       enable = mkOption {
@@ -24,7 +44,6 @@ with lib; let
         default = "inet";
         description = "アドレスファミリ";
       };
-      # ファイルパスか文字列のどちらでも渡せる
       contentFile = mkOption {
         type = types.nullOr types.path;
         default = null;
@@ -80,6 +99,29 @@ in {
       description = "The nftables package to use.";
     };
 
+    # --- 高レベルな簡易設定用オプション ---
+    allowedTCPPorts = mkOption {
+      type = types.listOf types.port;
+      default = [];
+      example = [22 80];
+      description = "List of TCP ports to allow on default filter table.";
+    };
+
+    allowedUDPPorts = mkOption {
+      type = types.listOf types.port;
+      default = [];
+      example = [53 51820];
+      description = "List of UDP ports to allow on default filter table.";
+    };
+
+    extraInputRules = mkOption {
+      type = types.lines;
+      default = "";
+      example = "iifname \"tailscale0\" accept";
+      description = "Raw nftables rules to insert into the input chain of default filter table.";
+    };
+
+    # --- 低レベルなテーブル定義 (エスケープハッチ) ---
     tables = mkOption {
       type = types.attrsOf (types.submodule tableSubmodule);
       default = {};
@@ -96,6 +138,13 @@ in {
   };
 
   config = mkIf cfg.enable {
+    # デフォルトの filter テーブルを mkDefault で流し込む
+    # （ユーザーが独自に content / contentFile を指定した場合はそちらが優先される）
+    networking.nftables.tables.filter = {
+      family = mkDefault "inet";
+      contentFile = mkDefault defaultFilterFile;
+    };
+
     # パッケージ導入
     environment.systemPackages = [cfg.package];
 
@@ -106,7 +155,7 @@ in {
       }
     ];
 
-    # --- サービス定義 ---
+    # --- サービス定義 (s6-rc) ---
     system.s6-rc.services.nftables = {
       type = "oneshot";
       format = "sh";

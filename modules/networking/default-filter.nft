@@ -1,0 +1,33 @@
+chain input {
+  # 基本方針: 許可したもの以外はすべて破棄 (drop)
+  type filter hook input priority 0; policy drop;
+
+  # 1. ループバック (localhost) からの通信は無条件で許可
+  iifname "lo" accept
+
+  # 2. 既に確立された通信 (established) や関連パケット (related) は許可
+  ct state { established, related } accept
+
+  # 3. 破損した不正パケットは破棄
+  ct state invalid drop
+
+  # 4. ICMP (ping) を許可
+  ip protocol icmp accept
+  ip6 nexthdr icmpv6 accept
+
+  # 5. Nix から動的に注入される開放ポート (TCP / UDP)
+  @openPorts@
+
+  # 6. 追加の生ルール (インターフェース許可や特定サブネット制限など)
+  @extraInputRules@
+}
+
+chain forward {
+  # ルーター動作はしないので通過パケットはすべて破棄
+  type filter hook forward priority 0; policy drop;
+}
+
+chain output {
+  # 自分が外に出ていく通信はすべて許可
+  type filter hook output priority 0; policy accept;
+}
