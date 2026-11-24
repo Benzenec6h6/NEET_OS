@@ -53,24 +53,23 @@ in {
   config = mkMerge [
     # ==============================================================
     # 1. 常時有効（Stage 1 の initrd で必須な成果物・ルール）
-    #    ※ gardendevd 有効時でも initrd はこれらを参照する
     # ==============================================================
     {
-      # initrd.nix が参照するスクリプト実体
       system.build.mdevdDisk = mdevd-disk;
 
-      # 各ハードウェア（uinput, i2c等）で追加された rules とマージされる基本ルール
       boot.initrd.mdevd.rules = ''
         # ブロックデバイスの検出 (LUKS やルートマウントに必須)
         -SUBSYSTEM=block;.* 0:0 660 */bin/mdevd-disk.sh
-
-        -$MODALIAS=.* 0:0 660 @modprobe --quiet "$MODALIAS"
+        -$MODALIAS=.*       0:0 660 @modprobe --quiet "$MODALIAS"
 
         null        0:0 666
         zero        0:0 666
         full        0:0 666
+        random      0:0 666
+        urandom     0:0 666
         console     0:0 600
         ptmx        0:0 666
+        tty         0:0 666
         tty[0-9]*   0:0 660
 
         sd[a-z].*          0:0 660
@@ -84,29 +83,54 @@ in {
     # Stage 2 (稼働時) のフルルール
     # --------------------------------------------------
     {
-      # 基本ルール（audio, video, input 等は Stage 2 だけが持てば良い）
       services.mdevd.rules = ''
+        # --- イベントトリガー ---
         -SUBSYSTEM=block;.* 0:0 660 */bin/mdevd-disk.sh
-        -$MODALIAS=.* 0:0 660 @modprobe --quiet "$MODALIAS"
-        -SUBSYSTEM=net;.* 0:0 660 @ip link set $INTERFACE up
+        -$MODALIAS=.*       0:0 660 @modprobe --quiet "$MODALIAS"
+        -SUBSYSTEM=net;.*   0:0 660 @ip link set $INTERFACE up
 
+        # --- 基本疑似端末・システムノード ---
         null        0:0 666
         zero        0:0 666
         full        0:0 666
-        random      0:0 444
-        urandom     0:0 444
-        tty         0:0 666
+        random      0:0 666
+        urandom     0:0 666
         console     0:0 600
-        ptmx        0:0 666
+        ptmx        0:${gidOf "tty"} 666
+        tty         0:${gidOf "tty"} 666
+        tty[0-9]*   0:${gidOf "tty"} 660
 
-        input/.*    0:${gidOf "input"} 660
+        # --- 仮想化 / コンテナ / ネットワーク ---
+        net/tun[0-9]* 0:0 666
+        net/tap[0-9]* 0:0 666
+        tun           0:0 666 =net/
+        tap           0:0 666 =net/
+        # ★ QEMU / KVM 向けアクセラレータ
+        kvm           0:${gidOf "kvm"} 660
+        # ★ FUSE (Flatpak, mergerfs, ユーザーマウント向け)
+        fuse          0:0 666
+
+        # --- グラフィックス (DRM) ---
         dri/.*      0:${gidOf "video"} 660
-        snd/.*      0:${gidOf "audio"} 660
+        card[0-9]+  0:${gidOf "video"} 660 =dri/
+        renderD[0-9]+ 0:${gidOf "video"} 660 =dri/
         video[0-9]+ 0:${gidOf "video"} 660
 
-        tun         0:0 666 =net/
-        sd[a-z].*   0:0 660
-        vd[a-z].*   0:0 660
+        # --- 入力デバイス (libinput, Wayland, uinput) ---
+        input/.*    0:${gidOf "input"} 660
+        # ★ 仮想キーボード・エミュレータ用
+        uinput      0:${gidOf "input"} 660 =input/
+
+        # --- サウンド (ALSA / PipeWire) ---
+        snd/.*      0:${gidOf "audio"} 660
+        controlC[0-9]+ 0:${gidOf "audio"} 660 =snd/
+        pcmC[0-9]+.*   0:${gidOf "audio"} 660 =snd/
+        timer          0:${gidOf "audio"} 660 =snd/
+        seq            0:${gidOf "audio"} 660 =snd/
+
+        # --- ブロックストレージ ---
+        sd[a-z].*          0:0 660
+        vd[a-z].*          0:0 660
         nvme[0-9]n[0-9].*  0:0 660
         mmcblk[0-9].*      0:0 660
       '';
@@ -134,7 +158,7 @@ in {
           log.enable = true;
           run = ''
             #!/bin/execlineb -P
-            export PATH /bin:${pkgs.pkgsStatic.mdevd}/bin:${pkgs.pkgsStatic.kmod}/bin
+            export PATH /bin:${pkgs.pkgsStatic.mdevd}/bin:${pkgs.pkgsStatic.kmod}/bin:${pkgs.pkgsStatic.iproute2}/bin
             mdevd -D 3 -O 4 -f /etc/mdev.conf
           '';
         };
