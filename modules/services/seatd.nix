@@ -28,22 +28,15 @@ in {
 
     neet.gids.seat = lib.mkDefault 150;
 
-    system.stateDirectories = [
-      {
-        path = "/run/seatd";
-        mode = "0755";
-        user = "root";
-        group = "seat";
-      }
-    ];
-
     system.s6-rc.services.seatd = {
       type = "longrun";
+      notification-fd = 3;
       dependencies = optional config.services.deviceManagerEnable "device-manager";
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1
-        ${pkgs.seatd}/bin/seatd -s /run/seatd/seatd.sock -u root -g ${cfg.group} ${optionalString cfg.debug "-l debug"}
+        # ★ -s を削除し、-n 3 で s6-rc に準備完了を通知
+        ${pkgs.seatd}/bin/seatd -n 3 -u root -g ${cfg.group} ${optionalString cfg.debug "-l debug"}
       '';
     };
   };

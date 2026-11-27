@@ -11,8 +11,9 @@ export PATH="/run/wrappers/bin:/run/current-system/bin:$PATH"
 export XDG_SESSION_TYPE=wayland
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
-if [ -S /run/seatd/seatd.sock ]; then
-  export SEATD_SOCK=/run/seatd/seatd.sock
+if [ -S /run/seatd.sock ]; then
+  export SEATD_SOCK=/run/seatd.sock
+  export LIBSEAT_BACKEND=seatd
 fi
 
 SERVICE_DIR="$XDG_RUNTIME_DIR/service"
