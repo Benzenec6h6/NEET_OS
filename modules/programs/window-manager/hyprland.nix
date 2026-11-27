@@ -22,13 +22,13 @@ with lib; let
 
   # ★ ユーザー設定を動的に探索・読み込む共通ラッパー
   wrapperConfig = pkgs.writeText "hyprland-wrapper.lua" ''
-    local user = os.getenv("USER") or ""
-    local home = os.getenv("HOME") or ""
+    local user = os.getenv("USER") or os.getenv("LOGNAME") or ""
+    local home = os.getenv("HOME") or ("/home/" .. user)
 
     -- 探索パス:
-    -- 1. Nix 経由で生成されたユーザー設定 (/etc/users/<USER>/hypr/hyprland.lua)
+    -- 1. Nix 経由で生成されたユーザー設定 (/etc/users/<USER>/files/hypr/hyprland.lua) ★ /files/ を追加！
     -- 2. ユーザーが手動で作成した設定 (~/.config/hypr/hyprland.lua)
-    local nix_config = "/etc/users/" .. user .. "/hypr/hyprland.lua"
+    local nix_config = "/etc/users/" .. user .. "/files/hypr/hyprland.lua"
     local dot_config = home .. "/.config/hypr/hyprland.lua"
 
     local function file_exists(path)
@@ -41,6 +41,9 @@ with lib; let
       dofile(nix_config)
     elseif file_exists(dot_config) then
       dofile(dot_config)
+    else
+      -- どちらも見つからない場合はログに出す
+      print("[NEET_OS] WARN: No user config found! checked: " .. nix_config .. " and " .. dot_config)
     end
 
     -- 2. NEET_OS: 起動完了イベントで graphical-session を起動
