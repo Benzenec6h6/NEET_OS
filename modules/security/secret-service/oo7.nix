@@ -14,18 +14,12 @@ with lib; let
 in {
   options = {
     neet.security.oo7 = {
-      enable = mkEnableOption "oo7 Secret Service provider and PAM integration";
+      enable = mkEnableOption "oo7 Secret Service provider (System infrastructure)";
 
       serverPackage = mkOption {
         type = types.package;
         default = pkgs.oo7-server;
         description = "The package providing oo7-daemon.";
-      };
-
-      pamPackage = mkOption {
-        type = types.package;
-        default = pkgs.oo7-pam;
-        description = "The package providing pam_oo7.so.";
       };
 
       portalPackage = mkOption {
@@ -55,17 +49,21 @@ in {
         ...
       }: {
         options.security.oo7 = {
-          enable = mkOption {
-            type = types.bool;
-            # ★ config.isSessionUser で判定を一元化
-            default = cfg.enable && config.isSessionUser;
-            description = "ユーザー '${name}' で oo7 キーリングデーモンを起動するかどうか";
-          };
+          # ★ 自動で気を利かせず、オプトインにする（デフォルト false）
+          enable = mkEnableOption "oo7 keyring daemon for user '${name}'";
         };
 
-        config = mkIf config.security.oo7.enable {
-          # ★ 方針Aに従い、s6.services.oo7 に登録
-          s6.services.oo7 = {
+        config = {
+          # ★ 不整合をビルド時に弾く
+          assertions = [
+            {
+              assertion = config.security.oo7.enable -> cfg.enable;
+              message = "ユーザー '${name}' で oo7 が有効化されていますが、システム側の 'neet.security.oo7.enable' が無効です。システム側の有効化が必要です。";
+            }
+          ];
+
+          # s6-rc サービス定義
+          s6.services.oo7 = mkIf config.security.oo7.enable {
             type = "longrun";
             dependencies = ["dbus"];
             autoStart = true;
@@ -80,18 +78,14 @@ in {
   };
 
   config = mkIf cfg.enable {
-    # 1. パッケージと D-Bus サービスの登録
+    # クライアント用パッケージ（libsecret 等）を登録
     environment.systemPackages =
       [
-        cfg.serverPackage
-        cfg.pamPackage
         pkgs.libsecret
       ]
       ++ optional (pkgs ? oo7-cli) pkgs.oo7-cli;
 
-    services.dbus.packages = [cfg.serverPackage];
-
-    # 2. メモリロック用の security wrapper を登録
+    # メモリロック用の security wrapper を登録
     neet.security.wrappers = mkIf cfg.useWrapper {
       oo7-daemon = {
         source = "${cfg.serverPackage}/libexec/oo7-daemon";
@@ -101,7 +95,7 @@ in {
       };
     };
 
-    # 3. XDG Desktop Portal 連携
+    # XDG Desktop Portal 連携
     xdg.portal = mkIf cfg.enablePortal {
       portals = [cfg.portalPackage];
       config = {

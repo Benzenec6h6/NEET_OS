@@ -10,15 +10,59 @@ with lib; let
   pam_unix = "${pkgs.pam}/lib/security/pam_unix.so";
   pam_deny = "${pkgs.pam}/lib/security/pam_deny.so";
   pam_rootok = "${pkgs.pam}/lib/security/pam_rootok.so";
-  pam_oo7 = "${config.neet.security.oo7.pamPackage}/lib/security/pam_oo7.so";
 
-  # PAM 設定ファイルの共通ベース（Linux 標準的な unix 認証）
-  defaultPamService = ''
-    auth      required    ${pam_unix} nullok
-    account   required    ${pam_unix}
-    password  required    ${pam_unix} sha512 shadow nullok
-    session   required    ${pam_unix}
-  '';
+  # PAM 各スタックのルールを組み立てるサブモジュール
+  serviceModule = {
+    options = {
+      # 行単位での追加フック
+      extraAuth = mkOption {
+        type = types.lines;
+        default = "";
+        description = "auth スタックに追加するルール";
+      };
+      extraAccount = mkOption {
+        type = types.lines;
+        default = "";
+        description = "account スタックに追加するルール";
+      };
+      extraPassword = mkOption {
+        type = types.lines;
+        default = "";
+        description = "password スタックに追加するルール";
+      };
+      extraSession = mkOption {
+        type = types.lines;
+        default = "";
+        description = "session スタックに追加するルール";
+      };
+
+      # 完全に全体を上書きしたい場合のみ使用
+      text = mkOption {
+        type = types.nullOr types.lines;
+        default = null;
+        description = "設定ファイル全体を上書きする場合の内容";
+      };
+    };
+  };
+
+  # デフォルトの PAM サービス生成ロジック
+  mkPamService = name: svc:
+    if svc.text != null
+    then svc.text
+    else ''
+      # PAM configuration for ${name}
+      auth      required    ${pam_unix} nullok
+      ${svc.extraAuth}
+
+      account   required    ${pam_unix}
+      ${svc.extraAccount}
+
+      password  required    ${pam_unix} sha512 shadow nullok
+      ${svc.extraPassword}
+
+      session   required    ${pam_unix}
+      ${svc.extraSession}
+    '';
 in {
   options.neet.security.pam = {
     enable = mkOption {
@@ -28,24 +72,8 @@ in {
     };
 
     services = mkOption {
-      type = types.attrsOf (types.submodule {
-        options = {
-          text = mkOption {
-            type = types.str;
-            default = defaultPamService;
-            description = "PAM 設定内容。未指定時は標準 unix 認証が使われる";
-          };
-        };
-      });
+      type = types.attrsOf (types.submodule serviceModule);
       default = {};
-      example = literalExpression ''
-        {
-          # デフォルトの unix 認証を使う場合
-          doas = {};
-          # カスタム設定を渡す場合
-          su.text = "auth sufficient ...";
-        }
-      '';
       description = "/etc/pam.d/<name> に配置するサービス定義";
     };
   };
@@ -59,32 +87,25 @@ in {
       owner = "root";
       group = "root";
     };
-    # 組み込みサービスの登録（sudo は privileges 側に任せるためここから削除）
+
+    # 組み込みサービスのベース登録（外部依存の記述はゼロ）
     neet.security.pam.services = {
+      # 一般コンソールログイン
+      login = {};
+
+      # su コマンド用（rootok のみ特別扱い）
+      su.text = ''
+        auth      sufficient  ${pam_rootok}
+        auth      required    ${pam_unix} nullok
+        account   required    ${pam_unix}
+        password  required    ${pam_unix} sha512 shadow nullok
+        session   required    ${pam_unix}
+      '';
+
+      # passwd コマンド用
       passwd.text = ''
         password  sufficient  ${pam_unix} sha512 shadow nullok
         password  required    ${pam_deny}
-      '';
-
-      # 一般ログイン / Console
-      login.text = ''
-        auth      required    ${pam_unix} nullok
-        ${optionalString config.neet.security.oo7.enable "auth      optional    ${pam_oo7}"}
-        account   required    ${pam_unix}
-        password  required    ${pam_unix} sha512 shadow nullok
-        ${optionalString config.neet.security.oo7.enable "password  optional    ${pam_oo7}"}
-        session   required    ${pam_unix}
-        ${optionalString config.neet.security.oo7.enable "session   optional    ${pam_oo7}"}
-        ${
-          optionalString config.services.sessiond.enable
-          "session   optional    ${config.services.sessiond.package}/lib/security/pam_sessiond.so"
-        }
-      '';
-
-      # su コマンド用 (pam_sessiond は入れない)
-      su.text = ''
-        auth      sufficient  ${pam_rootok}
-        ${defaultPamService}
       '';
     };
 
@@ -99,6 +120,10 @@ in {
           session   required    ${pam_deny}
         '';
       }
-      // (mapAttrs' (name: svc: nameValuePair "pam.d/${name}" {text = svc.text;}) cfg.services);
+      // (mapAttrs' (name: svc:
+        nameValuePair "pam.d/${name}" {
+          text = mkPamService name svc;
+        })
+      cfg.services);
   };
 }
