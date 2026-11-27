@@ -12,7 +12,7 @@ in {
 
     group = mkOption {
       type = types.str;
-      default = "video";
+      default = "seat";
       description = "Group that owns the seatd socket";
     };
 
@@ -43,7 +43,7 @@ in {
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1
-        ${pkgs.seatd}/bin/seatd -u root -g ${cfg.group} ${optionalString cfg.debug "-l debug"}
+        ${pkgs.seatd}/bin/seatd -s /run/seatd/seatd.sock -u root -g ${cfg.group} ${optionalString cfg.debug "-l debug"}
       '';
     };
   };
