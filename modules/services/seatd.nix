@@ -32,7 +32,6 @@ in {
       type = "longrun";
       notification-fd = 3;
       dependencies = optional config.services.deviceManagerEnable "device-manager";
-      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1

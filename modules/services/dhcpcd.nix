@@ -140,8 +140,6 @@ in {
         ++ optional (config.system.s6-rc.services ? sysctl) "sysctl"
         ++ optional (config.system.s6-rc.services ? resolvconf) "resolvconf";
 
-      log.enable = true;
-
       run = ''
         #!/bin/sh
         # 1. DHCP に必須なカーネルモジュールを確実にロード

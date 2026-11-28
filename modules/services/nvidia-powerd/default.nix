@@ -38,7 +38,6 @@ in {
     system.s6-rc.services.nvidia-powerd = {
       type = "longrun";
       dependencies = ["dbus"];
-      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         redirfd -w 1 /dev/null

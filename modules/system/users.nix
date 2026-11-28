@@ -175,19 +175,28 @@ with lib; let
           if u.home != null
           then u.home
           else "/home/${name}";
+        owner = {
+          user = name;
+          group = toString u.gid;
+        };
       in
-        optional u.createHome {
-          path = homePath;
-          mode = "0755";
-          user = name;
-          group = toString u.gid;
-        }
-        ++ optional u.isSessionUser {
-          path = "/run/user/${toString u.uid}";
-          mode = "0700";
-          user = name;
-          group = toString u.gid;
-        }
+        optional u.createHome ({
+            path = homePath;
+            mode = "0755";
+          }
+          // owner)
+        ++ optionals (u.createHome && u.isSessionUser) [
+          ({
+              path = "${homePath}/.local/state/log";
+              mode = "0700";
+            }
+            // owner)
+        ]
+        ++ optional u.isSessionUser ({
+            path = "/run/user/${toString u.uid}";
+            mode = "0700";
+          }
+          // owner)
     )
     cfg);
 in {

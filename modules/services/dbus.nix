@@ -75,7 +75,6 @@ in {
       type = "longrun";
       notification-fd = 3;
       dependencies = optional config.services.syslog.enable "syslog";
-      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         foreground { ${cfg.package}/bin/dbus-uuidgen --ensure }
@@ -89,7 +88,6 @@ in {
         services.dbus = {
           type = "longrun";
           notification-fd = 3;
-          log.enable = true;
           run = ''
             #!/bin/sh
             exec ${cfg.package}/bin/dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --nofork --nopidfile --print-pid=3

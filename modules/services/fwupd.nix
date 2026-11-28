@@ -57,9 +57,6 @@ in {
         #!/bin/execlineb -P
         ${cfg.package}/libexec/fwupd/fwupd --no-auto-shutdown
       '';
-
-      # s6-log によるログ収集
-      log.enable = true;
     };
   };
 }

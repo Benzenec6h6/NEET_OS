@@ -160,9 +160,6 @@ in {
         exec ${cfg.package}/bin/fcron --foreground -c /etc/fcron.conf ${escapeShellArgs cfg.extraArgs}
       '';
 
-      # s6-log によるロギング自動生成
-      log.enable = true;
-
       # syslog や chrony (時刻同期) があれば時刻が合ってから起動するのが望ましい
       dependencies =
         optional (config.services.chrony.enable or false) "chronyd"

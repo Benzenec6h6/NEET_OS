@@ -90,6 +90,7 @@ in {
         ++ optional config.services.sessiond.enable "sessiond"
         ++ optional config.services.sessiond-uaccess.enable "sessiond-uaccess";
 
+      log.enable = false;
       run = ''
         #!/bin/execlineb -P
         fdclose 0

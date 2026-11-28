@@ -8,7 +8,11 @@
   ),
 }:
 with lib;
-  {name, ...}: let
+  {
+    name,
+    config,
+    ...
+  }: let
     # 確実に文字列としてホームディレクトリを解決
     resolvedHome =
       if home != null
@@ -76,7 +80,12 @@ with lib;
       };
 
       log = {
-        enable = mkEnableOption "s6-log によるロガーの自動生成";
+        enable = mkOption {
+          type = types.bool;
+          default = config.type == "longrun";
+          defaultText = literalExpression ''config.type == "longrun"'';
+          description = "s6-log によるロガーの自動生成";
+        };
         user = mkOption {
           type = types.str;
           default =
@@ -95,12 +104,7 @@ with lib;
         };
         args = mkOption {
           type = types.listOf types.str;
-          default = let
-            logDir =
-              if isUser
-              then "${resolvedHome}/.local/state/log/${name}"
-              else "/var/log/${name}";
-          in ["n10" "s1000000" "T" logDir];
+          default = ["n10" "s1000000" "T" (head config.log.dirs)];
           description = "s6-log に渡す引数";
         };
       };

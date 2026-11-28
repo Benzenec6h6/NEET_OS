@@ -53,7 +53,7 @@ in {
       dependencies =
         ["sessiond"]
         ++ lib.optional config.services.deviceManagerEnable "device-manager";
-      log.enable = true;
+
       run = ''
         #!/bin/sh
         export LOG_LEVEL="${

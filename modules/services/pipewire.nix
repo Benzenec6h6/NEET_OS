@@ -73,7 +73,6 @@ in {
         s6.services.pipewire = {
           type = "longrun";
           dependencies = ["dbus"];
-          log.enable = true;
           run = ''
             #!/bin/sh
             exec ${cfg.package}/bin/pipewire
@@ -83,7 +82,6 @@ in {
         s6.services.pipewire-pulse = mkIf config.services.pipewire.pulse.enable {
           type = "longrun";
           dependencies = ["pipewire"];
-          log.enable = true;
           run = ''
             #!/bin/sh
             exec ${cfg.package}/bin/pipewire -c pipewire-pulse.conf

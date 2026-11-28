@@ -88,8 +88,6 @@ in {
         ++ optional config.services.sessiond.enable "sessiond"
         ++ optional config.services.sessiond-uaccess.enable "sessiond-uaccess";
 
-      log.enable = true;
-
       run = ''
         #!/bin/execlineb -P
         fdmove -c 2 1

@@ -74,7 +74,6 @@ in {
     system.s6-rc.services.neet-admin-server = {
       type = "longrun";
       autoStart = true;
-      log.enable = true;
       run = ''
         #!/bin/sh
         exec 2>&1

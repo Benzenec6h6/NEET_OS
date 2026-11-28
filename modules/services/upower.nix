@@ -40,7 +40,6 @@ in {
     system.s6-rc.services.upower = {
       type = "longrun";
       dependencies = ["dbus"];
-      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         ${cfg.package}/libexec/upowerd

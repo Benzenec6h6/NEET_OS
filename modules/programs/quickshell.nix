@@ -85,7 +85,6 @@ in {
             type = "longrun";
             autoStart = false;
             partOf = ["graphical-session"];
-            log.enable = true;
             run = ''
               #!/bin/sh
               exec ${startCmd}

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 pub struct StateDirectory {
@@ -137,21 +137,43 @@ pub fn setup_state_directories() -> io::Result<()> {
 
     for dir in dirs {
         let path = Path::new(&dir.path);
-        if !path.exists() {
-            fs::create_dir_all(path)?;
+        let uid = resolve_uid(&dir.user);
+        let gid = resolve_gid(&dir.group);
+
+        let created = if !path.exists() {
+            create_dir_all_tracked(path)?
+        } else {
+            Vec::new()
+        };
+
+        // 新規に作った中間ディレクトリは所有者だけ揃える（モードは触らない）
+        for p in &created {
+            if p != path && (uid.is_some() || gid.is_some()) {
+                let _ = std::os::unix::fs::chown(p, uid, gid);
+            }
         }
 
         let mode = u32::from_str_radix(&dir.mode, 8).unwrap_or(0o755);
         let _ = fs::set_permissions(path, fs::Permissions::from_mode(mode));
-
-        let uid = resolve_uid(&dir.user);
-        let gid = resolve_gid(&dir.group);
-
         if uid.is_some() || gid.is_some() {
             let _ = std::os::unix::fs::chown(path, uid, gid);
         }
     }
     Ok(())
+}
+
+fn create_dir_all_tracked(path: &Path) -> io::Result<Vec<PathBuf>> {
+    // path から遡って「まだ存在しない」祖先を集める
+    let mut missing: Vec<PathBuf> = path
+        .ancestors()
+        .take_while(|p| !p.as_os_str().is_empty() && !p.exists())
+        .map(Path::to_path_buf)
+        .collect();
+    // 親が先になるよう反転
+    missing.reverse();
+
+    fs::create_dir_all(path)?;
+    Ok(missing)
 }
 
 /// 基本的な互換シンボリックリンクや空ログファイルを整える

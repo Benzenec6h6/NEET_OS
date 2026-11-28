@@ -47,7 +47,6 @@ in {
     system.s6-rc.services.rtkit-daemon = {
       type = "longrun";
       dependencies = ["dbus" "polkitd"];
-      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         ${cfg.package}/libexec/rtkit-daemon${lib.optionalString cfg.debug " --debug"}

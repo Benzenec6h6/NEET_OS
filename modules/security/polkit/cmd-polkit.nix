@@ -48,7 +48,6 @@ in {
             type = "longrun";
             autoStart = false;
             partOf = ["graphical-session"];
-            log.enable = true;
             run = ''
               #!${pkgs.runtimeShell}
               ${optionalString (userCfg.extraPackages != []) ''

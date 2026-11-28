@@ -61,7 +61,6 @@ in {
       type = "longrun";
       dependencies = ["dbus"];
       notification-fd = 3;
-      log.enable = true;
 
       run = ''
         #!/bin/sh

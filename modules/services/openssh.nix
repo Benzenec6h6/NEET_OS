@@ -340,7 +340,6 @@ in {
           #!/bin/sh
           exec ${cfg.package}/bin/sshd -D -f /etc/ssh/sshd_config
         '';
-        log.enable = true;
       };
     };
   };

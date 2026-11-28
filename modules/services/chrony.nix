@@ -109,9 +109,6 @@ in {
         exec ${cfg.package}/bin/chronyd -d -s -u chrony -f /etc/chrony.conf ${escapeShellArgs cfg.extraArgs}
       '';
 
-      # NEET_OS 組み込みの s6-log 自動生成機構を活用
-      log.enable = true;
-
       # 名前解決/ネットワークが初期化されてから起動
       # ※ お使いのネットワークサービス名（dhcpcd や resolvconf）に合わせて調整可能
       dependencies = optional (config.services.dhcpcd.enable or false) "dhcpcd";

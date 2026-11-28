@@ -149,7 +149,6 @@ in {
       gardendevd = {
         type = "longrun";
         notification-fd = 3;
-        log.enable = true;
         run = ''
           #!/bin/sh
           [ -e /proc/sys/kernel/hotplug ] && echo "" > /proc/sys/kernel/hotplug 2>/dev/null || true

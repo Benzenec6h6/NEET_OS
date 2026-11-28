@@ -122,7 +122,6 @@ in {
     system.s6-rc.services.nix-daemon = {
       type = "longrun";
       dependencies = lib.optional config.programs.resolvconf.enable "resolvconf";
-      log.enable = true;
       run = ''
         #!/bin/sh
         echo $$ > /sys/fs/cgroup/system/nix-daemon/cgroup.procs

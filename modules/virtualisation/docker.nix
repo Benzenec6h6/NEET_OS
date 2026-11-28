@@ -103,9 +103,6 @@ in {
           --config-file /etc/docker/daemon.json \
           --group docker
       '';
-
-      # s6-log によるログ収集
-      log.enable = true;
     };
   };
 }

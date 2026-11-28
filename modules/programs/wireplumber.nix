@@ -57,7 +57,6 @@ in {
         s6.services.wireplumber = {
           type = "longrun";
           dependencies = ["pipewire"];
-          log.enable = true;
           run = ''
             #!/bin/sh
             export XDG_STATE_HOME="$HOME/.local/state"

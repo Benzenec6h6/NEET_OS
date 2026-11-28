@@ -28,7 +28,6 @@ in {
     system.s6-rc.services.bluetoothd = {
       type = "longrun";
       dependencies = ["dbus"];
-      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         ${pkgs.bluez}/libexec/bluetooth/bluetoothd --nodetach

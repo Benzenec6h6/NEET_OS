@@ -22,6 +22,7 @@
     name = "getty-${tty}";
     value = {
       type = "longrun";
+      log.enable = false;
       run = ''
         #!/bin/execlineb -P
         ${pkgs.util-linux}/bin/agetty ${autologinFlag}--noclear ${tty} linux
@@ -39,6 +40,7 @@
     name = "getty-${dev}";
     value = {
       type = "longrun";
+      log.enable = false;
       run = ''
         #!/bin/execlineb -P
         ${pkgs.util-linux}/bin/agetty ${autologinFlag}--keep-baud ${dev} ${speed} vt220
