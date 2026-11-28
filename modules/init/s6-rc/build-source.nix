@@ -3,12 +3,12 @@
   pkgs,
   s6lib,
   services,
+  isUser ? false,
 }:
 with lib; let
   inherit (s6lib) hasLog loggerName pipelineName entryName;
 
   # ---- 小さなビルダー ----
-  # { ファイル名 = パス; } -> linkFarm
   mkFarm = name: files:
     pkgs.linkFarm name (mapAttrsToList (n: path: {
         name = n;
@@ -18,13 +18,11 @@ with lib; let
 
   txt = name: key: pkgs.writeText "${name}-${key}";
 
-  # oneshot の up/down: sh 形式なら writeShellScript のパスを書く
   mkOneshotScript = name: svc: key: body:
     if svc.format == "sh" && body != ""
     then txt name key "${pkgs.writeShellScript "${name}-${key}.sh" body}"
     else txt name key body;
 
-  # envdirs や log がある場合はラッパー経由で run を実行
   mkRunScript = name: svc:
     if svc.envdirs == [] && !(hasLog svc)
     then pkgs.writeScript "${name}-run" svc.run
@@ -41,18 +39,31 @@ with lib; let
   mkLoggerRun = svc: let
     inherit (svc) log;
     q = escapeShellArg;
-    prepDir = d: ''
+
+    prepSystemDir = d: ''
       ${pkgs.coreutils}/bin/mkdir -p ${q d}
       ${pkgs.coreutils}/bin/chown ${q log.user}: ${q d}
       ${pkgs.coreutils}/bin/chmod 0750 ${q d}
     '';
+
+    prepUserDir = d: ''
+      ${pkgs.coreutils}/bin/mkdir -p ${q d}
+      ${pkgs.coreutils}/bin/chmod 0700 ${q d}
+    '';
   in
     if svc.logRun != null
     then svc.logRun
+    else if isUser
+    then ''
+      #!${pkgs.runtimeShell}
+      set -e
+      ${concatMapStrings prepUserDir log.dirs}
+      exec ${pkgs.s6}/bin/s6-log ${escapeShellArgs log.args}
+    ''
     else ''
       #!${pkgs.runtimeShell}
       set -e
-      ${concatMapStrings prepDir log.dirs}
+      ${concatMapStrings prepSystemDir log.dirs}
       exec ${pkgs.s6}/bin/s6-setuidgid ${q log.user} \
         ${pkgs.s6}/bin/s6-log ${escapeShellArgs log.args}
     '';
@@ -97,8 +108,6 @@ with lib; let
       );
     };
 
-  # ---- バンドル ----
-  # type = "bundle" で宣言された contents と、各サービスの partOf を統合して全バンドルを作る。
   resolveEntry = n:
     if services ? ${n}
     then entryName n services.${n}

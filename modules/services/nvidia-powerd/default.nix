@@ -37,7 +37,8 @@ in {
     # s6-rc を使った longrun サービスの定義
     system.s6-rc.services.nvidia-powerd = {
       type = "longrun";
-      dependencies = ["dbus"]; # D-Busデーモン起動後に実行
+      dependencies = ["dbus"];
+      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         redirfd -w 1 /dev/null

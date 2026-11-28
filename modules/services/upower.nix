@@ -39,7 +39,8 @@ in {
     # 4. s6-rc サービス定義 (upowerd)
     system.s6-rc.services.upower = {
       type = "longrun";
-      dependencies = ["dbus"]; # D-Bus が必須
+      dependencies = ["dbus"];
+      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         ${cfg.package}/libexec/upowerd

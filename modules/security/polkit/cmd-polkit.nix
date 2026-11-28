@@ -44,12 +44,11 @@ in {
         };
 
         config = mkIf userCfg.enable {
-          # ★ 方針A: s6.services.cmd-polkit に登録
           s6.services.cmd-polkit = {
             type = "longrun";
             autoStart = false;
             partOf = ["graphical-session"];
-
+            log.enable = true;
             run = ''
               #!${pkgs.runtimeShell}
               ${optionalString (userCfg.extraPackages != []) ''

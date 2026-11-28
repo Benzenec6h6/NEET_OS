@@ -51,6 +51,7 @@ in {
           s6.services.swayidle = {
             type = "longrun";
             partOf = ["graphical-session"];
+            log.enable = true;
             run = ''
               #!/bin/sh
               exec ${sysCfg.package}/bin/swayidle ${escapeShellArgs userCfg.args}

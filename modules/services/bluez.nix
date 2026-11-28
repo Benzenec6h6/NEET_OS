@@ -27,7 +27,8 @@ in {
     # 4. s6-rc サービス定義 (bluetoothd)
     system.s6-rc.services.bluetoothd = {
       type = "longrun";
-      dependencies = ["dbus"]; # D-Bus が必須
+      dependencies = ["dbus"];
+      log.enable = true;
       run = ''
         #!/bin/execlineb -P
         ${pkgs.bluez}/libexec/bluetooth/bluetoothd --nodetach

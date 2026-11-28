@@ -1,9 +1,22 @@
-{
-  lib,
-  pkgs,
+{lib, ...}: {
+  isUser ? false,
+  username ? null,
+  home ? (
+    if username != null
+    then "/home/${username}"
+    else null
+  ),
 }:
 with lib;
-  {name, ...}: {
+  {name, ...}: let
+    # 確実に文字列としてホームディレクトリを解決
+    resolvedHome =
+      if home != null
+      then home
+      else if username != null
+      then "/home/${username}"
+      else "/var/empty";
+  in {
     options = {
       type = mkOption {type = types.enum ["longrun" "oneshot" "bundle"];};
       run = mkOption {
@@ -66,17 +79,28 @@ with lib;
         enable = mkEnableOption "s6-log によるロガーの自動生成";
         user = mkOption {
           type = types.str;
-          default = "s6log";
+          default =
+            if isUser
+            then username
+            else "s6log";
           description = "s6-log を実行するユーザー";
         };
         dirs = mkOption {
           type = types.listOf types.str;
-          default = ["/var/log/${name}"];
-          description = "事前に作成して user 所有にするログディレクトリ";
+          default =
+            if isUser
+            then ["${resolvedHome}/.local/state/log/${name}"]
+            else ["/var/log/${name}"];
+          description = "事前に作成するログディレクトリ";
         };
         args = mkOption {
           type = types.listOf types.str;
-          default = ["n10" "s1000000" "T" "/var/log/${name}"];
+          default = let
+            logDir =
+              if isUser
+              then "${resolvedHome}/.local/state/log/${name}"
+              else "/var/log/${name}";
+          in ["n10" "s1000000" "T" logDir];
           description = "s6-log に渡す引数";
         };
       };

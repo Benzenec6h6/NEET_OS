@@ -67,6 +67,7 @@ in {
           s6.services.hypridle = {
             type = "longrun";
             partOf = ["graphical-session"];
+            log.enable = true;
             run = ''
               #!/bin/sh
               exec ${sysCfg.package}/bin/hypridle

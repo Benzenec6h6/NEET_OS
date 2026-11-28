@@ -89,6 +89,7 @@ in {
         services.dbus = {
           type = "longrun";
           notification-fd = 3;
+          log.enable = true;
           run = ''
             #!/bin/sh
             exec ${cfg.package}/bin/dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --nofork --nopidfile --print-pid=3

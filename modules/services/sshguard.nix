@@ -82,12 +82,6 @@ in {
         user = "root";
         group = "root";
       }
-      {
-        path = "/var/log/sshguard";
-        mode = "0750";
-        user = "root";
-        group = "root";
-      }
     ];
 
     system.s6-rc.services.sshguard = {
@@ -99,7 +93,6 @@ in {
 
       run = ''
         #!/bin/sh
-        # nft-sets スクリプトが nft コマンドや coreutils を探せるように PATH を指定
         export PATH="${makeBinPath [
           config.networking.nftables.package
           pkgs.coreutils
@@ -108,11 +101,12 @@ in {
         exec ${cfg.package}/bin/sshguard
       '';
 
-      # sshguard 自身のログ（誰をブロックしたか等）も s6-log で記録
-      logRun = ''
-        #!/bin/sh
-        exec ${pkgs.s6}/bin/s6-log -b n10 s500000 /var/log/sshguard
-      '';
+      log = {
+        enable = true;
+        # デフォルトは ["n10" "s1000000" "T" "/var/log/sshguard"] ですが、
+        # 元の指定（s500000）やタイムスタンプ（T）を反映したい場合は args で調整
+        args = ["-b" "n10" "s500000" "T" "/var/log/sshguard"];
+      };
     };
   };
 }

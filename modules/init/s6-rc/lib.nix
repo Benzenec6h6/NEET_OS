@@ -9,10 +9,21 @@ with lib; let
     # サービスオプション (service-options.nix) をまとめて公開
     serviceOpts = import ./service-options.nix {inherit lib pkgs;};
 
-    # `services` オプションの定義を 1 箇所に集約
+    # システム用: `services` オプションの定義
     mkServicesOption = description:
       mkOption {
-        type = types.attrsOf (types.submodule self.serviceOpts);
+        type = types.attrsOf (types.submodule (self.serviceOpts {}));
+        default = {};
+        inherit description;
+      };
+
+    # ユーザー用: ユーザー名とホームを注入した `services` オプション
+    mkUserServicesOption = username: home: description:
+      mkOption {
+        type = types.attrsOf (types.submodule (self.serviceOpts {
+          isUser = true;
+          inherit username home;
+        }));
         default = {};
         inherit description;
       };
@@ -22,7 +33,6 @@ with lib; let
     loggerName = name: "${name}-log";
     pipelineName = name: "${name}-pipeline";
 
-    # top / bundle から参照するときの実体名 (ログ付きなら pipeline)
     entryName = name: svc:
       if self.hasLog svc
       then self.pipelineName name
@@ -74,11 +84,27 @@ with lib; let
 
     # ---- ソース組み立て + s6-rc-compile ----
     buildDb = name: services:
+      self.buildDb' {
+        inherit name services;
+        isUser = false;
+      };
+
+    buildUserDb = name: services:
+      self.buildDb' {
+        inherit name services;
+        isUser = true;
+      };
+
+    buildDb' = {
+      name,
+      services,
+      isUser ? false,
+    }:
       pkgs.runCommand "s6-rc-db-${name}" {
         nativeBuildInputs = [pkgs.s6-rc];
       } ''
         s6-rc-compile $out ${import ./build-source.nix {
-          inherit lib pkgs services;
+          inherit lib pkgs services isUser;
           s6lib = self;
         }}
       '';

@@ -60,6 +60,7 @@ in {
             type = "longrun";
             dependencies = ["dbus"];
             autoStart = true;
+            log.enable = true;
             run = ''
               #!/bin/sh
               exec ${daemonBin} --foreground --components=${concatStringsSep "," cfg.components}

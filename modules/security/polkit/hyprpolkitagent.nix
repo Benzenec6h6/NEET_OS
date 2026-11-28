@@ -50,7 +50,7 @@ in {
             type = "longrun";
             autoStart = false;
             partOf = ["graphical-session"];
-
+            log.enable = true;
             run = ''
               #!${pkgs.runtimeShell}
               exec ${pkgs.s6}/bin/s6-envdir -I "$XDG_RUNTIME_DIR/env" ${userCfg.package}/libexec/hyprpolkitagent
